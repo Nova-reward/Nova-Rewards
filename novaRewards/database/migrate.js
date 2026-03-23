@@ -5,17 +5,14 @@ const path = require('path');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const migrations = [
-  '001_create_merchants.sql',
-  '002_create_users.sql',
-  '003_create_campaigns.sql',
-  '004_create_transactions.sql',
-];
-
 async function migrate() {
+  const files = fs.readdirSync(__dirname)
+    .filter(f => f.endsWith('.sql'))
+    .sort();
+
   const client = await pool.connect();
   try {
-    for (const file of migrations) {
+    for (const file of files) {
       const sql = fs.readFileSync(path.join(__dirname, file), 'utf8');
       console.log(`Running migration: ${file}`);
       await client.query(sql);
