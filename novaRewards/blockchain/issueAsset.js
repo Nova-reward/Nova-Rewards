@@ -18,22 +18,23 @@ const INITIAL_SUPPLY = '1000000'; // 1,000,000 NOVA
 
 /**
  * Funds a Testnet account using Friendbot.
- * Safe to call on already-funded accounts — Friendbot returns an error
- * which we silently ignore.
+ * Only calls Friendbot if the account does not yet exist on the network.
  *
  * @param {string} publicKey
  */
 async function fundWithFriendbot(publicKey) {
   try {
+    await server.loadAccount(publicKey);
+    console.log(`  ${publicKey} already exists — Friendbot skipped`);
+  } catch {
+    // Account not found on network — safe to fund
     const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
     if (res.ok) {
       console.log(`  Funded ${publicKey} via Friendbot`);
     } else {
-      // Already funded — not an error
-      console.log(`  ${publicKey} already funded (Friendbot skipped)`);
+      const body = await res.text();
+      throw new Error(`Friendbot failed for ${publicKey}: ${body}`);
     }
-  } catch {
-    console.log(`  ${publicKey} already funded (Friendbot skipped)`);
   }
 }
 
