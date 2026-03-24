@@ -11,11 +11,15 @@ describe('validateEnv (Property 11)', () => {
     originalEnv = { ...process.env };
     // Set all required vars to valid values
     REQUIRED_ENV_VARS.forEach((key) => { process.env[key] = 'test-value'; });
+    // Ensure NODE_ENV is not production by default
+    delete process.env.NODE_ENV;
   });
 
   afterEach(() => {
     // Restore original env
     REQUIRED_ENV_VARS.forEach((key) => { delete process.env[key]; });
+    delete process.env.NODE_ENV;
+    delete process.env.ALLOWED_ORIGIN;
     Object.assign(process.env, originalEnv);
   });
 
@@ -66,5 +70,29 @@ describe('validateEnv (Property 11)', () => {
     expect(() => validateEnv()).toThrow(
       expect.objectContaining({ message: expect.stringContaining(toRemove[0]) })
     );
+  });
+
+  test('throws when ALLOWED_ORIGIN is missing in production', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.ALLOWED_ORIGIN;
+
+    expect(() => validateEnv()).toThrow();
+    expect(() => validateEnv()).toThrow(expect.objectContaining({
+      message: expect.stringContaining('ALLOWED_ORIGIN')
+    }));
+  });
+
+  test('passes when ALLOWED_ORIGIN is set in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ALLOWED_ORIGIN = 'https://example.com';
+
+    expect(() => validateEnv()).not.toThrow();
+  });
+
+  test('passes when ALLOWED_ORIGIN is missing in development', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.ALLOWED_ORIGIN;
+
+    expect(() => validateEnv()).not.toThrow();
   });
 });
