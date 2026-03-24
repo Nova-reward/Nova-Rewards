@@ -7,6 +7,7 @@ const {
   BASE_FEE,
 } = require('stellar-sdk');
 const { server, NOVA } = require('./stellarService');
+const { verifyTrustline } = require('./trustline');
 
 const NETWORK_PASSPHRASE =
   process.env.STELLAR_NETWORK === 'mainnet'
@@ -37,25 +38,6 @@ async function fundWithFriendbot(publicKey) {
   }
 }
 
-/**
- * Checks whether the Distribution Account already has a NOVA trustline.
- *
- * @param {string} distributionPublic
- * @returns {Promise<boolean>}
- */
-async function hasTrustline(distributionPublic) {
-  try {
-    const account = await server.loadAccount(distributionPublic);
-    return account.balances.some(
-      (b) =>
-        b.asset_type !== 'native' &&
-        b.asset_code === 'NOVA' &&
-        b.asset_issuer === process.env.ISSUER_PUBLIC
-    );
-  } catch {
-    return false;
-  }
-}
 
 /**
  * One-time idempotent setup script:
@@ -80,7 +62,7 @@ async function issueAsset() {
 
   // Step 2: Establish trustline on Distribution Account (idempotent check)
   console.log('\n[2] Checking Distribution Account trustline...');
-  const trustlineExists = await hasTrustline(distributionKeypair.publicKey());
+  const { exists: trustlineExists } = await verifyTrustline(distributionKeypair.publicKey());
 
   if (trustlineExists) {
     console.log('  Trustline already exists — skipping.');
