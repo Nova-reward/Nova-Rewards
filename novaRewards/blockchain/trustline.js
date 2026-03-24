@@ -52,8 +52,8 @@ async function verifyTrustline(walletAddress) {
     const exists = account.balances.some(
       (b) =>
         b.asset_type !== 'native' &&
-        b.asset_code === 'NOVA' &&
-        b.asset_issuer === process.env.ISSUER_PUBLIC
+        b.asset_code === NOVA.code &&
+        b.asset_issuer === NOVA.issuer
     );
     return { exists };
   } catch (err) {

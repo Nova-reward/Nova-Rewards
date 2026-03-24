@@ -49,8 +49,8 @@ async function hasTrustline(distributionPublic) {
     return account.balances.some(
       (b) =>
         b.asset_type !== 'native' &&
-        b.asset_code === 'NOVA' &&
-        b.asset_issuer === process.env.ISSUER_PUBLIC
+        b.asset_code === NOVA.code &&
+        b.asset_issuer === NOVA.issuer
     );
   } catch {
     return false;
@@ -108,8 +108,8 @@ async function issueAsset() {
   const existingBalance = distAccountCheck.balances.find(
     (b) =>
       b.asset_type !== 'native' &&
-      b.asset_code === 'NOVA' &&
-      b.asset_issuer === issuerKeypair.publicKey()
+      b.asset_code === NOVA.code &&
+      b.asset_issuer === NOVA.issuer
   );
 
   if (existingBalance && parseFloat(existingBalance.balance) > 0) {
