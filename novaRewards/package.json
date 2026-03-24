@@ -9,7 +9,7 @@
     "blockchain"
   ],
   "scripts": {
-    "test": "cd backend && npm test",
+    "test": "npm test -w backend",
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
     "migrate": "node database/migrate.js"
