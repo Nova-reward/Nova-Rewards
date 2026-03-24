@@ -3,6 +3,7 @@ const {
   Keypair,
   TransactionBuilder,
   Operation,
+  Memo,
   Networks,
   BASE_FEE,
 } = require('stellar-sdk');
@@ -70,6 +71,7 @@ async function distributeRewards({ toWallet, amount }) {
         amount: String(amount),
       })
     )
+    .addMemo(Memo.text('NovaRewards distribution'))
     .setTimeout(180)
     .build();
 
