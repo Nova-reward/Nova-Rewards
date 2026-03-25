@@ -96,7 +96,7 @@ router.post('/distribute', merchantAuth, async (req, res, next) => {
       campaignId: campaign.id,
     });
 
-    res.json({ success: true, data: { txHash, transaction: tx } });
+    res.json({ success: true, txHash, transaction: tx });
   } catch (err) {
     if (err.code === 'no_trustline') {
       return res.status(400).json({
