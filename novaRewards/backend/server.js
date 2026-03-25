@@ -9,8 +9,13 @@ const cors = require('cors');
 
 const app = express();
 
-app.use(cors());
-app.use(express.json({ limit: '10kb' }));
+// Configure CORS based on environment
+const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
+  ? { origin: process.env.ALLOWED_ORIGIN }
+  : {}; // Open CORS for development
+
+app.use(cors(corsOptions));
+app.use(express.json());
 
 // Health check
 app.get('/health', (req, res) => {
