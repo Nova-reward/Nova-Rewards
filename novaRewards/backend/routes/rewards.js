@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { query } = require('../db/index');
-const { getActiveCampaign } = require('../db/campaignRepository');
+const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
@@ -61,13 +61,23 @@ router.post('/distribute', merchantAuth, async (req, res, next) => {
       });
     }
 
+    // Distinguish campaign not found vs inactive/expired for clearer client handling.
+    const campaignExists = await getCampaignById(campaignId);
+    if (!campaignExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'not_found',
+        message: 'Campaign does not exist',
+      });
+    }
+
     // Validate campaign is active and belongs to this merchant
     const campaign = await getActiveCampaign(campaignId);
     if (!campaign) {
       return res.status(400).json({
         success: false,
         error: 'invalid_campaign',
-        message: 'Campaign not found, expired, or inactive',
+        message: 'Campaign is expired or inactive',
       });
     }
 
