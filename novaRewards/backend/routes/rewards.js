@@ -1,47 +1,16 @@
 const router = require('express').Router();
-const { query } = require('../db/index');
 const { getActiveCampaign } = require('../db/campaignRepository');
 const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
-
-/**
- * Middleware: validates the merchant API key from the x-api-key header.
- * Requirements: 3.1
- */
-async function merchantAuth(req, res, next) {
-  const apiKey = req.headers['x-api-key'];
-  if (!apiKey) {
-    return res.status(401).json({
-      success: false,
-      error: 'unauthorized',
-      message: 'x-api-key header is required',
-    });
-  }
-
-  const result = await query(
-    'SELECT * FROM merchants WHERE api_key = $1',
-    [apiKey]
-  );
-
-  if (!result.rows[0]) {
-    return res.status(401).json({
-      success: false,
-      error: 'unauthorized',
-      message: 'Invalid API key',
-    });
-  }
-
-  req.merchant = result.rows[0];
-  next();
-}
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
 /**
  * POST /api/rewards/distribute
  * Distributes NOVA tokens to a customer wallet.
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 7.4, 7.5
  */
-router.post('/distribute', merchantAuth, async (req, res, next) => {
+router.post('/distribute', authenticateMerchant, async (req, res, next) => {
   try {
     const { customerWallet, amount, campaignId } = req.body;
 

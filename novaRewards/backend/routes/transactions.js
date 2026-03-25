@@ -3,6 +3,7 @@ const { server, NOVA } = require('../../blockchain/stellarService');
 const { recordTransaction, getTransactionsByMerchant, getMerchantTotals } = require('../db/transactionRepository');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { query } = require('../db/index');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
 /**
  * POST /api/transactions/record
@@ -129,13 +130,13 @@ router.get('/:walletAddress', async (req, res, next) => {
 module.exports = router;
 
 /**
- * GET /api/transactions/merchant-totals/:merchantId
- * Returns total NOVA distributed and redeemed for a merchant.
+ * GET /api/transactions/merchant-totals
+ * Returns total NOVA distributed and redeemed for the authenticated merchant.
  * Requirements: 10.2
  */
-router.get('/merchant-totals/:merchantId', async (req, res, next) => {
+router.get('/merchant-totals', authenticateMerchant, async (req, res, next) => {
   try {
-    const totals = await getMerchantTotals(req.params.merchantId);
+    const totals = await getMerchantTotals(req.merchant.id);
     res.json({ success: true, data: totals });
   } catch (err) {
     next(err);
