@@ -9,7 +9,12 @@ const cors = require('cors');
 
 const app = express();
 
-app.use(cors());
+// Configure CORS based on environment
+const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
+  ? { origin: process.env.ALLOWED_ORIGIN }
+  : {}; // Open CORS for development
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Health check
