@@ -59,4 +59,23 @@ router.post('/build-xdr', async (req, res, next) => {
   }
 });
 
+router.post('/build', async (req, res, next) => {
+  try {
+    const { walletAddress } = req.body;
+
+    if (!walletAddress || !isValidStellarAddress(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'walletAddress must be a valid Stellar public key',
+      });
+    }
+
+    const xdr = await buildTrustlineXDR(walletAddress);
+    res.json({ xdr });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

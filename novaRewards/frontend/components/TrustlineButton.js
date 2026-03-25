@@ -16,16 +16,9 @@ export default function TrustlineButton({ walletAddress, onSuccess }) {
     setStatus('loading');
     setMessage('');
     try {
-      const { data } = await api.post('/api/trustline/build-xdr', { walletAddress });
+      const { data } = await api.post('/api/trustline/build', { walletAddress });
 
-      if (data.data.status === 'already_exists') {
-        setStatus('done');
-        setMessage('Trustline already exists.');
-        onSuccess?.();
-        return;
-      }
-
-      await signAndSubmit(data.data.xdr);
+      await signAndSubmit(data.xdr);
       setStatus('done');
       setMessage('Trustline created successfully.');
       onSuccess?.();
