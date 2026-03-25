@@ -70,20 +70,26 @@ async function getTransactionsByMerchant(merchantId) {
  * Requirements: 10.2
  *
  * @param {number} merchantId
- * @returns {Promise<{ totalDistributed: number, totalRedeemed: number }>}
+ * @returns {Promise<{ totalDistributed: string, totalRedeemed: string }>}
  */
 async function getMerchantTotals(merchantId) {
   const result = await query(
-    `SELECT
-       COALESCE(SUM(CASE WHEN tx_type = 'distribution' THEN amount ELSE 0 END), 0) AS "totalDistributed",
-       COALESCE(SUM(CASE WHEN tx_type = 'redemption'   THEN amount ELSE 0 END), 0) AS "totalRedeemed"
+    `SELECT tx_type, COALESCE(SUM(amount), 0) AS total
      FROM transactions
-     WHERE merchant_id = $1`,
+     WHERE merchant_id = $1
+       AND tx_type IN ('distribution', 'redemption')
+     GROUP BY tx_type`,
     [merchantId]
   );
+
+  const totalsByType = result.rows.reduce((acc, row) => {
+    acc[row.tx_type] = String(row.total);
+    return acc;
+  }, {});
+
   return {
-    totalDistributed: parseFloat(result.rows[0].totalDistributed),
-    totalRedeemed: parseFloat(result.rows[0].totalRedeemed),
+    totalDistributed: totalsByType.distribution || '0',
+    totalRedeemed: totalsByType.redemption || '0',
   };
 }
 
