@@ -80,8 +80,15 @@ async function issueAsset() {
       .build();
 
     trustlineTx.sign(distributionKeypair);
-    const trustlineResult = await server.submitTransaction(trustlineTx);
-    console.log(`  Trustline created. Tx hash: ${trustlineResult.hash}`);
+    try {
+      const trustlineResult = await server.submitTransaction(trustlineTx);
+      console.log(`  Trustline created. Tx hash: ${trustlineResult.hash}`);
+    } catch (error) {
+      if (error.response?.data?.extras?.result_codes?.operations?.includes('op_underfunded')) {
+        throw new Error('Insufficient XLM balance in Distribution Account to cover transaction fees. Please fund the account with more XLM.');
+      }
+      throw error;
+    }
   }
 
   // Step 3: Send initial NOVA supply from Issuer to Distribution Account
@@ -118,8 +125,15 @@ async function issueAsset() {
       .build();
 
     paymentTx.sign(issuerKeypair);
-    const paymentResult = await server.submitTransaction(paymentTx);
-    console.log(`  Initial supply sent. Tx hash: ${paymentResult.hash}`);
+    try {
+      const paymentResult = await server.submitTransaction(paymentTx);
+      console.log(`  Initial supply sent. Tx hash: ${paymentResult.hash}`);
+    } catch (error) {
+      if (error.response?.data?.extras?.result_codes?.operations?.includes('op_underfunded')) {
+        throw new Error('Insufficient XLM balance in Issuer Account to cover transaction fees. Please fund the account with more XLM.');
+      }
+      throw error;
+    }
   }
 
   console.log('\n=== Asset issuance complete ===');
