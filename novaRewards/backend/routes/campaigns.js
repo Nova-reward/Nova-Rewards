@@ -55,12 +55,21 @@ router.post('/', async (req, res, next) => {
 
 /**
  * GET /api/campaigns/:merchantId
- * Returns all campaigns for a merchant.
- * Requirements: 7.2
+ * Returns all campaigns for a given merchant.
+ * Requirements: 7.2, 10.1
  */
 router.get('/:merchantId', async (req, res, next) => {
   try {
-    const campaigns = await getCampaignsByMerchant(req.params.merchantId);
+    const merchantId = parseInt(req.params.merchantId, 10);
+    if (isNaN(merchantId) || merchantId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'merchantId must be a positive integer',
+      });
+    }
+
+    const campaigns = await getCampaignsByMerchant(merchantId);
     res.json({ success: true, data: campaigns });
   } catch (err) {
     next(err);
