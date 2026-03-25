@@ -25,12 +25,14 @@ async function recordTransaction({
   campaignId,
   stellarLedger,
 }) {
+  const nullableCampaignId = campaignId ?? null;
+
   const result = await query(
     `INSERT INTO transactions
        (tx_hash, tx_type, amount, from_wallet, to_wallet, merchant_id, campaign_id, stellar_ledger)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [txHash, txType, amount, fromWallet, toWallet, merchantId, campaignId, stellarLedger]
+    [txHash, txType, amount, fromWallet, toWallet, merchantId, nullableCampaignId, stellarLedger]
   );
   return result.rows[0];
 }
