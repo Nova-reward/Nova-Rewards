@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   merchant_id    INTEGER       NOT NULL REFERENCES merchants(id),
   campaign_id    INTEGER       REFERENCES campaigns(id),
   stellar_ledger INTEGER,
-  created_at     TIMESTAMPTZ   DEFAULT NOW()
+  created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 -- B-tree indexes on wallet columns to avoid full table scans when querying by address
