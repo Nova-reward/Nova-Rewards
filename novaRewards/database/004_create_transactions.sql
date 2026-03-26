@@ -3,12 +3,12 @@
 
 CREATE TABLE IF NOT EXISTS transactions (
   id             SERIAL PRIMARY KEY,
-  tx_hash        VARCHAR(64)   UNIQUE,
+  tx_hash        VARCHAR(64)   NOT NULL UNIQUE,
   tx_type        VARCHAR(20)   NOT NULL CHECK (tx_type IN ('distribution', 'redemption', 'transfer')),
   amount         NUMERIC(18, 7) NOT NULL,
-  from_wallet    VARCHAR(56),
-  to_wallet      VARCHAR(56),
-  merchant_id    INTEGER       REFERENCES merchants(id),
+  from_wallet    VARCHAR(56)   NOT NULL,
+  to_wallet      VARCHAR(56)   NOT NULL,
+  merchant_id    INTEGER       NOT NULL REFERENCES merchants(id),
   campaign_id    INTEGER       REFERENCES campaigns(id),
   stellar_ledger INTEGER,
   created_at     TIMESTAMPTZ   DEFAULT NOW()
