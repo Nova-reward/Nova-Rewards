@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { StrKey, Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
+import { Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
 import TransactionLink from './TransactionLink';
@@ -21,16 +21,12 @@ export default function TransferForm({ senderPublicKey, senderBalance, onSuccess
   const [message, setMessage] = useState('');
   const [txHash, setTxHash] = useState('');
 
-  function isValidAddress(addr) {
-    try { return StrKey.isValidEd25519PublicKey(addr); } catch { return false; }
-  }
-
   async function handleTransfer(e) {
     e.preventDefault();
     setMessage('');
 
     // Client-side validation — Requirements 5.1
-    if (!isValidAddress(recipient)) {
+    if (!isValidStellarAddress(recipient)) {
       setMessage('Recipient must be a valid Stellar public key.');
       setStatus('error');
       return;

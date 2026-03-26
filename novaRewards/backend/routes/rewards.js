@@ -38,11 +38,27 @@ async function merchantAuth(req, res, next) {
 }
 
 /**
+ * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
+ * Closes: #123
+ */
+const distributeRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'rate_limit_exceeded',
+    message: 'Too many requests. Please try again later.',
+  },
+});
+
+/**
  * POST /api/rewards/distribute
  * Distributes NOVA tokens to a customer wallet.
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 7.4, 7.5
  */
-router.post('/distribute', merchantAuth, async (req, res, next) => {
+router.post('/distribute', distributeRateLimiter, merchantAuth, async (req, res, next) => {
   try {
     const { customerWallet, amount, campaignId } = req.body;
 
