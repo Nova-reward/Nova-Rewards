@@ -13,3 +13,8 @@ CREATE TABLE IF NOT EXISTS transactions (
   stellar_ledger INTEGER,
   created_at     TIMESTAMPTZ   DEFAULT NOW()
 );
+
+-- B-tree indexes on wallet columns to avoid full table scans when querying by address
+-- Requirements: 3.4, 4.3
+CREATE INDEX IF NOT EXISTS idx_transactions_from_wallet ON transactions (from_wallet);
+CREATE INDEX IF NOT EXISTS idx_transactions_to_wallet   ON transactions (to_wallet);
