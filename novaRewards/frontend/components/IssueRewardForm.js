@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { StrKey } from "stellar-sdk";
 import api from "../lib/api";
+import TransactionLink from './TransactionLink';
 
 /**
  * Form for issuing NOVA rewards to a customer wallet.
@@ -143,18 +144,11 @@ export default function IssueRewardForm({
       </button>
 
       {message && (
-        <p className={status === "error" ? "error" : "success"}>{message}</p>
-      )}
-      {txHash && (
-        <p
-          style={{
-            fontSize: "0.8rem",
-            color: "#94a3b8",
-            marginTop: "0.5rem",
-            fontFamily: "monospace",
-          }}
-        >
-          Tx: {txHash}
+        <p className={status === "error" ? "error" : "success"}>
+          {message}
+          {txHash && (
+            <span> Transaction: <TransactionLink txHash={txHash} /></span>
+          )}
         </p>
       )}
     </form>
