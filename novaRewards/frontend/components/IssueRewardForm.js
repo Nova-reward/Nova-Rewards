@@ -19,6 +19,7 @@ export default function IssueRewardForm({
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [txHash, setTxHash] = useState("");
+  const [walletError, setWalletError] = useState("");
 
   function isValidAddress(addr) {
     try {
@@ -32,9 +33,13 @@ export default function IssueRewardForm({
     e.preventDefault();
     setMessage("");
     setTxHash("");
+    setWalletError("");
+
+    const trimmedWallet = customerWallet.trim();
 
     // Client-side validation — Requirements 10.5
-    if (!isValidAddress(customerWallet)) {
+    if (!isValidAddress(trimmedWallet)) {
+      setWalletError("Please enter a valid Stellar public key (G...).");
       setMessage("Customer wallet must be a valid Stellar public key.");
       setStatus("error");
       return;
@@ -54,7 +59,11 @@ export default function IssueRewardForm({
     try {
       const { data } = await api.post(
         "/api/rewards/distribute",
-        { customerWallet, amount, campaignId: Number(campaignId) },
+        {
+          customerWallet: trimmedWallet,
+          amount,
+          campaignId: Number(campaignId),
+        },
         { headers: { "x-api-key": apiKey } },
       );
       setStatus("done");
@@ -92,10 +101,26 @@ export default function IssueRewardForm({
       <input
         className="input"
         value={customerWallet}
-        onChange={(e) => setCustomerWallet(e.target.value)}
+        onChange={(e) => {
+          setCustomerWallet(e.target.value);
+          if (walletError) setWalletError("");
+        }}
+        onBlur={() => {
+          const trimmedWallet = customerWallet.trim();
+          if (!trimmedWallet) {
+            setWalletError("");
+            return;
+          }
+          setWalletError(
+            isValidAddress(trimmedWallet)
+              ? ""
+              : "Please enter a valid Stellar public key (G...).",
+          );
+        }}
         placeholder="G..."
         disabled={status === "loading"}
       />
+      {walletError && <p className="error">{walletError}</p>}
 
       <label className="label">Amount (NOVA)</label>
       <input
