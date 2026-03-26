@@ -1,4 +1,5 @@
 TN:
+<<<<<<< HEAD
 SF:db/campaignRepository.js
 FN:13,validateCampaign
 FN:49,createCampaign
@@ -204,11 +205,19 @@ FN:11,(anonymous_0)
 FNF:1
 FNH:0
 FNDA:0,(anonymous_0)
+=======
+SF:routes/merchants.js
+FN:11,(anonymous_0)
+FNF:1
+FNH:1
+FNDA:14,(anonymous_0)
+>>>>>>> origin/main
 DA:1,1
 DA:2,1
 DA:3,1
 DA:4,1
 DA:11,1
+<<<<<<< HEAD
 DA:12,0
 DA:13,0
 DA:15,0
@@ -218,11 +227,23 @@ DA:24,0
 DA:31,0
 DA:33,0
 DA:40,0
+=======
+DA:12,14
+DA:13,14
+DA:15,14
+DA:16,4
+DA:23,10
+DA:24,6
+DA:31,4
+DA:33,4
+DA:40,4
+>>>>>>> origin/main
 DA:42,0
 DA:43,0
 DA:49,0
 DA:53,1
 LF:18
+<<<<<<< HEAD
 LH:6
 BRDA:15,0,0,0
 BRDA:15,0,1,0
@@ -239,21 +260,46 @@ BRDA:42,5,0,0
 BRDA:42,5,1,0
 BRF:13
 BRH:0
+=======
+LH:15
+BRDA:15,0,0,4
+BRDA:15,0,1,10
+BRDA:15,1,0,14
+BRDA:15,1,1,12
+BRDA:15,1,2,11
+BRDA:23,2,0,6
+BRDA:23,2,1,4
+BRDA:23,3,0,10
+BRDA:23,3,1,7
+BRDA:37,4,0,4
+BRDA:37,4,1,2
+BRDA:42,5,0,0
+BRDA:42,5,1,0
+BRF:13
+BRH:11
+>>>>>>> origin/main
 end_of_record
 TN:
 SF:routes/rewards.js
 FN:12,merchantAuth
 FN:44,(anonymous_1)
 FNF:2
+<<<<<<< HEAD
 FNH:0
 FNDA:0,merchantAuth
 FNDA:0,(anonymous_1)
+=======
+FNH:2
+FNDA:50,merchantAuth
+FNDA:50,(anonymous_1)
+>>>>>>> origin/main
 DA:1,1
 DA:2,1
 DA:3,1
 DA:4,1
 DA:5,1
 DA:6,1
+<<<<<<< HEAD
 DA:13,0
 DA:14,0
 DA:15,0
@@ -275,6 +321,29 @@ DA:67,0
 DA:75,0
 DA:76,0
 DA:77,0
+=======
+DA:13,50
+DA:14,50
+DA:15,0
+DA:22,50
+DA:27,50
+DA:28,0
+DA:35,50
+DA:36,50
+DA:44,1
+DA:45,50
+DA:46,50
+DA:48,50
+DA:49,0
+DA:56,50
+DA:57,0
+DA:65,50
+DA:66,50
+DA:67,0
+DA:75,50
+DA:76,50
+DA:77,50
+>>>>>>> origin/main
 DA:84,0
 DA:85,0
 DA:93,0
@@ -287,6 +356,7 @@ DA:119,0
 DA:125,0
 DA:129,1
 LF:38
+<<<<<<< HEAD
 LH:8
 BRDA:14,0,0,0
 BRDA:14,0,1,0
@@ -304,6 +374,25 @@ BRDA:56,5,2,0
 BRDA:66,6,0,0
 BRDA:66,6,1,0
 BRDA:76,7,0,0
+=======
+LH:23
+BRDA:14,0,0,0
+BRDA:14,0,1,50
+BRDA:27,1,0,0
+BRDA:27,1,1,50
+BRDA:48,2,0,0
+BRDA:48,2,1,50
+BRDA:48,3,0,50
+BRDA:48,3,1,50
+BRDA:56,4,0,0
+BRDA:56,4,1,50
+BRDA:56,5,0,50
+BRDA:56,5,1,50
+BRDA:56,5,2,50
+BRDA:66,6,0,0
+BRDA:66,6,1,50
+BRDA:76,7,0,50
+>>>>>>> origin/main
 BRDA:76,7,1,0
 BRDA:84,8,0,0
 BRDA:84,8,1,0
@@ -312,6 +401,7 @@ BRDA:111,9,1,0
 BRDA:118,10,0,0
 BRDA:118,10,1,0
 BRF:23
+<<<<<<< HEAD
 BRH:0
 end_of_record
 TN:
@@ -457,4 +547,7 @@ BRDA:66,6,0,0
 BRDA:66,6,1,0
 BRF:14
 BRH:4
+=======
+BRH:11
+>>>>>>> origin/main
 end_of_record
