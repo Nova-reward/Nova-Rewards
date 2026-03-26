@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StrKey, Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
+import TransactionLink from './TransactionLink';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -18,7 +19,11 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
+<<<<<<< feature/transaction-links
+  const [txHash, setTxHash] = useState('');
+=======
   const [amountError, setAmountError] = useState('');
+>>>>>>> main
 
   function isValidAddress(addr) {
     try { return StrKey.isValidEd25519PublicKey(addr); } catch { return false; }
@@ -80,11 +85,12 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
         .build();
 
       // Sign with Freighter and submit — Requirements 4.2
-      const { txHash } = await signAndSubmit(tx.toXDR());
+      const result = await signAndSubmit(tx.toXDR());
+      setTxHash(result.txHash);
 
       // Record redemption in backend
       await api.post('/api/transactions/record', {
-        txHash,
+        txHash: result.txHash,
         txType: 'redemption',
         amount,
         fromWallet: senderPublicKey,
@@ -92,7 +98,7 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
       });
 
       setStatus('done');
-      setMessage(`Redemption successful! Tx: ${txHash.slice(0, 16)}…`);
+      setMessage('Redemption successful!');
       setMerchantWallet('');
       setAmount('');
       onSuccess?.();
@@ -127,7 +133,14 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
       <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
         {status === 'loading' ? 'Redeeming…' : 'Redeem NOVA'}
       </button>
-      {message && <p className={status === 'error' ? 'error' : 'success'}>{message}</p>}
+      {message && (
+        <p className={status === 'error' ? 'error' : 'success'}>
+          {message}
+          {txHash && (
+            <span> Transaction: <TransactionLink txHash={txHash} /></span>
+          )}
+        </p>
+      )}
     </form>
   );
 }
