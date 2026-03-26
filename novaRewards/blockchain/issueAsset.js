@@ -39,6 +39,25 @@ async function fundWithFriendbot(publicKey) {
   }
 }
 
+/**
+ * Checks whether the Distribution Account already has a NOVA trustline.
+ *
+ * @param {string} distributionPublic
+ * @returns {Promise<boolean>}
+ */
+async function hasTrustline(distributionPublic) {
+  try {
+    const account = await server.loadAccount(distributionPublic);
+    return account.balances.some(
+      (b) =>
+        b.asset_type !== 'native' &&
+        b.asset_code === NOVA.code &&
+        b.asset_issuer === NOVA.issuer
+    );
+  } catch {
+    return false;
+  }
+}
 
 /**
  * One-time idempotent setup script:
@@ -98,8 +117,8 @@ async function issueAsset() {
   const existingBalance = distAccountCheck.balances.find(
     (b) =>
       b.asset_type !== 'native' &&
-      b.asset_code === 'NOVA' &&
-      b.asset_issuer === issuerKeypair.publicKey()
+      b.asset_code === NOVA.code &&
+      b.asset_issuer === NOVA.issuer
   );
 
   if (existingBalance && parseFloat(existingBalance.balance) > 0) {
