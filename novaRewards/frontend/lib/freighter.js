@@ -37,17 +37,21 @@ export async function isFreighterInstalled() {
  * @throws {Error} if user denies access or Freighter is not installed
  */
 export async function connectWallet() {
-  const accessResult = await requestAccess();
-  if (accessResult.error) {
-    throw new Error(`Freighter access denied: ${accessResult.error}`);
-  }
+  try {
+    const accessResult = await requestAccess();
+    if (accessResult.error) {
+      throw new Error(`Freighter access denied: ${accessResult.error}`);
+    }
 
-  const keyResult = await getPublicKey();
-  if (keyResult.error) {
-    throw new Error(`Could not get public key: ${keyResult.error}`);
-  }
+    const keyResult = await getPublicKey();
+    if (keyResult.error) {
+      throw new Error(`Could not get public key: ${keyResult.error}`);
+    }
 
-  return keyResult.publicKey;
+    return keyResult.publicKey;
+  } catch (err) {
+    throw new Error(err.message || 'Failed to connect wallet. Please try again.');
+  }
 }
 
 /**

@@ -20,11 +20,35 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
-  const [txHash, setTxHash] = useState('');
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [amountError, setAmountError] = useState('');
+
 
   function isValidAddress(addr) {
     try { return StrKey.isValidEd25519PublicKey(addr); } catch { return false; }
+  }
+
+  function validateAmount(value) {
+    if (!value || value.trim() === '') {
+      setAmountError('');
+      return false;
+    }
+    const numValue = Number(value);
+    if (isNaN(numValue) || numValue <= 0) {
+      setAmountError('Amount must be a positive number.');
+      return false;
+    }
+    if (numValue > Number(senderBalance)) {
+      setAmountError(`Insufficient balance. Available: ${senderBalance} NOVA`);
+      return false;
+    }
+    setAmountError('');
+    return true;
+  }
+
+  function handleAmountChange(e) {
+    const value = e.target.value;
+    setAmount(value);
+    validateAmount(value);
   }
 
   async function handleRedeem(e) {
@@ -36,14 +60,9 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
       setStatus('error');
       return;
     }
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      setMessage('Amount must be a positive number.');
-      setStatus('error');
-      return;
-    }
-    // Client-side balance check — Requirements 4.1
-    if (Number(amount) > Number(senderBalance)) {
-      setMessage(`Insufficient balance. Available: ${senderBalance} NOVA`);
+    
+    // Validate amount before submission
+    if (!validateAmount(amount)) {
       setStatus('error');
       return;
     }
@@ -94,49 +113,38 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
   }
 
   return (
-    <>
-      <form onSubmit={handleRedeem}>
-        <label className="label">Merchant Wallet Address</label>
-        <input
-          className="input"
-          value={merchantWallet}
-          onChange={(e) => setMerchantWallet(e.target.value)}
-          placeholder="G..."
-          disabled={status === 'loading'}
-        />
-        <label className="label">Amount to Redeem (NOVA)</label>
-        <input
-          className="input"
-          type="number"
-          min="0.0000001"
-          step="any"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="50"
-          disabled={status === 'loading'}
-        />
-        <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
-          {status === 'loading' ? 'Redeeming…' : 'Redeem NOVA'}
-        </button>
-        {message && (
-          <p className={status === 'error' ? 'error' : 'success'}>
-            {message}
-            {txHash && (
-              <span> Transaction: <TransactionLink txHash={txHash} /></span>
-            )}
-          </p>
-        )}
-      </form>
-
-      <ConfirmationModal
-        isOpen={showConfirmation}
-        onConfirm={executeRedeem}
-        onCancel={() => setShowConfirmation(false)}
-        recipient={merchantWallet}
-        amount={amount}
-        asset="NOVA"
-        operation="redemption"
+    <form onSubmit={handleRedeem}>
+      <label className="label">Merchant Wallet Address</label>
+      <input
+        className="input"
+        value={merchantWallet}
+        onChange={(e) => setMerchantWallet(e.target.value)}
+        placeholder="G..."
+        disabled={status === 'loading'}
       />
-    </>
+      <label className="label">Amount to Redeem (NOVA)</label>
+      <input
+        className="input"
+        type="number"
+        min="0.0000001"
+        step="any"
+        value={amount}
+        onChange={handleAmountChange}
+        placeholder="50"
+        disabled={status === 'loading'}
+      />
+      {amountError && <p className="error" style={{ marginTop: '0.25rem', fontSize: '0.875rem' }}>{amountError}</p>}
+      <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
+        {status === 'loading' ? 'Redeeming…' : 'Redeem NOVA'}
+      </button>
+      {message && (
+        <p className={status === 'error' ? 'error' : 'success'}>
+          {message}
+          {txHash && (
+            <span> Transaction: <TransactionLink txHash={txHash} /></span>
+          )}
+        </p>
+      )}
+    </form>
   );
 }
