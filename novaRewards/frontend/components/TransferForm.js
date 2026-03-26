@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
-import { isValidStellarAddress } from '../lib/stellarUtils';
+import TransactionLink from './TransactionLink';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -19,6 +19,7 @@ export default function TransferForm({ senderPublicKey, senderBalance, onSuccess
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
+  const [txHash, setTxHash] = useState('');
 
   async function handleTransfer(e) {
     e.preventDefault();
@@ -67,11 +68,12 @@ export default function TransferForm({ senderPublicKey, senderBalance, onSuccess
         .build();
 
       // Sign with Freighter and submit — Requirements 5.3
-      const { txHash } = await signAndSubmit(tx.toXDR());
+      const result = await signAndSubmit(tx.toXDR());
+      setTxHash(result.txHash);
 
       // Record in backend
       await api.post('/api/transactions/record', {
-        txHash,
+        txHash: result.txHash,
         txType: 'transfer',
         amount,
         fromWallet: senderPublicKey,
@@ -79,7 +81,7 @@ export default function TransferForm({ senderPublicKey, senderBalance, onSuccess
       });
 
       setStatus('done');
-      setMessage(`Transfer successful! Tx: ${txHash.slice(0, 16)}…`);
+      setMessage('Transfer successful!');
       setRecipient('');
       setAmount('');
       onSuccess?.();
@@ -113,7 +115,14 @@ export default function TransferForm({ senderPublicKey, senderBalance, onSuccess
       <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
         {status === 'loading' ? 'Sending…' : 'Send NOVA'}
       </button>
-      {message && <p className={status === 'error' ? 'error' : 'success'}>{message}</p>}
+      {message && (
+        <p className={status === 'error' ? 'error' : 'success'}>
+          {message}
+          {txHash && (
+            <span> Transaction: <TransactionLink txHash={txHash} /></span>
+          )}
+        </p>
+      )}
     </form>
   );
 }

@@ -1,5 +1,6 @@
 // Feature: nova-rewards — POST /api/trustline/verify
 // Validates: Requirements 2.3, 2.4
+// #95: Unit Tests for trustline verification route
 // Covers:
 //   1. Valid address — returns { exists: boolean }
 //   2. Invalid address — returns 400
@@ -74,7 +75,9 @@ describe('POST /api/trustline/verify', () => {
     server = http.createServer(buildApp()).listen(0, done);
   });
 
-  afterAll((done) => server.close(done));
+  afterAll((done) => {
+    server.close(done);
+  });
 
   beforeEach(() => jest.clearAllMocks());
 
