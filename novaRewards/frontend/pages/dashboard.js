@@ -4,12 +4,15 @@ import { useWallet } from "../context/WalletContext";
 import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
+import LoadingSkeleton from "../components/LoadingSkeleton";
+import ErrorBoundary from "../components/ErrorBoundary";
+import { truncateAddress } from "../lib/truncateAddress";
 
 /**
  * Customer dashboard — balance, transaction history, trustline, transfer, redeem.
  * Requirements: 9.1, 9.2, 9.3, 8.5
  */
-export default function Dashboard() {
+function DashboardContent() {
   const {
     publicKey,
     balance,
@@ -28,7 +31,7 @@ export default function Dashboard() {
 
   if (!publicKey) return null;
 
-  const shortKey = `${publicKey.slice(0, 6)}…${publicKey.slice(-4)}`;
+  const shortKey = truncateAddress(publicKey);
 
   function formatTx(tx) {
     const isIncoming = tx.to === publicKey || tx.to_account === publicKey;
@@ -61,96 +64,117 @@ export default function Dashboard() {
       </nav>
 
       <div className="container">
-        <div className="dashboard-summary-grid">
-          {/* Balance card */}
-          <div className="card" style={{ textAlign: "center" }}>
-            <p style={{ color: "#94a3b8", marginBottom: "0.4rem" }}>
-              NOVA Balance
-            </p>
-            <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }}>
-              {parseFloat(balance).toFixed(2)}
-            </p>
-            <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>NOVA</p>
-            <button
-              className="btn btn-secondary"
-              style={{ marginTop: "1rem" }}
-              onClick={() => refreshBalance()}
-            >
-              Refresh
-            </button>
-          </div>
-
-          {/* Transaction history */}
-          <div className="card">
-            <h2 style={{ marginBottom: "1rem" }}>Transaction History</h2>
-            {transactions.length === 0 ? (
-              <p style={{ color: "#94a3b8" }}>No NOVA transactions yet.</p>
-            ) : (
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Type</th>
-                      <th>Amount</th>
-                      <th>Counterparty</th>
-                      <th>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.map((tx, i) => {
-                      const { type, counterparty, amount, date } = formatTx(tx);
-                      return (
-                        <tr key={tx.id || i}>
-                          <td>{type}</td>
-                          <td>{parseFloat(amount).toFixed(4)} NOVA</td>
-                          <td
-                            style={{
-                              fontFamily: "monospace",
-                              fontSize: "0.85rem",
-                            }}
-                          >
-                            {counterparty}
-                          </td>
-                          <td>{date}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+        {loading ? (
+          <LoadingSkeleton />
+        ) : (
+          <>
+            <div className="dashboard-summary-grid">
+              {/* Balance card */}
+              <div className="card" style={{ textAlign: "center" }}>
+                <p style={{ color: "#94a3b8", marginBottom: "0.4rem" }}>
+                  NOVA Balance
+                </p>
+                <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }}>
+                  {parseFloat(balance).toFixed(2)}
+                </p>
+                <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>NOVA</p>
+                <button
+                  className="btn btn-secondary"
+                  style={{ marginTop: "1rem" }}
+                  onClick={() => refreshBalance()}
+                >
+                  Refresh
+                </button>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Trustline */}
-        <div className="card">
-          <h2 style={{ marginBottom: "1rem" }}>Trustline</h2>
-          <TrustlineButton
-            walletAddress={publicKey}
-            onSuccess={() => refreshBalance()}
-          />
-        </div>
+              {/* Transaction history */}
+              <div className="card">
+                <h2 style={{ marginBottom: "1rem" }}>Transaction History</h2>
+                {transactions.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "1rem 0" }}>
+                    <p style={{ color: "#94a3b8", marginBottom: "0.75rem" }}>
+                      No transactions yet. Start earning NOVA rewards!
+                    </p>
+                    <a href="/merchant" style={{ color: "#7c3aed", fontWeight: 600 }}>
+                      Browse merchants →
+                    </a>
+                  </div>
+                ) : (
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Type</th>
+                          <th>Amount</th>
+                          <th>Counterparty</th>
+                          <th>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {transactions.map((tx, i) => {
+                          const { type, counterparty, amount, date } = formatTx(tx);
+                          return (
+                            <tr key={tx.id || i}>
+                              <td>{type}</td>
+                              <td>{parseFloat(amount).toFixed(4)} NOVA</td>
+                              <td
+                                style={{
+                                  fontFamily: "monospace",
+                                  fontSize: "0.85rem",
+                                }}
+                              >
+                                {counterparty}
+                              </td>
+                              <td>{date}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
 
-        {/* Transfer */}
-        <div className="card">
-          <h2 style={{ marginBottom: "1rem" }}>Send NOVA</h2>
-          <TransferForm
-            senderPublicKey={publicKey}
-            senderBalance={balance}
-            onSuccess={() => refreshBalance()}
-          />
-        </div>
+            {/* Trustline */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Trustline</h2>
+              <TrustlineButton
+                walletAddress={publicKey}
+                onSuccess={() => refreshBalance()}
+              />
+            </div>
 
-        {/* Redeem */}
-        <div className="card">
-          <h2 style={{ marginBottom: "1rem" }}>Redeem NOVA</h2>
-          <RedeemForm
-            senderPublicKey={publicKey}
-            senderBalance={balance}
-            onSuccess={() => refreshBalance()}
-          />
-        </div>
+            {/* Transfer */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Send NOVA</h2>
+              <TransferForm
+                senderPublicKey={publicKey}
+                senderBalance={balance}
+                onSuccess={() => refreshBalance()}
+              />
+            </div>
+
+            {/* Redeem */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Redeem NOVA</h2>
+              <RedeemForm
+                senderPublicKey={publicKey}
+                senderBalance={balance}
+                onSuccess={() => refreshBalance()}
+              />
+            </div>
+          </>
+        )}
       </div>
     </>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <ErrorBoundary>
+      <DashboardContent />
+    </ErrorBoundary>
   );
 }

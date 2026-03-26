@@ -11,3 +11,5 @@ CREATE TABLE IF NOT EXISTS campaigns (
   is_active   BOOLEAN     DEFAULT TRUE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_campaigns_merchant_id ON campaigns (merchant_id);
