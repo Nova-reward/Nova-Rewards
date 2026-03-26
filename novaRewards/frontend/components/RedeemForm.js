@@ -4,6 +4,7 @@ import { StrKey, Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horiz
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
 import TransactionLink from './TransactionLink';
+import ConfirmationModal from './ConfirmationModal';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -20,6 +21,7 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [txHash, setTxHash] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   function isValidAddress(addr) {
     try { return StrKey.isValidEd25519PublicKey(addr); } catch { return false; }
@@ -46,6 +48,12 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
       return;
     }
 
+    // Show confirmation modal
+    setShowConfirmation(true);
+  }
+
+  async function executeRedeem() {
+    setShowConfirmation(false);
     setStatus('loading');
     try {
       // Build unsigned payment XDR (customer → merchant)
@@ -86,37 +94,49 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
   }
 
   return (
-    <form onSubmit={handleRedeem}>
-      <label className="label">Merchant Wallet Address</label>
-      <input
-        className="input"
-        value={merchantWallet}
-        onChange={(e) => setMerchantWallet(e.target.value)}
-        placeholder="G..."
-        disabled={status === 'loading'}
+    <>
+      <form onSubmit={handleRedeem}>
+        <label className="label">Merchant Wallet Address</label>
+        <input
+          className="input"
+          value={merchantWallet}
+          onChange={(e) => setMerchantWallet(e.target.value)}
+          placeholder="G..."
+          disabled={status === 'loading'}
+        />
+        <label className="label">Amount to Redeem (NOVA)</label>
+        <input
+          className="input"
+          type="number"
+          min="0.0000001"
+          step="any"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="50"
+          disabled={status === 'loading'}
+        />
+        <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
+          {status === 'loading' ? 'Redeeming…' : 'Redeem NOVA'}
+        </button>
+        {message && (
+          <p className={status === 'error' ? 'error' : 'success'}>
+            {message}
+            {txHash && (
+              <span> Transaction: <TransactionLink txHash={txHash} /></span>
+            )}
+          </p>
+        )}
+      </form>
+
+      <ConfirmationModal
+        isOpen={showConfirmation}
+        onConfirm={executeRedeem}
+        onCancel={() => setShowConfirmation(false)}
+        recipient={merchantWallet}
+        amount={amount}
+        asset="NOVA"
+        operation="redemption"
       />
-      <label className="label">Amount to Redeem (NOVA)</label>
-      <input
-        className="input"
-        type="number"
-        min="0.0000001"
-        step="any"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        placeholder="50"
-        disabled={status === 'loading'}
-      />
-      <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
-        {status === 'loading' ? 'Redeeming…' : 'Redeem NOVA'}
-      </button>
-      {message && (
-        <p className={status === 'error' ? 'error' : 'success'}>
-          {message}
-          {txHash && (
-            <span> Transaction: <TransactionLink txHash={txHash} /></span>
-          )}
-        </p>
-      )}
-    </form>
+    </>
   );
 }
