@@ -1,5 +1,6 @@
 ﻿// Feature: nova-rewards, campaign routes
 // Validates: Requirements 7.2, 7.3
+// #94: Unit Tests for campaign routes
 
 // Must be set before requiring server.js — stellarService reads ISSUER_PUBLIC
 // at module load time to construct the NOVA Asset.
@@ -136,7 +137,7 @@ describe('GET /api/campaigns/:merchantId', () => {
     expect(res.body.success).toBe(true);
     expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.data).toHaveLength(2);
-    expect(getCampaignsByMerchant).toHaveBeenCalledWith('7');
+    expect(getCampaignsByMerchant).toHaveBeenCalledWith(7);
   });
 
   test('200 - returns an empty array when merchant has no campaigns', async () => {
