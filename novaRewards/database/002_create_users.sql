@@ -4,5 +4,5 @@
 CREATE TABLE IF NOT EXISTS users (
   id             SERIAL PRIMARY KEY,
   wallet_address VARCHAR(56) NOT NULL UNIQUE,
-  created_at     TIMESTAMPTZ DEFAULT NOW()
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

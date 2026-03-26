@@ -1,0 +1,8 @@
+node_modules/
+coverage/
+novaRewards/backend/coverage/
+.env
+.env.local
+dist/
+build/
+.DS_Store

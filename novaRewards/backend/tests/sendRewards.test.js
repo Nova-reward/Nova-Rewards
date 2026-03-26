@@ -138,4 +138,81 @@ describe('distributeRewards', function() {
       ).rejects.toThrow('Horizon 400: tx_failed');
     });
   });
+
+  describe('happy path: trustline exists, sufficient balance, Horizon returns success', function() {
+    test('calls verifyTrustline with recipient wallet', async function() {
+      verifyTrustline.mockResolvedValue({ exists: true });
+      server.loadAccount.mockResolvedValue(mockDistributionAccount('500.0000000'));
+      server.submitTransaction.mockResolvedValue({ hash: 'abc123' });
+
+      await distributeRewards({ toWallet: RECIPIENT, amount: '10' });
+
+      expect(verifyTrustline).toHaveBeenCalledWith(RECIPIENT);
+    });
+
+    test('calls server.loadAccount with distribution account public key', async function() {
+      verifyTrustline.mockResolvedValue({ exists: true });
+      server.loadAccount.mockResolvedValue(mockDistributionAccount('500.0000000'));
+      server.submitTransaction.mockResolvedValue({ hash: 'abc123' });
+
+      await distributeRewards({ toWallet: RECIPIENT, amount: '10' });
+
+      expect(server.loadAccount).toHaveBeenCalledWith(DIST_KEYPAIR.publicKey());
+    });
+
+    test('calls server.submitTransaction with signed transaction', async function() {
+      verifyTrustline.mockResolvedValue({ exists: true });
+      server.loadAccount.mockResolvedValue(mockDistributionAccount('500.0000000'));
+      server.submitTransaction.mockResolvedValue({ hash: 'abc123' });
+
+      await distributeRewards({ toWallet: RECIPIENT, amount: '10' });
+
+      expect(server.submitTransaction).toHaveBeenCalledTimes(1);
+      const submittedTx = server.submitTransaction.mock.calls[0][0];
+      expect(submittedTx).toBeTruthy();
+    });
+  });
+
+  describe('error path: no trustline', function() {
+    test('does not call server.loadAccount when trustline does not exist', async function() {
+      verifyTrustline.mockResolvedValue({ exists: false });
+
+      await expect(
+        distributeRewards({ toWallet: RECIPIENT, amount: '10' })
+      ).rejects.toMatchObject({ code: 'no_trustline' });
+
+      expect(server.loadAccount).not.toHaveBeenCalled();
+    });
+
+    test('does not call server.submitTransaction when trustline does not exist', async function() {
+      verifyTrustline.mockResolvedValue({ exists: false });
+
+      await expect(
+        distributeRewards({ toWallet: RECIPIENT, amount: '10' })
+      ).rejects.toMatchObject({ code: 'no_trustline' });
+
+      expect(server.submitTransaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('error path: Horizon throws', function() {
+    test('propagates error when server.loadAccount throws', async function() {
+      verifyTrustline.mockResolvedValue({ exists: true });
+      server.loadAccount.mockRejectedValue(new Error('Horizon connection failed'));
+
+      await expect(
+        distributeRewards({ toWallet: RECIPIENT, amount: '10' })
+      ).rejects.toThrow('Horizon connection failed');
+    });
+
+    test('propagates error when server.submitTransaction throws', async function() {
+      verifyTrustline.mockResolvedValue({ exists: true });
+      server.loadAccount.mockResolvedValue(mockDistributionAccount('500.0000000'));
+      server.submitTransaction.mockRejectedValue(new Error('Horizon 500: internal error'));
+
+      await expect(
+        distributeRewards({ toWallet: RECIPIENT, amount: '10' })
+      ).rejects.toThrow('Horizon 500: internal error');
+    });
+  });
 });
