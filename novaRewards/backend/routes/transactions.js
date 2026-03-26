@@ -1,7 +1,6 @@
 const router = require('express').Router();
-const { server, NOVA } = require('../../blockchain/stellarService');
+const { server, NOVA, isValidStellarAddress } = require('../../blockchain/stellarService');
 const { recordTransaction, getTransactionsByMerchant, getMerchantTotals } = require('../db/transactionRepository');
-const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { query } = require('../db/index');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
@@ -101,8 +100,8 @@ router.get('/:walletAddress', async (req, res, next) => {
         const novaPayments = page.records.filter(
           (r) =>
             r.type === 'payment' &&
-            r.asset_code === 'NOVA' &&
-            r.asset_issuer === process.env.ISSUER_PUBLIC
+            r.asset_code === NOVA.code &&
+            r.asset_issuer === NOVA.issuer
         );
         transactions.push(...novaPayments);
 

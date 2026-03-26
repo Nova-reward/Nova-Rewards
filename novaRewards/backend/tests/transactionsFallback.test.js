@@ -1,5 +1,6 @@
 // Feature: nova-rewards — GET /api/transactions/:walletAddress Horizon fallback
 // Validates: Requirements 6.1, 6.4, 6.5
+// #96: Unit Tests for transaction history route with Horizon fallback
 // Covers:
 //   1. Mock Horizon to throw a network error
 //   2. Assert the route falls back to the PostgreSQL query
@@ -74,7 +75,9 @@ describe('GET /api/transactions/:walletAddress — Horizon fallback', () => {
     srv = http.createServer(buildApp()).listen(0, done);
   });
 
-  afterAll((done) => srv.close(done));
+  afterAll((done) => {
+    srv.close(done);
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();

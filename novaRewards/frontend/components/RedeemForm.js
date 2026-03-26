@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StrKey, Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
+import TransactionLink from './TransactionLink';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -18,9 +19,38 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
+<<<<<<< feature/transaction-links
+  const [txHash, setTxHash] = useState('');
+=======
+  const [amountError, setAmountError] = useState('');
+>>>>>>> main
 
   function isValidAddress(addr) {
     try { return StrKey.isValidEd25519PublicKey(addr); } catch { return false; }
+  }
+
+  function validateAmount(value) {
+    if (!value || value.trim() === '') {
+      setAmountError('');
+      return false;
+    }
+    const numValue = Number(value);
+    if (isNaN(numValue) || numValue <= 0) {
+      setAmountError('Amount must be a positive number.');
+      return false;
+    }
+    if (numValue > Number(senderBalance)) {
+      setAmountError(`Insufficient balance. Available: ${senderBalance} NOVA`);
+      return false;
+    }
+    setAmountError('');
+    return true;
+  }
+
+  function handleAmountChange(e) {
+    const value = e.target.value;
+    setAmount(value);
+    validateAmount(value);
   }
 
   async function handleRedeem(e) {
@@ -32,14 +62,9 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
       setStatus('error');
       return;
     }
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      setMessage('Amount must be a positive number.');
-      setStatus('error');
-      return;
-    }
-    // Client-side balance check — Requirements 4.1
-    if (Number(amount) > Number(senderBalance)) {
-      setMessage(`Insufficient balance. Available: ${senderBalance} NOVA`);
+    
+    // Validate amount before submission
+    if (!validateAmount(amount)) {
       setStatus('error');
       return;
     }
@@ -60,11 +85,12 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
         .build();
 
       // Sign with Freighter and submit — Requirements 4.2
-      const { txHash } = await signAndSubmit(tx.toXDR());
+      const result = await signAndSubmit(tx.toXDR());
+      setTxHash(result.txHash);
 
       // Record redemption in backend
       await api.post('/api/transactions/record', {
-        txHash,
+        txHash: result.txHash,
         txType: 'redemption',
         amount,
         fromWallet: senderPublicKey,
@@ -72,7 +98,7 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
       });
 
       setStatus('done');
-      setMessage(`Redemption successful! Tx: ${txHash.slice(0, 16)}…`);
+      setMessage('Redemption successful!');
       setMerchantWallet('');
       setAmount('');
       onSuccess?.();
@@ -99,14 +125,22 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
         min="0.0000001"
         step="any"
         value={amount}
-        onChange={(e) => setAmount(e.target.value)}
+        onChange={handleAmountChange}
         placeholder="50"
         disabled={status === 'loading'}
       />
+      {amountError && <p className="error" style={{ marginTop: '0.25rem', fontSize: '0.875rem' }}>{amountError}</p>}
       <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
         {status === 'loading' ? 'Redeeming…' : 'Redeem NOVA'}
       </button>
-      {message && <p className={status === 'error' ? 'error' : 'success'}>{message}</p>}
+      {message && (
+        <p className={status === 'error' ? 'error' : 'success'}>
+          {message}
+          {txHash && (
+            <span> Transaction: <TransactionLink txHash={txHash} /></span>
+          )}
+        </p>
+      )}
     </form>
   );
 }

@@ -7,11 +7,6 @@ const {
 } = require('stellar-sdk');
 const { server, NOVA } = require('./stellarService');
 
-const NETWORK_PASSPHRASE =
-  process.env.STELLAR_NETWORK === 'mainnet'
-    ? Networks.PUBLIC
-    : Networks.TESTNET;
-
 /**
  * Builds an unsigned changeTrust XDR for the NOVA asset.
  * The returned XDR string is intended to be signed client-side via Freighter.
@@ -21,6 +16,11 @@ const NETWORK_PASSPHRASE =
  * @returns {Promise<string>} Unsigned transaction XDR
  */
 async function buildTrustlineXDR(walletAddress) {
+  const NETWORK_PASSPHRASE =
+    process.env.STELLAR_NETWORK === 'mainnet'
+      ? Networks.PUBLIC
+      : Networks.TESTNET;
+
   const account = await server.loadAccount(walletAddress);
 
   const transaction = new TransactionBuilder(account, {
@@ -52,8 +52,8 @@ async function verifyTrustline(walletAddress) {
     const exists = account.balances.some(
       (b) =>
         b.asset_type !== 'native' &&
-        b.asset_code === 'NOVA' &&
-        b.asset_issuer === process.env.ISSUER_PUBLIC
+        b.asset_code === NOVA.code &&
+        b.asset_issuer === NOVA.issuer
     );
     return { exists };
   } catch (err) {
