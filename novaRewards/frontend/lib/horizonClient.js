@@ -5,7 +5,7 @@ const HORIZON_URL =
 
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
 
-const server = new Horizon.Server(HORIZON_URL);
+const server = new Horizon.Server(HORIZON_URL, { timeout: 15000 });
 
 /**
  * Fetches the current NOVA token balance for a wallet.
