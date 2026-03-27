@@ -1,15 +1,25 @@
 require('dotenv').config();
 const { validateEnv } = require('./middleware/validateEnv');
 
-// Validate all required env vars before anything else — halts if any are missing
+// Validate all required env vars before anything else — halts if any are missing.
+// This MUST run before requiring ./db/index because the Pool constructor reads
+// DATABASE_URL immediately at require-time.
 validateEnv();
+
+// Safe to require db now — DATABASE_URL is guaranteed to be present
+require('./db/index');
 
 const express = require('express');
 const cors = require('cors');
 
 const app = express();
 
-app.use(cors());
+// Configure CORS based on environment
+const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
+  ? { origin: process.env.ALLOWED_ORIGIN }
+  : {}; // Open CORS for development
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Health check

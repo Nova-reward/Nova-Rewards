@@ -1,8 +1,8 @@
 const router = require('express').Router();
-const { server, NOVA } = require('../../blockchain/stellarService');
+const { server, NOVA, isValidStellarAddress } = require('../../blockchain/stellarService');
 const { recordTransaction, getTransactionsByMerchant, getMerchantTotals } = require('../db/transactionRepository');
-const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { query } = require('../db/index');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
 /**
  * POST /api/transactions/record
@@ -28,6 +28,22 @@ router.post('/record', async (req, res, next) => {
         success: false,
         error: 'validation_error',
         message: `txType must be one of: ${validTypes.join(', ')}`,
+      });
+    }
+
+    if (fromWallet && !isValidStellarAddress(fromWallet)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'fromWallet must be a valid Stellar public key',
+      });
+    }
+
+    if (toWallet && !isValidStellarAddress(toWallet)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'toWallet must be a valid Stellar public key',
       });
     }
 
@@ -100,8 +116,8 @@ router.get('/:walletAddress', async (req, res, next) => {
         const novaPayments = page.records.filter(
           (r) =>
             r.type === 'payment' &&
-            r.asset_code === 'NOVA' &&
-            r.asset_issuer === process.env.ISSUER_PUBLIC
+            r.asset_code === NOVA.code &&
+            r.asset_issuer === NOVA.issuer
         );
         transactions.push(...novaPayments);
 
@@ -129,13 +145,13 @@ router.get('/:walletAddress', async (req, res, next) => {
 module.exports = router;
 
 /**
- * GET /api/transactions/merchant-totals/:merchantId
- * Returns total NOVA distributed and redeemed for a merchant.
+ * GET /api/transactions/merchant-totals
+ * Returns total NOVA distributed and redeemed for the authenticated merchant.
  * Requirements: 10.2
  */
-router.get('/merchant-totals/:merchantId', async (req, res, next) => {
+router.get('/merchant-totals', authenticateMerchant, async (req, res, next) => {
   try {
-    const totals = await getMerchantTotals(req.params.merchantId);
+    const totals = await getMerchantTotals(req.merchant.id);
     res.json({ success: true, data: totals });
   } catch (err) {
     next(err);
