@@ -4,6 +4,7 @@ import { StrKey, Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horiz
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
 import TransactionLink from './TransactionLink';
+import ConfirmationModal from './ConfirmationModal';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -19,11 +20,8 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
-<<<<<<< feature/transaction-links
-  const [txHash, setTxHash] = useState('');
-=======
   const [amountError, setAmountError] = useState('');
->>>>>>> main
+
 
   function isValidAddress(addr) {
     try { return StrKey.isValidEd25519PublicKey(addr); } catch { return false; }
@@ -69,6 +67,12 @@ export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }
       return;
     }
 
+    // Show confirmation modal
+    setShowConfirmation(true);
+  }
+
+  async function executeRedeem() {
+    setShowConfirmation(false);
     setStatus('loading');
     try {
       // Build unsigned payment XDR (customer → merchant)
