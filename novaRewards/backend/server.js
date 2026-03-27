@@ -39,6 +39,8 @@ app.use('/api/rewards', require('./routes/rewards'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/trustline', require('./routes/trustline'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/contract-events', require('./routes/contractEvents'));
+app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 
