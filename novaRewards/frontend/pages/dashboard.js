@@ -4,6 +4,7 @@ import { useWallet } from '../context/WalletContext';
 import TrustlineButton from '../components/TrustlineButton';
 import TransferForm from '../components/TransferForm';
 import RedeemForm from '../components/RedeemForm';
+import PointsWidget from '../components/PointsWidget';
 
 /**
  * Customer dashboard — balance, transaction history, trustline, transfer, redeem.
@@ -44,6 +45,9 @@ export default function Dashboard() {
       </nav>
 
       <div className="container">
+        <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+          <PointsWidget />
+        </div>
         {/* Balance card */}
         <div className="card" style={{ textAlign: 'center' }}>
           <p style={{ color: '#94a3b8', marginBottom: '0.4rem' }}>NOVA Balance</p>
