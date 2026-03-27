@@ -1,4 +1,5 @@
 const { query } = require('./index');
+const { client: redisClient } = require('../lib/redis');
 
 /**
  * Records a completed Stellar transaction in the database.
@@ -34,6 +35,15 @@ async function recordTransaction({
      RETURNING *`,
     [txHash, txType, amount, fromWallet, toWallet, merchantId, nullableCampaignId, stellarLedger]
   );
+
+  // Invalidate leaderboard cache when a reward is earned (distribution maps to 'earned')
+  if (txType === 'distribution') {
+    await Promise.all([
+      redisClient.del('leaderboard:weekly'),
+      redisClient.del('leaderboard:alltime'),
+    ]).catch((err) => console.error('[leaderboard] cache invalidation failed', err));
+  }
+
   return result.rows[0];
 }
 

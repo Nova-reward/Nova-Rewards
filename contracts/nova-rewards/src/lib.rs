@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    Address, BytesN, Env,
+    token, Address, BytesN, Env, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -14,6 +14,10 @@ pub enum DataKey {
     Admin,
     Balance(Address),
     MigratedVersion,
+    /// Address of the XLM SAC token contract
+    XlmToken,
+    /// Address of the DEX router contract used for multi-hop swaps
+    Router,
 }
 
 // Current code version — bump this with every upgrade that needs a migration.
@@ -97,6 +101,105 @@ impl NovaRewardsContract {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
+    }
+
+    /// Sets the XLM SAC token address and DEX router address.
+    /// Admin only. Must be called before swap_for_xlm is usable.
+    pub fn set_swap_config(env: Env, xlm_token: Address, router: Address) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::XlmToken, &xlm_token);
+        env.storage().instance().set(&DataKey::Router, &router);
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-asset swap (Issue #200)
+    // -----------------------------------------------------------------------
+
+    /// Burns `nova_amount` Nova points for the caller and exchanges them for
+    /// XLM (or another output asset) via the configured DEX router.
+    ///
+    /// # Parameters
+    /// - `user`         – the account authorising and receiving the swap
+    /// - `nova_amount`  – Nova points to burn (must be > 0)
+    /// - `min_xlm_out`  – minimum acceptable output; reverts if not met (slippage guard)
+    /// - `path`         – intermediate asset addresses for multi-hop routing
+    ///                    (max 5 hops per Stellar protocol limits; may be empty
+    ///                    for a direct NOVA→XLM swap)
+    ///
+    /// # Events
+    /// Emits `(Symbol("swap"), user)` with data `(nova_amount, xlm_received, path)`.
+    pub fn swap_for_xlm(
+        env: Env,
+        user: Address,
+        nova_amount: i128,
+        min_xlm_out: i128,
+        path: Vec<Address>,
+    ) -> i128 {
+        user.require_auth();
+
+        // Validate inputs
+        if nova_amount <= 0 {
+            panic!("nova_amount must be positive");
+        }
+        if min_xlm_out < 0 {
+            panic!("min_xlm_out must be non-negative");
+        }
+        // Stellar protocol: path_payment allows at most 5 intermediate hops
+        if path.len() > 5 {
+            panic!("path exceeds maximum of 5 hops");
+        }
+
+        // --- Burn Nova points ---
+        let balance: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Balance(user.clone()))
+            .unwrap_or(0);
+        if balance < nova_amount {
+            panic!("insufficient Nova balance");
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance(user.clone()), &(balance - nova_amount));
+
+        // --- Execute swap via router ---
+        // The router contract must implement swap_exact_in(sender, nova_amount,
+        // min_out, path) -> i128 (returns actual XLM received).
+        let router: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Router)
+            .expect("router not configured");
+
+        let xlm_received: i128 = env.invoke_contract(
+            &router,
+            &soroban_sdk::Symbol::new(&env, "swap_exact_in"),
+            soroban_sdk::vec![
+                &env,
+                user.clone().into(),
+                nova_amount.into(),
+                min_xlm_out.into(),
+                path.clone().into(),
+            ],
+        );
+
+        // Slippage guard — revert if router returned less than minimum
+        if xlm_received < min_xlm_out {
+            panic!("slippage: received {} < min {}", xlm_received, min_xlm_out);
+        }
+
+        // --- Emit event ---
+        env.events().publish(
+            (symbol_short!("swap"), user),
+            (nova_amount, xlm_received, path),
+        );
+
+        xlm_received
     }
 
     // -----------------------------------------------------------------------
