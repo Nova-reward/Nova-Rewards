@@ -20,6 +20,64 @@ pub enum DataKey {
 const CONTRACT_VERSION: u32 = 1;
 
 // ---------------------------------------------------------------------------
+// Fixed-point arithmetic (Issue #205)
+// ---------------------------------------------------------------------------
+
+/// Scale factor for 6 decimal places of precision.
+/// All rate arguments are expressed as integers scaled by this factor.
+/// e.g. a 3.3333% rate is passed as 33_333 (= 0.033333 × 1_000_000).
+pub const SCALE_FACTOR: i128 = 1_000_000;
+
+/// Computes the reward payout for a given balance and rate using fixed-point
+/// arithmetic to eliminate rounding errors and dust accumulation.
+///
+/// # Fixed-point approach
+///
+/// Rates are represented as integers scaled by `SCALE_FACTOR` (10^6).
+/// A rate of 3.3333% is expressed as `33_333` (i.e. 0.033333 × 1_000_000).
+///
+/// ## Why multiply first?
+///
+/// The naïve formula `(balance / SCALE_FACTOR) * rate` loses precision because
+/// integer division truncates *before* the multiplication, discarding the
+/// fractional part of the balance entirely.
+///
+/// The correct formula is:
+/// ```text
+/// payout = (balance * rate) / SCALE_FACTOR
+/// ```
+/// Multiplying first keeps all significant bits intact; the single division at
+/// the end is the only truncation point.
+///
+/// ## Why i128?
+///
+/// With `SCALE_FACTOR = 1_000_000` and a maximum balance near `i64::MAX`
+/// (~9.2 × 10^18), the intermediate product `balance * rate` can reach
+/// ~9.2 × 10^24, which overflows `i64` and even `u64`. `i128` provides
+/// ~1.7 × 10^38, giving ample headroom for any realistic balance × rate
+/// combination.
+///
+/// ## Overflow safety
+///
+/// `checked_mul` and `checked_div` are used so the contract panics
+/// deterministically on overflow rather than silently producing wrong results.
+///
+/// # Arguments
+/// * `balance` – token balance in base units (i128)
+/// * `rate`    – reward rate scaled by `SCALE_FACTOR`
+///              (e.g. 33_333 for 3.3333%)
+///
+/// # Returns
+/// Payout in base units, truncated toward zero.
+pub fn calculate_payout(balance: i128, rate: i128) -> i128 {
+    balance
+        .checked_mul(rate)
+        .expect("overflow in balance * rate")
+        .checked_div(SCALE_FACTOR)
+        .expect("overflow in payout / SCALE_FACTOR")
+}
+
+// ---------------------------------------------------------------------------
 // Contract
 // ---------------------------------------------------------------------------
 
@@ -122,5 +180,11 @@ impl NovaRewardsContract {
             .instance()
             .get(&DataKey::MigratedVersion)
             .unwrap_or(0)
+    }
+
+    /// Thin contract entry-point that delegates to the free `calculate_payout`
+    /// function. Exposed so off-chain callers can verify payout amounts.
+    pub fn calc_payout(_env: Env, balance: i128, rate: i128) -> i128 {
+        calculate_payout(balance, rate)
     }
 }
