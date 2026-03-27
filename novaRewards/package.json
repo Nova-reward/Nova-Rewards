@@ -13,6 +13,6 @@
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
     "migrate": "node database/migrate.js",
-    "migrate:rollback": "node database/migrate.js --rollback"
+    "reset-testnet": "node scripts/reset-testnet.js"
   }
 }
