@@ -54,6 +54,7 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
  */
 router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
+    const campaigns = await getCampaignsByMerchant(req.merchant.id);
     const merchantId = parseInt(req.params.merchantId, 10);
     if (isNaN(merchantId) || merchantId <= 0) {
       return res.status(400).json({

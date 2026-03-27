@@ -1,6 +1,10 @@
 const router = require('express').Router();
+<<<<<<< Testing-—-Property-Tests-Write-property-test-for-merchant-totals-consistency-(Property-12)
 const { getActiveCampaign } = require('../db/campaignRepository');
 const rateLimit = require('express-rate-limit');
+=======
+const { createHash } = require('crypto');
+>>>>>>> main
 const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { recordTransaction } = require('../db/transactionRepository');
@@ -29,7 +33,7 @@ const distributeRateLimiter = rateLimit({
  * Distributes NOVA tokens to a customer wallet.
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 7.4, 7.5
  */
-router.post('/distribute', distributeRateLimiter, merchantAuth, async (req, res, next) => {
+router.post('/distribute', authenticateMerchant, async (req, res, next) => {
   try {
     const { customerWallet, amount, campaignId } = req.body;
 
