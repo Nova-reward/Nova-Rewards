@@ -95,9 +95,72 @@ async function getMerchantTotals(merchantId) {
   };
 }
 
+/**
+ * Returns paginated transactions for a user with optional filtering.
+ * Requirements: #180
+ *
+ * @param {number} userId
+ * @param {object} params
+ * @param {string} [params.type] - Filter by transaction type
+ * @param {string} [params.startDate] - ISO date string
+ * @param {string} [params.endDate] - ISO date string
+ * @param {number} params.page
+ * @param {number} params.limit
+ * @returns {Promise<{data: object[], total: number, page: number, limit: number}>}
+ */
+async function getTransactionsByUser(userId, { type, startDate, endDate, page = 1, limit = 20 }) {
+  const offset = (page - 1) * limit;
+  const conditions = ['t.user_id = $1'];
+  const params = [userId];
+  let paramIndex = 2;
+
+  if (type) {
+    conditions.push(`t.tx_type = $${paramIndex++}`);
+    params.push(type);
+  }
+
+  if (startDate) {
+    conditions.push(`t.created_at >= $${paramIndex++}`);
+    params.push(new Date(startDate));
+  }
+
+  if (endDate) {
+    conditions.push(`t.created_at <= $${paramIndex++}`);
+    params.push(new Date(endDate));
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  // Get total count
+  const countResult = await query(
+    `SELECT COUNT(*) as total FROM transactions t ${whereClause}`,
+    params
+  );
+  const total = parseInt(countResult.rows[0].total, 10);
+
+  // Get paginated data with campaign name (no N+1 query)
+  const dataResult = await query(
+    `SELECT t.*, c.name as campaign_name
+     FROM transactions t
+     LEFT JOIN campaigns c ON t.campaign_id = c.id
+     ${whereClause}
+     ORDER BY t.created_at DESC
+     LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+    [...params, limit, offset]
+  );
+
+  return {
+    data: dataResult.rows,
+    total,
+    page,
+    limit,
+  };
+}
+
 module.exports = {
   recordTransaction,
   getTransactionByHash,
   getTransactionsByMerchant,
   getMerchantTotals,
+  getTransactionsByUser,
 };

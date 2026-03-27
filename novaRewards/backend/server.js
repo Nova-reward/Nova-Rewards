@@ -33,6 +33,9 @@ app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/rewards', require('./routes/rewards'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/trustline', require('./routes/trustline'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/contract-events', require('./routes/contractEvents'));
+app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {
