@@ -1,5 +1,10 @@
 const router = require('express').Router();
+<<<<<<< Testing-—-Property-Tests-Write-property-test-for-merchant-totals-consistency-(Property-12)
+const { getActiveCampaign } = require('../db/campaignRepository');
+const rateLimit = require('express-rate-limit');
+=======
 const { createHash } = require('crypto');
+>>>>>>> main
 const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { recordTransaction } = require('../db/transactionRepository');
