@@ -1,10 +1,27 @@
 const router = require('express').Router();
+const { createHash } = require('crypto');
 const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+
+/**
+ * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
+ * Closes: #123
+ */
+const distributeRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'rate_limit_exceeded',
+    message: 'Too many requests. Please try again later.',
+  },
+});
 
 /**
  * POST /api/rewards/distribute
