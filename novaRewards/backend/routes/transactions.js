@@ -30,6 +30,22 @@ router.post('/record', async (req, res, next) => {
       });
     }
 
+    if (fromWallet && !isValidStellarAddress(fromWallet)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'fromWallet must be a valid Stellar public key',
+      });
+    }
+
+    if (toWallet && !isValidStellarAddress(toWallet)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'toWallet must be a valid Stellar public key',
+      });
+    }
+
     // Verify the transaction exists on Horizon before recording
     let stellarLedger = null;
     try {
