@@ -4,23 +4,17 @@ const {
   createCampaign,
   getCampaignsByMerchant,
 } = require('../db/campaignRepository');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
 /**
  * POST /api/campaigns
  * Creates a new reward campaign after validating inputs.
  * Requirements: 7.2, 7.3
  */
-router.post('/', async (req, res, next) => {
+router.post('/', authenticateMerchant, async (req, res, next) => {
   try {
-    const { merchantId, name, rewardRate, startDate, endDate } = req.body;
-
-    if (!merchantId) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'merchantId is required',
-      });
-    }
+    const { name, rewardRate, startDate, endDate } = req.body;
+    const merchantId = req.merchant.id;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return res.status(400).json({
@@ -58,8 +52,9 @@ router.post('/', async (req, res, next) => {
  * Returns all campaigns for a given merchant.
  * Requirements: 7.2, 10.1
  */
-router.get('/:merchantId', async (req, res, next) => {
+router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
+    const campaigns = await getCampaignsByMerchant(req.merchant.id);
     const merchantId = parseInt(req.params.merchantId, 10);
     if (isNaN(merchantId) || merchantId <= 0) {
       return res.status(400).json({
