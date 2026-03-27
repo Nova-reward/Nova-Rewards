@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const rateLimit = require('express-rate-limit');
+const { createHash } = require('crypto');
 const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { recordTransaction } = require('../db/transactionRepository');
@@ -22,7 +22,7 @@ async function merchantAuth(req, res, next) {
 
   const result = await query(
     'SELECT * FROM merchants WHERE api_key = $1',
-    [apiKey]
+    [createHash('sha256').update(apiKey).digest('hex')]
   );
 
   if (!result.rows[0]) {
