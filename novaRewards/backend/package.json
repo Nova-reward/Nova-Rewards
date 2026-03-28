@@ -9,7 +9,8 @@
     "test": "jest --runInBand --coverage",
     "lint": "eslint .",
     "migrate": "node ../database/migrate.js",
-    "migrate:rollback": "node ../database/migrate.js --rollback"
+    "migrate:rollback": "node ../database/migrate.js --rollback",
+    "generate:openapi": "node -e \"const fs=require('fs'); const swagger=require('./swagger'); fs.mkdirSync('../..//docs', { recursive: true}); fs.writeFileSync('../../docs/openapi.json', JSON.stringify(swagger, null, 2)); console.log('docs/openapi.json generated');\""  
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -24,6 +25,8 @@
     "rate-limit-redis": "^4.2.0",
     "redis": "^4.7.0",
     "stellar-sdk": "^12.3.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^10.0.0"
   },
   "devDependencies": {

@@ -7,7 +7,8 @@ const { getUserTotalPoints, getUserReferralPoints } = require('../db/pointTransa
 const { sendWelcome } = require('../services/emailService');
 const { authenticateUser, requireOwnershipOrAdmin } = require('../middleware/authenticateUser');
 const { validateUpdateUserDto } = require('../middleware/validateDto');
-const { isValidStellarAddress } = require('../../blockchain/stellarService');
+const { isValidStellarAddress, getNOVABalance } = require('../../blockchain/stellarService');
+const { client: redisClient } = require('../lib/redis');
 
 /**
  * POST /api/users
@@ -81,6 +82,99 @@ router.get('/:walletAddress/points', async (req, res, next) => {
     res.json({
       success: true,
       data: { walletAddress, balance: balance < 0 ? 0 : balance },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /users/{id}/token-balance:
+ *   get:
+ *     summary: Get user's on-chain token balance
+ *     description: Reads the user's linked Stellar public key and returns token balance from Horizon/Soroban.
+ *     tags:
+ *       - Users
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: Token balance retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: User not found or no linked Stellar public key.
+ *       400:
+ *         description: Validation error on input.
+ */
+router.get('/:id/token-balance', async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (Number.isNaN(userId) || userId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'id must be a positive integer',
+      });
+    }
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    if (!user.stellar_public_key) {
+      return res.status(404).json({
+        success: false,
+        error: 'not_found',
+        message: 'User does not have a linked Stellar public key',
+      });
+    }
+
+    const cacheKey = `tokenBalance:${userId}`;
+    let tokenBalance;
+
+    if (redisClient && redisClient.isOpen) {
+      const cachedBalance = await redisClient.get(cacheKey);
+      if (cachedBalance) {
+        return res.json({
+          success: true,
+          data: {
+            userId,
+            stellarPublicKey: user.stellar_public_key,
+            tokenBalance: cachedBalance,
+            cached: true,
+          },
+        });
+      }
+    }
+
+    tokenBalance = await getNOVABalance(user.stellar_public_key);
+
+    if (redisClient && redisClient.isOpen) {
+      try {
+        await redisClient.setEx(cacheKey, 30, tokenBalance);
+      } catch (cacheErr) {
+        console.warn('Redis cache set failed', cacheErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        userId,
+        stellarPublicKey: user.stellar_public_key,
+        tokenBalance,
+        cached: false,
+      },
     });
   } catch (err) {
     next(err);

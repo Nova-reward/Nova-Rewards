@@ -71,6 +71,12 @@ app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
 
+// Swagger/OpenAPI docs
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger');
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api/docs/openapi.json', (req, res) => res.json(swaggerSpec));
+
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {
   console.error(err);
