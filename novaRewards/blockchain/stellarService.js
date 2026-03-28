@@ -34,15 +34,6 @@ function isValidStellarAddress(address) {
  * @param {string} walletAddress - Stellar public key
  * @returns {Promise<string>} NOVA balance as a string (e.g. "100.0000000")
  */
-async function getNOVABalance(walletAddress) {
-  const account = await server.loadAccount(walletAddress);
-  const novaBalance = account.balances.find(
-    (b) =>
-      b.asset_type !== 'native' &&
-      b.asset_code === 'NOVA' &&
-      b.asset_issuer === process.env.ISSUER_PUBLIC
-  );
-  return novaBalance ? novaBalance.balance : '0';
-}
+async function getNOVABalance(walletAddress) {\n  try {\n    const account = await server.loadAccount(walletAddress);\n    const novaBalance = account.balances.find(\n      (b) =>\n        b.asset_type !== 'native' &&\n        b.asset_code === 'NOVA' &&\n        b.asset_issuer === process.env.ISSUER_PUBLIC\n    );\n    return novaBalance ? novaBalance.balance : '0';\n  } catch (err) {\n    if ((err.response?.status === 404) || err.message?.toLowerCase().includes('not found')) {\n      return '0';\n    }\n    throw err;\n  }\n}
 
 module.exports = { server, NOVA, isValidStellarAddress, getNOVABalance };
