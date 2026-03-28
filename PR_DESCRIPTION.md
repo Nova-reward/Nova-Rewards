@@ -1,10 +1,11 @@
-# Issue: Closes #14
-# Title: feat: implement getAsset helper for consistent asset instantiation
+# Issue: Closes #168
+# Title: feat: implement referral link generation and sharing UI
 
 ### Description:
-Refactored asset construction to use a centralized helper instead of inline new Asset() calls.
+Introduces the UI for generating, copying, and sharing referral links with on-chain rewards tracking.
 
 ### Key Changes:
-- **Centralized Helper:** Added getAsset(code, issuer) to stellarService.js.
-- **Native Support:** Automatically returns Asset.native() if the code is 'XLM' or 'native', ensuring native payments are handled correctly.
-- **Uniformity:** Updated NOVA and related constants to use the helper throughout the blockchain module.
+- **ReferralLink Component:** Built a premium React component with linear-gradient aesthetics and responsive grid layout.
+- **Copy to Clipboard:** Integrated the Clipboard API with a document.execCommand fallback for maximum browser compatibility; includes a 2-second visual confirmation.
+- **Sharing Integration:** Added direct sharing shortcuts for WhatsApp, Twitter/X, and Email, plus a native navigator.share fallback for mobile devices.
+- **User Dashboard:** Integrated the component into the main dashboard to display real-time referral stats.
