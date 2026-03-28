@@ -68,6 +68,12 @@ Users can store and manage rewards in their crypto wallets.
 
 ---
 
+## Product
+
+For detailed product vision, roadmap, and feature specifications, see the [Product Requirements Document (PRD)](docs/PRD.md).
+
+---
+
 ## Getting Started
 
 ### Prerequisites
