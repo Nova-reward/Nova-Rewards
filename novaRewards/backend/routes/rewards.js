@@ -1,4 +1,5 @@
-const router = require('express').Router();
+const express = require('express');
+const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const { createHash } = require('crypto');
 const { query } = require('../db/index');
@@ -7,6 +8,7 @@ const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { verifyTrustline } = require('../services/stellar');
 
 /**
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
@@ -29,23 +31,31 @@ const distributeRateLimiter = rateLimit({
  * Distributes NOVA tokens to a customer wallet.
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 7.4, 7.5
  */
-router.post('/distribute', authenticateMerchant, async (req, res, next) => {
+router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (req, res, next) => {
   try {
-    const { customerWallet, amount, campaignId } = req.body;
+    const { walletAddress, amount, campaignId } = req.body;
 
-    if (!customerWallet || !isValidStellarAddress(customerWallet)) {
+    if (!walletAddress || !amount) {
       return res.status(400).json({
         success: false,
-        error: 'validation_error',
-        message: 'customerWallet must be a valid Stellar public key',
+        error: 'Missing required fields: walletAddress and amount are required',
       });
     }
 
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+    if (amount <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'validation_error',
-        message: 'amount must be a positive number',
+        error: 'Amount must be greater than zero',
+      });
+    }
+
+    // Verify trustline exists
+    const hasTrustline = await verifyTrustline(walletAddress);
+    if (!hasTrustline) {
+      return res.status(400).json({
+        success: false,
+        error: 'no_trustline',
+        message: 'Recipient does not have a NOVA trustline. Please add NOVA trustline first.',
       });
     }
 
@@ -77,24 +87,14 @@ router.post('/distribute', authenticateMerchant, async (req, res, next) => {
       });
     }
 
-    // Distribute via Stellar — throws on no_trustline or insufficient_balance
-    const { txHash } = await distributeRewards({
-      toWallet: customerWallet,
-      amount: String(amount),
-    });
-
-    // Record in database
-    const tx = await recordTransaction({
-      txHash,
-      txType: 'distribution',
+    // Distribute rewards
+    const result = await distributeRewards({
+      recipient: walletAddress,
       amount,
-      fromWallet: process.env.DISTRIBUTION_PUBLIC,
-      toWallet: customerWallet,
-      merchantId: req.merchant.id,
-      campaignId: campaign.id,
+      campaignId,
     });
 
-    res.json({ success: true, txHash, transaction: tx });
+    res.json({ success: true, txHash: result.txHash, transaction: result.tx });
   } catch (err) {
     if (err.code === 'no_trustline') {
       return res.status(400).json({
@@ -103,14 +103,13 @@ router.post('/distribute', authenticateMerchant, async (req, res, next) => {
         message: err.message,
       });
     }
-    if (err.code === 'insufficient_balance') {
-      return res.status(400).json({
-        success: false,
-        error: 'insufficient_balance',
-        message: err.message,
-      });
-    }
-    next(err);
+    
+    console.error('Error distributing rewards:', err);
+    res.status(500).json({
+      success: false,
+      error: 'internal_server_error',
+      message: err.message || 'Failed to distribute rewards',
+    });
   }
 });
 
