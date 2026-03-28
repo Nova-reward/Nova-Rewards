@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: novaRewards/backend
-        run: npm ci
+        run: npm install
 
       - name: Run tests
         working-directory: novaRewards/backend

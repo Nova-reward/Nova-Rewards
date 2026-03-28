@@ -1,4 +1,5 @@
 const { query } = require('../db/index');
+const { verifyToken } = require('../services/tokenService');
 
 /**
  * Middleware: validates JWT token from the Authorization header.
@@ -7,7 +8,7 @@ const { query } = require('../db/index');
  */
 async function authenticateUser(req, res, next) {
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       success: false,
@@ -16,17 +17,11 @@ async function authenticateUser(req, res, next) {
     });
   }
 
-  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  const token = authHeader.substring(7);
 
   try {
-    // In a real implementation, you would verify the JWT token here
-    // For now, we'll use a simple token lookup (in production, use jsonwebtoken)
-    // This is a placeholder - replace with actual JWT verification
-    
-    // For demonstration, we'll extract user ID from token
-    // In production, decode JWT and verify signature
-    const decoded = decodeToken(token);
-    
+    const decoded = verifyToken(token);
+
     if (!decoded || !decoded.userId) {
       return res.status(401).json({
         success: false,
@@ -35,11 +30,10 @@ async function authenticateUser(req, res, next) {
       });
     }
 
-    // Fetch user from database
     const result = await query(
-      `SELECT id, wallet_address, first_name, last_name, bio, stellar_public_key, 
+      `SELECT id, email, wallet_address, first_name, last_name, bio, stellar_public_key,
               role, created_at, updated_at
-       FROM users 
+       FROM users
        WHERE id = $1 AND is_deleted = FALSE`,
       [decoded.userId]
     );
@@ -61,31 +55,6 @@ async function authenticateUser(req, res, next) {
       error: 'unauthorized',
       message: 'Invalid or expired token',
     });
-  }
-}
-
-/**
- * Placeholder token decoder - replace with actual JWT verification
- * In production, use jsonwebtoken library to verify and decode
- * @param {string} token - JWT token
- * @returns {Object|null} - Decoded token payload
- */
-function decodeToken(token) {
-  try {
-    // This is a placeholder - in production, use:
-    // const jwt = require('jsonwebtoken');
-    // return jwt.verify(token, process.env.JWT_SECRET);
-    
-    // For now, parse a simple base64-encoded payload
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
-    
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-    return payload;
-  } catch (err) {
-    return null;
   }
 }
 

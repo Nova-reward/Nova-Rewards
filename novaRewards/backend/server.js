@@ -45,6 +45,7 @@ app.get('/health', (req, res) => {
 });
 
 // Routes (wired in as they are implemented)
+app.use('/api/auth', require('./routes/auth'));
 app.use('/api/merchants', require('./routes/merchants'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/rewards', require('./routes/rewards'));
