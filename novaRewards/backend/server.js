@@ -22,6 +22,18 @@ const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({
+      success: false,
+      error: 'validation_error',
+      message: 'Invalid JSON in request body',
+    });
+  }
+  next(err);
+});
+
 // Rate limiting — global default, stricter on auth endpoints
 app.use(globalLimiter);
 app.use('/api/auth/login', authLimiter);
@@ -55,11 +67,15 @@ app.use((err, req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, async () => {
-  await connectRedis();
-  startLeaderboardCacheWarmer();
-  startDailyLoginBonusJob();
-  console.log(`NovaRewards backend running on port ${PORT}`);
-});
+
+// Only start the server when this file is run directly (not when required by tests)
+if (require.main === module) {
+  app.listen(PORT, async () => {
+    await connectRedis();
+    startLeaderboardCacheWarmer();
+    startDailyLoginBonusJob();
+    console.log(`NovaRewards backend running on port ${PORT}`);
+  });
+}
 
 module.exports = app;

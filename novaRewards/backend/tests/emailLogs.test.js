@@ -29,6 +29,11 @@ jest.mock('../middleware/authenticateMerchant', () => ({
   },
 }));
 
+// Mock emailService to avoid nodemailer dependency
+jest.mock('../services/emailService', () => ({
+  sendWelcome: jest.fn().mockResolvedValue({ success: true }),
+}));
+
 const app = require('../server');
 const {
   getEmailLogs,

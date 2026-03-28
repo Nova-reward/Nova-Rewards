@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const rateLimit = require('express-rate-limit');
 const { createHash } = require('crypto');
 const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');

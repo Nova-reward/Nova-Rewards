@@ -33,7 +33,7 @@ async function runDailyLoginBonus(now = new Date()) {
   for (const user of users) {
     try {
       await query(
-        `INSERT INTO point_transactions (user_id, points, type) VALUES ($1, $2, 'bonus')`,
+        `INSERT INTO point_transactions (user_id, amount, balance_before, balance_after, type) VALUES ($1, $2, 0, $2, 'bonus')`,
         [user.id, bonusPoints]
       );
       await query(
