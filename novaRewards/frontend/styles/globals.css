@@ -20,6 +20,28 @@
   --badge-green-text: #15803d;
   --badge-gray-bg: #e2e8f0;
   --badge-gray-text: #475569;
+
+  /* Animation tokens (from docs/design/animation-tokens.css) */
+  --animation-button-press-duration: 80ms;
+  --animation-button-press-timing-function: ease-out;
+  --animation-button-hover-duration: 150ms;
+  --animation-button-hover-timing-function: ease;
+  --animation-button-focus-duration: 100ms;
+  --animation-button-focus-timing-function: ease-out;
+
+  --animation-loading-skeleton-duration: 1.5s;
+  --animation-loading-skeleton-timing-function: linear;
+  --animation-loading-spinner-duration: 400ms;
+  --animation-loading-spinner-timing-function: linear;
+  --animation-progress-fill-duration: 240ms;
+  --animation-progress-fill-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --animation-confetti-duration: 1.2s;
+  --animation-confetti-timing-function: ease-out;
+  --animation-confetti-particles: 200;
+
+  --animation-counter-increment-duration: 700ms;
+  --animation-counter-increment-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -79,11 +101,32 @@ a:hover {
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 600;
-  transition: opacity 0.2s;
+  transition:
+    transform var(--animation-button-press-duration) var(--animation-button-press-timing-function),
+    background-color var(--animation-button-hover-duration) var(--animation-button-hover-timing-function),
+    box-shadow var(--animation-button-focus-duration) var(--animation-button-focus-timing-function),
+    opacity 0.2s ease;
+}
+.btn:hover:not(:disabled) {
+  /* optional hover color can be customized through a var */
+  background-color: var(--btn-hover-bg, #5b21b6);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  animation: focus-ring-fade-in var(--animation-button-focus-duration) forwards;
 }
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@keyframes focus-ring-fade-in {
+  from { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  to { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35); }
 }
 .btn-primary {
   background: var(--accent);
@@ -814,7 +857,43 @@ td {
   border: 3px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spinner-rotate var(--animation-loading-spinner-duration) var(--animation-loading-spinner-timing-function) infinite;
+}
+
+@keyframes spinner-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.confetti-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.confetti-particle {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  opacity: 1;
+  animation: confetti-burst var(--animation-confetti-duration) var(--animation-confetti-timing-function) forwards;
+}
+
+@keyframes confetti-burst {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx, 0), var(--ty, 0)) rotate(var(--r, 0deg)) scale(0.65);
+    opacity: 0;
+  }
 }
 
 /* Mobile overlay */
