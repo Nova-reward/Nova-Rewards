@@ -232,4 +232,86 @@ describe("POST /api/merchants/register", () => {
     expect(body.error).toBe("validation_error");
     expect(query).not.toHaveBeenCalled();
   });
+
+  test("400 – invalid wallet address format", async () => {
+    const { status, body } = await post(server, "/api/merchants/register", {
+      name: "ACME Corp",
+      walletAddress: "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN_INVALID",
+    });
+
+    expect(status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error).toBe("validation_error");
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test("201 – valid body with all fields returns merchant record with api_key", async () => {
+    const wallet = Keypair.random().publicKey();
+    const fakeRow = {
+      id: 1,
+      name: "ACME Corp",
+      wallet_address: wallet,
+      business_category: "Retail",
+      api_key: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+      created_at: new Date().toISOString(),
+    };
+    query.mockResolvedValueOnce({ rows: [fakeRow] });
+
+    const { status, body } = await post(server, "/api/merchants/register", {
+      name: "ACME Corp",
+      walletAddress: wallet,
+      businessCategory: "Retail",
+    });
+
+    expect(status).toBe(201);
+    expect(body.success).toBe(true);
+    expect(body.data.api_key).toBeDefined();
+    expect(typeof body.data.api_key).toBe("string");
+    expect(body.data.api_key.length).toBeGreaterThan(0);
+  });
+
+  test("201 – api_key is generated and returned", async () => {
+    const wallet = Keypair.random().publicKey();
+    const fakeRow = {
+      id: 1,
+      name: "Test Merchant",
+      wallet_address: wallet,
+      business_category: null,
+      api_key: "generatedapikey1234567890abcdef",
+      created_at: new Date().toISOString(),
+    };
+    query.mockResolvedValueOnce({ rows: [fakeRow] });
+
+    const { status, body } = await post(server, "/api/merchants/register", {
+      name: "Test Merchant",
+      walletAddress: wallet,
+    });
+
+    expect(status).toBe(201);
+    expect(body.data.api_key).toBe("generatedapikey1234567890abcdef");
+  });
+
+  test("400 – name is not a string", async () => {
+    const { status, body } = await post(server, "/api/merchants/register", {
+      name: 123,
+      walletAddress: Keypair.random().publicKey(),
+    });
+
+    expect(status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error).toBe("validation_error");
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  test("400 – walletAddress is null", async () => {
+    const { status, body } = await post(server, "/api/merchants/register", {
+      name: "ACME Corp",
+      walletAddress: null,
+    });
+
+    expect(status).toBe(400);
+    expect(body.success).toBe(false);
+    expect(body.error).toBe("validation_error");
+    expect(query).not.toHaveBeenCalled();
+  });
 });

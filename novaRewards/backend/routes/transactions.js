@@ -1,8 +1,9 @@
 const router = require('express').Router();
-const { server, NOVA } = require('../../blockchain/stellarService');
-const { recordTransaction, getTransactionsByMerchant, getMerchantTotals } = require('../db/transactionRepository');
-const { isValidStellarAddress } = require('../../blockchain/stellarService');
+const { server, NOVA, isValidStellarAddress } = require('../../blockchain/stellarService');
+const { recordTransaction, getTransactionsByMerchant, getMerchantTotals, getTransactionsByUser } = require('../db/transactionRepository');
 const { query } = require('../db/index');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { getUserByWallet } = require('../db/userRepository');
 
 /**
  * POST /api/transactions/record
@@ -28,6 +29,22 @@ router.post('/record', async (req, res, next) => {
         success: false,
         error: 'validation_error',
         message: `txType must be one of: ${validTypes.join(', ')}`,
+      });
+    }
+
+    if (fromWallet && !isValidStellarAddress(fromWallet)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'fromWallet must be a valid Stellar public key',
+      });
+    }
+
+    if (toWallet && !isValidStellarAddress(toWallet)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'toWallet must be a valid Stellar public key',
       });
     }
 
@@ -100,8 +117,8 @@ router.get('/:walletAddress', async (req, res, next) => {
         const novaPayments = page.records.filter(
           (r) =>
             r.type === 'payment' &&
-            r.asset_code === 'NOVA' &&
-            r.asset_issuer === process.env.ISSUER_PUBLIC
+            r.asset_code === NOVA.code &&
+            r.asset_issuer === NOVA.issuer
         );
         transactions.push(...novaPayments);
 
@@ -126,16 +143,122 @@ router.get('/:walletAddress', async (req, res, next) => {
   }
 });
 
+/**
+ * GET /api/transactions/user/history
+ * Returns paginated transaction history for the authenticated user.
+ * Requirements: #180
+ */
+router.get('/user/history', async (req, res, next) => {
+  try {
+    const { userId, page = 1, limit = 20, type, startDate, endDate } = req.query;
+
+    // Validate required userId parameter
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'userId query parameter is required',
+      });
+    }
+
+    // Validate userId is a positive integer
+    const userIdNum = parseInt(userId, 10);
+    if (isNaN(userIdNum) || userIdNum <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'userId must be a positive integer',
+      });
+    }
+
+    // Validate page parameter
+    const pageNum = parseInt(page, 10);
+    if (isNaN(pageNum) || pageNum <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'page must be a positive integer',
+      });
+    }
+
+    // Validate limit parameter
+    const limitNum = parseInt(limit, 10);
+    if (isNaN(limitNum) || limitNum <= 0 || limitNum > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'limit must be a positive integer between 1 and 100',
+      });
+    }
+
+    // Validate type parameter if provided
+    const validTypes = ['distribution', 'redemption', 'transfer'];
+    if (type && !validTypes.includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: `type must be one of: ${validTypes.join(', ')}`,
+      });
+    }
+
+    // Validate date parameters if provided
+    if (startDate && isNaN(Date.parse(startDate))) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'startDate must be a valid ISO date string',
+      });
+    }
+
+    if (endDate && isNaN(Date.parse(endDate))) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'endDate must be a valid ISO date string',
+      });
+    }
+
+    // Check if user exists
+    const user = await getUserByWallet(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'not_found',
+        message: 'User not found',
+      });
+    }
+
+    // Get paginated transactions
+    const result = await getTransactionsByUser(userIdNum, {
+      type,
+      startDate,
+      endDate,
+      page: pageNum,
+      limit: limitNum,
+    });
+
+    res.json({
+      success: true,
+      data: result.data,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
 
 /**
- * GET /api/transactions/merchant-totals/:merchantId
- * Returns total NOVA distributed and redeemed for a merchant.
+ * GET /api/transactions/merchant-totals
+ * Returns total NOVA distributed and redeemed for the authenticated merchant.
  * Requirements: 10.2
  */
-router.get('/merchant-totals/:merchantId', async (req, res, next) => {
+router.get('/merchant-totals', authenticateMerchant, async (req, res, next) => {
   try {
-    const totals = await getMerchantTotals(req.params.merchantId);
+    const totals = await getMerchantTotals(req.merchant.id);
     res.json({ success: true, data: totals });
   } catch (err) {
     next(err);

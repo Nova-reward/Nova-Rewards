@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { connectWallet, isFreighterInstalled } from '../lib/freighter';
 import { getNOVABalance, getTransactionHistory } from '../lib/horizonClient';
 
@@ -17,6 +17,28 @@ export function WalletProvider({ children }) {
   const [freighterInstalled, setFreighterInstalled] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    const storedKey = localStorage.getItem('walletPublicKey');
+    if (storedKey) {
+      setPublicKey(storedKey);
+      // Re-fetch balance after hydration
+      Promise.all([
+        getNOVABalance(storedKey),
+        getTransactionHistory(storedKey),
+      ]).then(([bal, txs]) => {
+        setBalance(bal);
+        setTransactions(txs);
+      }).catch(() => {
+        // If balance fetch fails, clear the stored key
+        localStorage.removeItem('walletPublicKey');
+        setPublicKey(null);
+      });
+    }
+    setHydrated(true);
+  }, []);
 
   /** Fetches and updates the current NOVA balance and transaction history. */
   const refreshBalance = useCallback(async (wallet) => {
@@ -45,6 +67,7 @@ export function WalletProvider({ children }) {
 
       const key = await connectWallet();
       setPublicKey(key);
+      localStorage.setItem('walletPublicKey', key);
       await refreshBalance(key);
     } catch (err) {
       setError(err.message);
@@ -59,6 +82,7 @@ export function WalletProvider({ children }) {
     setBalance('0');
     setTransactions([]);
     setError(null);
+    localStorage.removeItem('walletPublicKey');
   }, []);
 
   return (
@@ -73,6 +97,7 @@ export function WalletProvider({ children }) {
         connect,
         disconnect,
         refreshBalance,
+        hydrated,
       }}
     >
       {children}

@@ -1,11 +1,16 @@
 require('dotenv').config();
 const { validateEnv } = require('./middleware/validateEnv');
 
-// Validate all required env vars before anything else — halts if any are missing
 validateEnv();
+
+require('./db/index');
 
 const express = require('express');
 const cors = require('cors');
+const { connectRedis } = require('./lib/redis');
+const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
+const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
+const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 
@@ -16,6 +21,11 @@ const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Rate limiting — global default, stricter on auth endpoints
+app.use(globalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -28,6 +38,11 @@ app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/rewards', require('./routes/rewards'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/trustline', require('./routes/trustline'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/contract-events', require('./routes/contractEvents'));
+app.use('/api/admin/email-logs', require('./routes/emailLogs'));
+app.use('/api/leaderboard', require('./routes/leaderboard'));
+app.use('/api/admin', require('./routes/admin'));
 
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {
@@ -40,7 +55,10 @@ app.use((err, req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await connectRedis();
+  startLeaderboardCacheWarmer();
+  startDailyLoginBonusJob();
   console.log(`NovaRewards backend running on port ${PORT}`);
 });
 
