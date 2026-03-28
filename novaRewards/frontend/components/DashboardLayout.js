@@ -61,7 +61,8 @@ export default function DashboardLayout({ children }) {
   // Navigation links
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { href: '/rewards', label: 'Rewards', icon: '🎁', tourId: 'reward-catalogue' },
+    { href: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
+    { href: '/rewards', label: 'Rewards', icon: '🎁' },
     { href: '/history', label: 'History', icon: '📜' },
     { href: '/referral', label: 'Referral', icon: '👥', tourId: 'referral-link' },
     { href: '/settings', label: 'Settings', icon: '⚙️' },
