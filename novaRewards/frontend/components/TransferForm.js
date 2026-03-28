@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
-import { StrKey, Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
+import { Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
 import TransactionLink from './TransactionLink';
+import ConfirmationModal from './ConfirmationModal';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -20,17 +21,14 @@ export default function TransferForm({ senderPublicKey, senderBalance, onSuccess
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [txHash, setTxHash] = useState('');
-
-  function isValidAddress(addr) {
-    try { return StrKey.isValidEd25519PublicKey(addr); } catch { return false; }
-  }
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   async function handleTransfer(e) {
     e.preventDefault();
     setMessage('');
 
     // Client-side validation — Requirements 5.1
-    if (!isValidAddress(recipient)) {
+    if (!isValidStellarAddress(recipient)) {
       setMessage('Recipient must be a valid Stellar public key.');
       setStatus('error');
       return;
@@ -46,6 +44,12 @@ export default function TransferForm({ senderPublicKey, senderBalance, onSuccess
       return;
     }
 
+    // Show confirmation modal
+    setShowConfirmation(true);
+  }
+
+  async function executeTransfer() {
+    setShowConfirmation(false);
     setStatus('loading');
     try {
       // Verify recipient trustline — Requirements 5.2
@@ -96,37 +100,49 @@ export default function TransferForm({ senderPublicKey, senderBalance, onSuccess
   }
 
   return (
-    <form onSubmit={handleTransfer}>
-      <label className="label">Recipient Wallet Address</label>
-      <input
-        className="input"
-        value={recipient}
-        onChange={(e) => setRecipient(e.target.value)}
-        placeholder="G..."
-        disabled={status === 'loading'}
+    <>
+      <form onSubmit={handleTransfer}>
+        <label className="label">Recipient Wallet Address</label>
+        <input
+          className="input"
+          value={recipient}
+          onChange={(e) => setRecipient(e.target.value)}
+          placeholder="G..."
+          disabled={status === 'loading'}
+        />
+        <label className="label">Amount (NOVA)</label>
+        <input
+          className="input"
+          type="number"
+          min="0.0000001"
+          step="any"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="10"
+          disabled={status === 'loading'}
+        />
+        <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
+          {status === 'loading' ? 'Sending…' : 'Send NOVA'}
+        </button>
+        {message && (
+          <p className={status === 'error' ? 'error' : 'success'}>
+            {message}
+            {txHash && (
+              <span> Transaction: <TransactionLink txHash={txHash} /></span>
+            )}
+          </p>
+        )}
+      </form>
+
+      <ConfirmationModal
+        isOpen={showConfirmation}
+        onConfirm={executeTransfer}
+        onCancel={() => setShowConfirmation(false)}
+        recipient={recipient}
+        amount={amount}
+        asset="NOVA"
+        operation="transfer"
       />
-      <label className="label">Amount (NOVA)</label>
-      <input
-        className="input"
-        type="number"
-        min="0.0000001"
-        step="any"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        placeholder="10"
-        disabled={status === 'loading'}
-      />
-      <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
-        {status === 'loading' ? 'Sending…' : 'Send NOVA'}
-      </button>
-      {message && (
-        <p className={status === 'error' ? 'error' : 'success'}>
-          {message}
-          {txHash && (
-            <span> Transaction: <TransactionLink txHash={txHash} /></span>
-          )}
-        </p>
-      )}
-    </form>
+    </>
   );
 }

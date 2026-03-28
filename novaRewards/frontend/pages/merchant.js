@@ -184,7 +184,7 @@ export default function MerchantDashboard() {
                   Refreshing totals…
                 </p>
               )}
-              <div style={{ display: "flex", gap: "2rem" }}>
+              <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
                 <div>
                   <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
                     Total Distributed

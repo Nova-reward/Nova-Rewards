@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "../context/WalletContext";
+import DashboardLayout from "../components/DashboardLayout";
 import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
@@ -46,24 +47,8 @@ function DashboardContent() {
   }
 
   return (
-    <>
-      <nav className="nav">
-        <span className="nav-brand">⭐ NovaRewards</span>
-        <div className="nav-links">
-          <span style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
-            {shortKey}
-          </span>
-          <button
-            className="btn btn-secondary"
-            onClick={disconnect}
-            style={{ padding: "0.4rem 1rem" }}
-          >
-            Disconnect
-          </button>
-        </div>
-      </nav>
-
-      <div className="container">
+    <DashboardLayout>
+      <div className="dashboard-content">
         {loading ? (
           <LoadingSkeleton />
         ) : (
@@ -167,7 +152,7 @@ function DashboardContent() {
           </>
         )}
       </div>
-    </>
+    </DashboardLayout>
   );
 }
 

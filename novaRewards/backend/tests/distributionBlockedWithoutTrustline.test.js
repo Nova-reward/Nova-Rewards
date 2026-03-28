@@ -53,6 +53,7 @@ jest.mock('../db/index', () => ({ query: jest.fn() }));
 
 jest.mock('../db/campaignRepository', () => ({
   getActiveCampaign: jest.fn(),
+  getCampaignById: jest.fn(),
 }));
 
 jest.mock('../db/transactionRepository', () => ({
@@ -66,7 +67,7 @@ const express = require('express');
 const { server: horizonServer } = require('../../blockchain/stellarService');
 const { verifyTrustline }       = require('../../blockchain/trustline');
 const { distributeRewards }     = require('../../blockchain/sendRewards');
-const { getActiveCampaign }     = require('../db/campaignRepository');
+const { getActiveCampaign, getCampaignById } = require('../db/campaignRepository');
 const { recordTransaction }     = require('../db/transactionRepository');
 const { query }                 = require('../db/index');
 
@@ -76,6 +77,14 @@ function buildApp() {
   const app = express();
   app.use(express.json());
   app.use('/api/rewards', require('../routes/rewards'));
+  // Global error handler — returns JSON instead of HTML
+  app.use((err, req, res, _next) => {
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.code || 'internal_error',
+      message: err.message || 'An unexpected error occurred',
+    });
+  });
   return app;
 }
 
@@ -221,11 +230,12 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
     srv = http.createServer(buildApp()).listen(0, done);
   });
 
-  afterAll((done) => srv.close(done));
+  afterAll((done) => { srv.close(done); });
 
   beforeEach(() => {
     jest.clearAllMocks();
     query.mockResolvedValue({ rows: [MERCHANT] });
+    getCampaignById.mockResolvedValue(CAMPAIGN);
     getActiveCampaign.mockResolvedValue(CAMPAIGN);
   });
 
