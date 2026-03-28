@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    name: Backend Tests
 
     steps:
       - name: Checkout code
@@ -28,3 +29,32 @@ jobs:
       - name: Run tests
         working-directory: novaRewards/backend
         run: npx jest --runInBand --ci
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    name: Frontend Build Check
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: novaRewards/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: novaRewards/frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: novaRewards/frontend
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.nova-rewards.xyz
+          NEXT_PUBLIC_HORIZON_URL: https://horizon.stellar.org
+          NEXT_PUBLIC_ISSUER_PUBLIC: GBRPYHIL2CI3WHZDTOOQFC6EB4KJJGUJGU3XYQVVXN7XNXQVVVVVVVV
+          NEXT_PUBLIC_STELLAR_NETWORK: public
+          NEXT_PUBLIC_MULTISIG_CONTRACT_ID: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4
