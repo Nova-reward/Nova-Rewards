@@ -5,6 +5,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
+import ReferralLink from "../components/ReferralLink";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 import StellarDropModal from "../components/StellarDropModal";
@@ -139,7 +140,6 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Trustline */}
             <div className="card">
               <h2 style={{ marginBottom: "1rem" }}>Trustline</h2>
               <TrustlineButton
@@ -147,6 +147,10 @@ function DashboardContent() {
                 onSuccess={() => refreshBalance()}
               />
             </div>
+
+            {/* Referral Link — Requirement 168 */}
+            <ReferralLink userId={publicKey} />
+
 
             {/* Transfer */}
             <div className="card">

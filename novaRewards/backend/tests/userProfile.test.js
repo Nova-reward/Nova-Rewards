@@ -18,6 +18,12 @@ jest.mock('../services/emailService', () => ({
   sendWelcome: jest.fn().mockResolvedValue({ success: true }),
 }));
 
+// Mock Stellar service for token balance API
+jest.mock('../../blockchain/stellarService', () => ({
+  getNOVABalance: jest.fn().mockResolvedValue('1337.0000000'),
+  isValidStellarAddress: jest.fn().mockReturnValue(true),
+}));
+
 // Mock authenticateUser to inject req.user based on the Authorization header
 jest.mock('../middleware/authenticateUser', () => ({
   authenticateUser: (req, res, next) => {
@@ -149,6 +155,31 @@ describe('User Profile API', () => {
       expect(res.status).toBe(401);
       expect(res.body.success).toBe(false);
       expect(res.body.error).toBe('unauthorized');
+    });
+
+    it('should return token balance for user with stellarPublicKey', async () => {
+      query.mockResolvedValueOnce({ rows: [mockUser] });
+
+      const res = await request(app)
+        .get('/api/users/1/token-balance')
+        .set('Authorization', authToken);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveProperty('tokenBalance', '1337.0000000');
+      expect(res.body.data).toHaveProperty('cached', false);
+    });
+
+    it('should return 404 when no linked Stellar public key', async () => {
+      query.mockResolvedValueOnce({ rows: [{ ...mockUser, stellar_public_key: null }] });
+
+      const res = await request(app)
+        .get('/api/users/1/token-balance')
+        .set('Authorization', authToken);
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('not_found');
     });
   });
 
