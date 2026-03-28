@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
+const { createHash } = require('crypto');
 const { query } = require('../db/index');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 
@@ -28,16 +29,17 @@ router.post('/register', async (req, res, next) => {
       });
     }
 
-    const apiKey = uuidv4().replace(/-/g, ''); // 32-char hex key
+    const apiKey = uuidv4().replace(/-/g, ''); // 32-char hex key — returned once, never stored
+    const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
 
     const result = await query(
       `INSERT INTO merchants (name, wallet_address, business_category, api_key)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, name, wallet_address, business_category, api_key, created_at`,
-      [name.trim(), walletAddress, businessCategory || null, apiKey]
+       RETURNING id, name, wallet_address, business_category, created_at`,
+      [name.trim(), walletAddress, businessCategory || null, apiKeyHash]
     );
 
-    res.status(201).json({ success: true, data: result.rows[0] });
+    res.status(201).json({ success: true, data: { ...result.rows[0], api_key: apiKey } });
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({

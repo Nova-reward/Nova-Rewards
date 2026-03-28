@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@stellar/freighter-api": "^2.0.0",
@@ -13,6 +15,10 @@
     "next": "^14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-joyride": "^3.0.0",
     "stellar-sdk": "^12.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
   }
 }
