@@ -11,6 +11,7 @@ const { connectRedis } = require('./lib/redis');
 const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
+const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
 
 const app = express();
 
@@ -21,6 +22,7 @@ const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(metricsMiddleware);
 
 // Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
 app.use((err, req, res, next) => {
@@ -42,6 +44,16 @@ app.use('/api/auth/forgot-password', authLimiter);
 // Health check
 app.get('/health', (req, res) => {
   res.json({ success: true, data: { status: 'ok' } });
+});
+
+// Prometheus metrics scrape endpoint
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', registry.contentType);
+    res.end(await registry.metrics());
+  } catch (err) {
+    res.status(500).end(err.message);
+  }
 });
 
 // Routes (wired in as they are implemented)
