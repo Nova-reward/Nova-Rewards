@@ -76,9 +76,11 @@ impl VestingContract {
             total_duration,
             released: 0,
         };
-        env.storage()
-            .persistent()
-            .set(&DataKey::Schedule(beneficiary.clone(), id), &schedule);
+        let schedule_key = DataKey::Schedule(beneficiary.clone(), id);
+        env.storage().persistent().set(&schedule_key, &schedule);
+        // Extend TTL by 365 days (31,536,000 ledgers)
+        env.storage().persistent().extend_ttl(&schedule_key, 31_536_000, 31_536_000);
+        
         env.storage().instance().set(&next_id_key, &(id + 1));
         id
     }
@@ -104,6 +106,8 @@ impl VestingContract {
             .persistent()
             .get(&key)
             .expect("schedule not found");
+        // Extend TTL by 365 days (31,536,000 ledgers)
+        env.storage().persistent().extend_ttl(&key, 31_536_000, 31_536_000);
 
         let now = env.ledger().timestamp();
         let vested = Self::vested_amount(&schedule, now);
@@ -119,6 +123,8 @@ impl VestingContract {
 
         schedule.released += releasable;
         env.storage().persistent().set(&key, &schedule);
+        // Extend TTL again after update
+        env.storage().persistent().extend_ttl(&key, 31_536_000, 31_536_000);
 
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("tok_rel")),
@@ -129,10 +135,11 @@ impl VestingContract {
     }
 
     pub fn get_schedule(env: Env, beneficiary: Address, schedule_id: u32) -> VestingSchedule {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Schedule(beneficiary, schedule_id))
-            .expect("schedule not found")
+        let key = DataKey::Schedule(beneficiary, schedule_id);
+        let schedule = env.storage().persistent().get(&key).expect("schedule not found");
+        // Extend TTL by 365 days
+        env.storage().persistent().extend_ttl(&key, 31_536_000, 31_536_000);
+        schedule
     }
 
     pub fn pool_balance(env: Env) -> i128 {

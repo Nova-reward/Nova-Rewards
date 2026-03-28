@@ -3,7 +3,9 @@
   border: 1px solid #2d2d4e;
   border-radius: 12px;
   padding: 1.25rem;
-  min-width: 180px;
+  min-width: 0;
+  width: 100%;
+  max-width: 340px;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;

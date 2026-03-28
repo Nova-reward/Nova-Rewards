@@ -46,6 +46,7 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 a {
@@ -188,7 +189,7 @@ td {
 
 .dashboard-summary-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
   margin-bottom: 1.5rem;
@@ -200,9 +201,10 @@ td {
 
 .table-scroll {
   overflow-x: auto;
+  width: 100%;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .container {
     padding: 1.25rem 0.75rem;
   }
@@ -224,8 +226,37 @@ td {
     grid-template-columns: 1fr;
   }
 
-  table {
-    min-width: 560px;
+  .header {
+    padding: 0.75rem 1rem;
+  }
+
+  .page-title {
+    font-size: 1.1rem;
+  }
+
+  .main-content {
+    padding: 0.75rem;
+  }
+
+  .profile-dropdown {
+    right: -0.5rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .auth-card {
+    padding: 1.5rem 1rem;
+  }
+
+  .modal-content {
+    max-width: calc(100vw - 2rem);
+    padding: 1.25rem 1rem;
+  }
+
+  .modal-actions {
+    flex-wrap: wrap;
   }
 }
 /* Modal styles */
@@ -561,6 +592,7 @@ td {
 /* Main wrapper */
 .main-wrapper {
   flex: 1;
+  min-width: 0;
   margin-left: 260px;
   transition: margin-left 0.3s ease;
   display: flex;
@@ -757,6 +789,7 @@ td {
 /* Main content */
 .main-content {
   flex: 1;
+  min-width: 0;
   padding: 1.5rem;
 }
 
@@ -840,24 +873,6 @@ td {
 
   .desktop-only {
     display: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .header {
-    padding: 1rem;
-  }
-
-  .page-title {
-    font-size: 1.25rem;
-  }
-
-  .main-content {
-    padding: 1rem;
-  }
-
-  .profile-dropdown {
-    right: -0.5rem;
   }
 }
 

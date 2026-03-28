@@ -61,9 +61,10 @@ export default function DashboardLayout({ children }) {
   // Navigation links
   const navLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { href: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
     { href: '/rewards', label: 'Rewards', icon: '🎁' },
     { href: '/history', label: 'History', icon: '📜' },
-    { href: '/referral', label: 'Referral', icon: '👥' },
+    { href: '/referral', label: 'Referral', icon: '👥', tourId: 'referral-link' },
     { href: '/settings', label: 'Settings', icon: '⚙️' },
   ];
 
@@ -110,6 +111,7 @@ export default function DashboardLayout({ children }) {
               key={link.href}
               href={link.href}
               className={`nav-link ${router.pathname === link.href ? 'nav-link-active' : ''}`}
+              {...(link.tourId ? { 'data-tour': link.tourId } : {})}
             >
               <span className="nav-icon">{link.icon}</span>
               {sidebarOpen && <span className="nav-label">{link.label}</span>}
@@ -153,7 +155,7 @@ export default function DashboardLayout({ children }) {
 
           <div className="header-right">
             {/* Notification bell */}
-            <button className="header-icon-btn" aria-label="Notifications">
+            <button className="header-icon-btn" aria-label="Notifications" data-tour="notification-centre">
               <span className="notification-icon">🔔</span>
               <span className="notification-badge">3</span>
             </button>
