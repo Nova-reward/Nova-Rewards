@@ -10,6 +10,8 @@ const REQUIRED_ENV_VARS = [
   'STELLAR_NETWORK',
   'HORIZON_URL',
   'DATABASE_URL',
+  'REDIS_URL',
+  'JWT_SECRET',
 ];
 
 /**

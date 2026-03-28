@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS merchants (
   wallet_address    VARCHAR(56)  NOT NULL UNIQUE,
   business_category VARCHAR(100),
   api_key           VARCHAR(64)  NOT NULL UNIQUE,
-  created_at        TIMESTAMPTZ  DEFAULT NOW()
+  created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
