@@ -1,7 +1,11 @@
 // Unit tests for authenticateUser middleware
 jest.mock('../db/index', () => ({ query: jest.fn() }));
+jest.mock('../services/tokenService', () => ({
+  verifyToken: jest.fn(),
+}));
 
 const { query } = require('../db/index');
+const { verifyToken } = require('../services/tokenService');
 const { authenticateUser, requireAdmin, requireOwnershipOrAdmin } = require('../middleware/authenticateUser');
 
 function mockReqRes(headers = {}, params = {}, method = 'GET') {
@@ -14,12 +18,6 @@ function mockReqRes(headers = {}, params = {}, method = 'GET') {
   return { req, res, next };
 }
 
-// Build a valid JWT-like token with base64-encoded payload
-function makeToken(payload) {
-  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64');
-  return `header.${encoded}.sig`;
-}
-
 beforeEach(() => jest.clearAllMocks());
 
 describe('authenticateUser', () => {
@@ -30,15 +28,16 @@ describe('authenticateUser', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('returns 401 when token is malformed', async () => {
-    const { req, res, next } = mockReqRes({ authorization: 'Bearer bad.token' });
+  test('returns 401 when token verification throws (malformed token)', async () => {
+    verifyToken.mockImplementation(() => { throw new Error('invalid token'); });
+    const { req, res, next } = mockReqRes({ authorization: 'Bearer bad.token.here' });
     await authenticateUser(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
   });
 
   test('returns 401 when user not found in DB', async () => {
-    const token = makeToken({ userId: 999 });
-    const { req, res, next } = mockReqRes({ authorization: `Bearer ${token}` });
+    verifyToken.mockReturnValue({ userId: 999 });
+    const { req, res, next } = mockReqRes({ authorization: 'Bearer valid.token.here' });
     query.mockResolvedValue({ rows: [] });
     await authenticateUser(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
@@ -46,8 +45,8 @@ describe('authenticateUser', () => {
 
   test('attaches user to req and calls next on success', async () => {
     const user = { id: 1, role: 'user' };
-    const token = makeToken({ userId: 1 });
-    const { req, res, next } = mockReqRes({ authorization: `Bearer ${token}` });
+    verifyToken.mockReturnValue({ userId: 1 });
+    const { req, res, next } = mockReqRes({ authorization: 'Bearer valid.token.here' });
     query.mockResolvedValue({ rows: [user] });
     await authenticateUser(req, res, next);
     expect(req.user).toEqual(user);

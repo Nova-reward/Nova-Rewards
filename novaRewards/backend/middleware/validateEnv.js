@@ -11,6 +11,7 @@ const REQUIRED_ENV_VARS = [
   'HORIZON_URL',
   'DATABASE_URL',
   'REDIS_URL',
+  'JWT_SECRET',
 ];
 
 /**
