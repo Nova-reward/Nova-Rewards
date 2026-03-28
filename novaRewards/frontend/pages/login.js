@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../context/AuthContext';
+import { useTour } from '../context/TourContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 
 /**
@@ -29,6 +30,7 @@ const loginSchema = z.object({
 function LoginContent() {
   const router = useRouter();
   const { login, loading, error, clearError } = useAuth();
+  const { startTour, hasCompletedTour } = useTour();
   const [submitError, setSubmitError] = useState('');
 
   const {
@@ -54,7 +56,10 @@ function LoginContent() {
     const result = await login(data);
 
     if (result.success) {
-      // Redirect to dashboard
+      // Start onboarding tour for first-time users
+      if (!hasCompletedTour()) {
+        startTour();
+      }
       router.push('/dashboard');
     } else {
       setSubmitError(result.error || 'Login failed. Please check your credentials.');

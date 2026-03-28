@@ -72,7 +72,7 @@ export default function PointsWidget() {
   }
 
   return (
-    <div className={styles.widgetContainer}>
+    <div className={styles.widgetContainer} data-tour="points-widget">
       <div className={styles.label}>Nova Points</div>
       <div className={styles.balanceWrapper}>
         <AnimatedCounter value={balance} />
