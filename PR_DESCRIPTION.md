@@ -1,11 +1,9 @@
-# Issue: Closes #168
-# Title: feat: implement referral link generation and sharing UI
+# Issue: Closes #12
+# Title: fix: handle 404 errors for unfunded Stellar accounts
 
 ### Description:
-Introduces the UI for generating, copying, and sharing referral links with on-chain rewards tracking.
+If a wallet address has never been funded on the network, server.loadAccount throws a 404 error. This PR adds robust error handling to gracefully catch these cases.
 
 ### Key Changes:
-- **ReferralLink Component:** Built a premium React component with linear-gradient aesthetics and responsive grid layout.
-- **Copy to Clipboard:** Integrated the Clipboard API with a document.execCommand fallback for maximum browser compatibility; includes a 2-second visual confirmation.
-- **Sharing Integration:** Added direct sharing shortcuts for WhatsApp, Twitter/X, and Email, plus a native navigator.share fallback for mobile devices.
-- **User Dashboard:** Integrated the component into the main dashboard to display real-time referral stats.
+- **Horizon Fallback:** Added a check for both err.response.status === 404 and a message-based fallback (err.message.includes('not found')) to handle differing Horizon SDK version signatures.
+- **Improved Stability:** getNOVABalance and verifyTrustline now return safer defaults ('0' or { exists: false }) for unfunded accounts instead of crashing.
