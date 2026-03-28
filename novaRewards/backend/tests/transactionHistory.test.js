@@ -20,6 +20,11 @@ jest.mock('../db/userRepository', () => ({
   getUserByWallet: jest.fn(),
 }));
 
+// Mock emailService to avoid nodemailer dependency
+jest.mock('../services/emailService', () => ({
+  sendWelcome: jest.fn().mockResolvedValue({ success: true }),
+}));
+
 const app = require('../server');
 const { getTransactionsByUser } = require('../db/transactionRepository');
 const { getUserByWallet } = require('../db/userRepository');

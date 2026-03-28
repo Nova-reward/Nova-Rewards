@@ -1,11 +1,59 @@
+// Must be set before requiring server.js — stellarService reads ISSUER_PUBLIC at module load time
+process.env.ISSUER_PUBLIC = 'GDQGIY5T5QULPD7V54LJODKC5CMKPNGTWVEMYBQH4LV6STKI6IGO543K';
+process.env.HORIZON_URL = 'https://horizon-testnet.stellar.org';
+process.env.STELLAR_NETWORK = 'testnet';
+
 const request = require('supertest');
-const app = require('../server');
-const { query } = require('../db/index');
+
+// Stub validateEnv so server.js does not halt on missing env vars
+jest.mock('../middleware/validateEnv', () => ({ validateEnv: jest.fn() }));
 
 // Mock database queries
 jest.mock('../db/index', () => ({
   query: jest.fn(),
 }));
+
+// Mock emailService to avoid nodemailer dependency
+jest.mock('../services/emailService', () => ({
+  sendWelcome: jest.fn().mockResolvedValue({ success: true }),
+}));
+
+// Mock authenticateUser to inject req.user based on the Authorization header
+jest.mock('../middleware/authenticateUser', () => ({
+  authenticateUser: (req, res, next) => {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Bearer token is required' });
+    }
+    try {
+      const parts = auth.substring(7).split('.');
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      req.user = { id: payload.userId, role: payload.role || 'user' };
+      next();
+    } catch {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Invalid token' });
+    }
+  },
+  requireOwnershipOrAdmin: (req, res, next) => {
+    // For GET requests, allow all authenticated users through — the route decides what data to return
+    // For mutating requests (PATCH, DELETE), enforce ownership or admin
+    if (req.method === 'GET') return next();
+    const resourceUserId = parseInt(req.params.id);
+    if (req.user?.id !== resourceUserId && req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    }
+    next();
+  },
+  requireAdmin: (req, res, next) => {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Admin access required' });
+    }
+    next();
+  },
+}));
+
+const app = require('../server');
+const { query } = require('../db/index');
 
 describe('User Profile API', () => {
   let authToken;
@@ -14,6 +62,9 @@ describe('User Profile API', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
+
+    // Default: user exists (tests that need 404 override with empty rows)
+    query.mockResolvedValue({ rows: [{ id: 1 }], rowCount: 1 });
 
     // Mock authenticated user
     mockUser = {

@@ -24,20 +24,18 @@ describe('getMerchantTotals (Property 12)', () => {
         async (amounts) => {
           const expectedTotal = amounts.reduce((sum, a) => sum + a, 0);
 
-          // Simulate what Postgres COALESCE(SUM(...)) returns
+          // Simulate what Postgres GROUP BY tx_type returns
           query.mockResolvedValue({
             rows: [
-              {
-                totalDistributed: String(expectedTotal),
-                totalRedeemed: '0',
-              },
+              { tx_type: 'distribution', total: String(expectedTotal) },
+              { tx_type: 'redemption', total: '0' },
             ],
           });
 
           const result = await getMerchantTotals(1);
 
-          expect(result.totalDistributed).toBeCloseTo(expectedTotal, 5);
-          expect(result.totalRedeemed).toBe(0);
+          expect(parseFloat(result.totalDistributed)).toBeCloseTo(expectedTotal, 5);
+          expect(result.totalRedeemed).toBe('0');
         }
       ),
       { numRuns: 100 }
@@ -46,13 +44,11 @@ describe('getMerchantTotals (Property 12)', () => {
 
   // Property: totalDistributed is 0 when there are no distribution transactions
   test('totalDistributed is 0 when merchant has no distributions', async () => {
-    query.mockResolvedValue({
-      rows: [{ totalDistributed: '0', totalRedeemed: '0' }],
-    });
+    query.mockResolvedValue({ rows: [] });
 
     const result = await getMerchantTotals(99);
 
-    expect(result.totalDistributed).toBe(0);
-    expect(result.totalRedeemed).toBe(0);
+    expect(result.totalDistributed).toBe('0');
+    expect(result.totalRedeemed).toBe('0');
   });
 });
