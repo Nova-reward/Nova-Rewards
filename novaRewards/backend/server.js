@@ -48,6 +48,7 @@ app.get('/health', (req, res) => {
 app.use('/api/merchants', require('./routes/merchants'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/rewards', require('./routes/rewards'));
+app.use('/api/redemptions', require('./routes/redemptions'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/trustline', require('./routes/trustline'));
 app.use('/api/users', require('./routes/users'));
@@ -74,6 +75,8 @@ if (require.main === module) {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
+    // Register event listeners
+    require('./services/redemptionEventListener').registerRedemptionEventListener();
     console.log(`NovaRewards backend running on port ${PORT}`);
   });
 }
