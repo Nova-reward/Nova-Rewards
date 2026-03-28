@@ -109,6 +109,8 @@ function requireAdmin(req, res, next) {
  * Requirements: 183.1
  */
 function requireOwnershipOrAdmin(req, res, next) {
+  // GET requests: allow all authenticated users — route decides public vs private data
+  if (req.method === 'GET') return next();
   const resourceUserId = parseInt(req.params.id);
   const currentUserId = req.user?.id;
   

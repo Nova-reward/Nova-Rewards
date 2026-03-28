@@ -17,8 +17,8 @@ async function getLeaderboard(period, limit, currentUserId) {
   const rankSql = `
     SELECT
       user_id,
-      SUM(points) AS total_points,
-      RANK() OVER (ORDER BY SUM(points) DESC) AS rank
+      SUM(amount) AS total_points,
+      RANK() OVER (ORDER BY SUM(amount) DESC) AS rank
     FROM point_transactions
     WHERE type = 'earned' ${dateFilter}
     GROUP BY user_id

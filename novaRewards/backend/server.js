@@ -22,6 +22,18 @@ const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({
+      success: false,
+      error: 'validation_error',
+      message: 'Invalid JSON in request body',
+    });
+  }
+  next(err);
+});
+
 // Rate limiting — global default, stricter on auth endpoints
 app.use(globalLimiter);
 app.use('/api/auth/login', authLimiter);
@@ -36,6 +48,7 @@ app.get('/health', (req, res) => {
 app.use('/api/merchants', require('./routes/merchants'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/rewards', require('./routes/rewards'));
+app.use('/api/redemptions', require('./routes/redemptions'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/trustline', require('./routes/trustline'));
 app.use('/api/users', require('./routes/users'));
@@ -43,6 +56,7 @@ app.use('/api/contract-events', require('./routes/contractEvents'));
 app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/drops', require('./routes/drops'));
 
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {
@@ -55,11 +69,17 @@ app.use((err, req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, async () => {
-  await connectRedis();
-  startLeaderboardCacheWarmer();
-  startDailyLoginBonusJob();
-  console.log(`NovaRewards backend running on port ${PORT}`);
-});
+
+// Only start the server when this file is run directly (not when required by tests)
+if (require.main === module) {
+  app.listen(PORT, async () => {
+    await connectRedis();
+    startLeaderboardCacheWarmer();
+    startDailyLoginBonusJob();
+    // Register event listeners
+    require('./services/redemptionEventListener').registerRedemptionEventListener();
+    console.log(`NovaRewards backend running on port ${PORT}`);
+  });
+}
 
 module.exports = app;

@@ -8,8 +8,8 @@ async function getStats() {
   const { rows } = await query(`
     SELECT
       (SELECT COUNT(*) FROM users WHERE is_deleted = FALSE)                          AS total_users,
-      (SELECT COALESCE(SUM(points), 0) FROM point_transactions WHERE type = 'earned') AS total_points_issued,
-      (SELECT COALESCE(SUM(points), 0) FROM point_transactions WHERE type = 'redeemed') AS total_redemptions,
+      (SELECT COALESCE(SUM(amount), 0) FROM point_transactions WHERE type = 'earned') AS total_points_issued,
+      (SELECT COALESCE(SUM(amount), 0) FROM point_transactions WHERE type = 'redeemed') AS total_redemptions,
       (SELECT COUNT(*) FROM rewards WHERE is_active = TRUE AND is_deleted = FALSE)   AS active_rewards
   `);
   return rows[0];

@@ -86,6 +86,20 @@ router.post('/record', async (req, res, next) => {
 });
 
 /**
+ * GET /api/transactions/merchant-totals
+ * Returns total NOVA distributed and redeemed for the authenticated merchant.
+ * Requirements: 10.2
+ */
+router.get('/merchant-totals', authenticateMerchant, async (req, res, next) => {
+  try {
+    const totals = await getMerchantTotals(req.merchant.id);
+    res.json({ success: true, data: totals });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /api/transactions/:walletAddress
  * Returns NOVA transaction history for a wallet.
  * Queries Horizon first; falls back to PostgreSQL if Horizon is unavailable.
@@ -250,17 +264,3 @@ router.get('/user/history', async (req, res, next) => {
 });
 
 module.exports = router;
-
-/**
- * GET /api/transactions/merchant-totals
- * Returns total NOVA distributed and redeemed for the authenticated merchant.
- * Requirements: 10.2
- */
-router.get('/merchant-totals', authenticateMerchant, async (req, res, next) => {
-  try {
-    const totals = await getMerchantTotals(req.merchant.id);
-    res.json({ success: true, data: totals });
-  } catch (err) {
-    next(err);
-  }
-});

@@ -12,7 +12,13 @@ function skip(req) {
   return WHITELIST.includes(req.ip);
 }
 
+/**
+ * Returns a RedisStore when the client is connected, otherwise undefined
+ * (express-rate-limit falls back to its in-memory store).
+ * This prevents a crash at module-load time when Redis is unavailable (e.g. in tests / CI).
+ */
 function makeStore(prefix) {
+  if (!redisClient.isOpen) return undefined;
   return new RedisStore({
     sendCommand: (...args) => redisClient.sendCommand(args),
     prefix,

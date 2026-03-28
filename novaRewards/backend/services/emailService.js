@@ -101,13 +101,14 @@ async function sendEmail({ to, subject, html, emailType }) {
  * Requirements: #184
  *
  * @param {object} params
- * @param {string} params.to - Recipient email
- * @param {string} params.userName - User's name
- * @param {string|number} params.amount - Redemption amount
- * @param {string} params.txHash - Transaction hash
+ * @param {string} params.to           - Recipient email
+ * @param {string} params.userName     - User's display name or wallet address
+ * @param {string} params.rewardName   - Name of the redeemed reward
+ * @param {number} params.pointsSpent  - Points deducted
+ * @param {number} params.redemptionId - Redemption record ID
  * @returns {Promise<{success: boolean, logId?: number, error?: string}>}
  */
-async function sendRedemptionConfirmation({ to, userName, amount, txHash }) {
+async function sendRedemptionConfirmation({ to, userName, rewardName, pointsSpent, redemptionId }) {
   const subject = 'NovaRewards - Redemption Confirmation';
   const html = `
     <!DOCTYPE html>
@@ -119,7 +120,6 @@ async function sendRedemptionConfirmation({ to, userName, amount, txHash }) {
         .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
         .content { background: #f9f9f9; padding: 30px; }
         .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        .button { display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
       </style>
     </head>
     <body>
@@ -130,9 +130,10 @@ async function sendRedemptionConfirmation({ to, userName, amount, txHash }) {
         <div class="content">
           <p>Hi ${userName},</p>
           <p>Your redemption has been successfully processed.</p>
-          <p><strong>Amount:</strong> ${amount} NOVA</p>
-          <p><strong>Transaction Hash:</strong> ${txHash}</p>
-          <p>Your rewards have been transferred to your wallet. Thank you for being a valued NovaRewards member!</p>
+          <p><strong>Reward:</strong> ${rewardName}</p>
+          <p><strong>Points spent:</strong> ${pointsSpent}</p>
+          <p><strong>Redemption ID:</strong> #${redemptionId}</p>
+          <p>Thank you for being a valued NovaRewards member!</p>
         </div>
         <div class="footer">
           <p>&copy; ${new Date().getFullYear()} NovaRewards. All rights reserved.</p>
