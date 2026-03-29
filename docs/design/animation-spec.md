@@ -79,3 +79,75 @@
 - [ ] Record any exceptions (heavy animation offload, intersection triggers, frame-drop handling).
 
 > Action item: Review with frontend team in next sync and agree on final candidate splits. Add notes to `docs/design/animation-spec.md` and update storybook stories.
+
+## 7) Page transitions
+
+### Route changes
+- Fade out current page: opacity 1 to 0, duration 200ms, easing ease-out
+- Slide in new page: transform translateX(100%) to 0, duration 300ms, easing cubic-bezier(0.4, 0, 0.2, 1)
+- Stagger content appearance: delay 100ms for main content, 200ms for secondary
+
+### Modal transitions
+- Backdrop fade: opacity 0 to 0.5, duration 200ms, easing ease
+- Modal slide up: transform translateY(20px) to 0, opacity 0 to 1, duration 250ms, easing cubic-bezier(0.34, 1.56, 0.64, 1)
+- Close: reverse animations
+
+## 8) Micro-interactions
+
+### Form field focus
+- Border color change: duration 150ms, easing ease
+- Label float up: transform translateY, scale, duration 200ms, easing cubic-bezier(0.4, 0, 0.2, 1)
+
+### Icon hover
+- Scale: 1 to 1.1, duration 150ms, easing ease-out
+- Color transition: duration 200ms, easing ease
+
+### Notification toast
+- Slide in from right: transform translateX(100%) to 0, duration 300ms, easing cubic-bezier(0.4, 0, 0.2, 1)
+- Auto dismiss: fade out after 3s, duration 200ms
+
+## 9) Hover, loading, success, and error animations
+
+### Hover animations
+- Card lift: box-shadow increase, transform translateY(-2px), duration 200ms, easing ease
+- Tooltip appear: opacity 0 to 1, transform scale(0.95) to 1, duration 150ms, easing ease-out
+
+### Loading animations
+- Pulse: opacity 0.5 to 1, duration 1s, iteration infinite, easing ease-in-out
+- Bounce: transform translateY(0) to -10px to 0, duration 600ms, iteration infinite
+
+### Success animations
+- Checkmark draw: SVG path stroke-dashoffset from 100 to 0, duration 400ms, easing ease-out
+- Success message slide down: transform translateY(-20px) to 0, opacity 0 to 1, duration 300ms
+
+### Error animations
+- Shake: transform translateX(-5px) to 5px repeated, duration 400ms, easing ease-in-out
+- Error border flash: border-color red, duration 200ms, repeat 3 times
+
+## 10) Performance-optimized animation guidelines
+
+### Use transform and opacity
+- Prefer transform (translate, scale, rotate) and opacity for animations as they don't trigger layout recalculations
+- Avoid animating properties like width, height, top, left that cause reflows
+
+### Limit animation scope
+- Use will-change CSS property for elements that will animate to hint browser for optimization
+- Remove will-change after animation completes
+
+### Reduce motion for accessibility
+- Respect prefers-reduced-motion media query: disable animations for users who prefer reduced motion
+- Provide alternative static states
+
+### Optimize for 60fps
+- Keep animations under 16ms per frame
+- Use requestAnimationFrame for JS animations
+- Avoid heavy computations during animation frames
+
+### Hardware acceleration
+- Use transform3d for GPU acceleration when possible
+- Be cautious with too many layered animations
+
+### Testing
+- Test animations on low-end devices
+- Use Chrome DevTools performance tab to monitor frame drops
+- Ensure animations don't interfere with user interactions
