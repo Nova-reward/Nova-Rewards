@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: novaRewards/frontend/package-lock.json
+          cache-dependency-path: novaRewards/package-lock.json
 
       - name: Install dependencies
         working-directory: novaRewards/frontend
