@@ -5,6 +5,9 @@ process.env.STELLAR_NETWORK = 'testnet';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
 process.env.REDIS_URL = 'redis://localhost:6379';
 
+const express = require('express');
+const request = require('supertest');
+
 // Mock database
 jest.mock('../db/index', () => ({
   pool: {
@@ -17,6 +20,7 @@ jest.mock('../db/index', () => ({
 jest.mock('../lib/redis', () => ({
   client: {
     ping: jest.fn().mockResolvedValue('PONG'),
+    sendCommand: jest.fn().mockResolvedValue('OK'),
     isOpen: true,
     on: jest.fn(),
   },
@@ -44,27 +48,36 @@ jest.mock('stellar-sdk', () => {
   };
 });
 
-// Mock other services
-jest.mock('../middleware/validateEnv', () => ({ validateEnv: jest.fn() }));
-jest.mock('../services/emailService', () => ({ sendWelcome: jest.fn() }));
-jest.mock('../jobs/leaderboardCacheWarmer', () => ({
-  startLeaderboardCacheWarmer: jest.fn(),
-}));
-jest.mock('../jobs/dailyLoginBonus', () => ({
-  startDailyLoginBonusJob: jest.fn(),
-}));
-jest.mock('../services/redemptionEventListener', () => ({
-  registerRedemptionEventListener: jest.fn(),
-}));
-
-const request = require('supertest');
-const app = require('../server');
 const { pool } = require('../db');
 const { client: redisClient } = require('../lib/redis');
 
+// Build a lightweight app with just the health route
+function buildApp() {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/health', require('../routes/health'));
+  app.use((err, req, res, _next) => {
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.code || 'internal_error',
+      message: err.message || 'An unexpected error occurred',
+    });
+  });
+  return app;
+}
+
 describe('Health Check Endpoints', () => {
+  let app;
+
+  beforeAll(() => {
+    app = buildApp();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset mocks to default successful state
+    pool.query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+    redisClient.ping.mockResolvedValue('PONG');
   });
 
   describe('GET /api/health', () => {
