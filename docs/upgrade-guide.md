@@ -1,99 +1,113 @@
-# Nova Rewards Contract — Upgrade Guide (Issue #206)
+# Nova Rewards Contract Upgrade Guide
 
 ## Overview
 
-The `nova-rewards` Soroban contract supports in-place WASM upgrades via
-`env.deployer().update_current_contract_wasm()`. All instance storage
-(balances, admin, migration version) persists across upgrades.
+The `contracts/nova-rewards` crate supports in-place WASM upgrades through the
+`upgrade` and `migrate` entrypoints. Contract instance storage survives the
+WASM swap, so balances, admin state, staking configuration, and the stored
+`MigratedVersion` remain available after the upgrade transaction completes.
 
----
+## What changes during an upgrade
+
+- `upgrade(new_wasm_hash)` replaces the current contract code with a new WASM blob.
+- `migrate()` applies any storage or configuration changes required by the new code version.
+- `CONTRACT_VERSION` in [`contracts/nova-rewards/src/lib.rs`](../contracts/nova-rewards/src/lib.rs) gates whether `migrate()` is allowed to run.
 
 ## Prerequisites
 
-```bash
-# Install Rust + wasm32 target
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup target add wasm32-unknown-unknown
+1. Install the Rust toolchain and the `wasm32-unknown-unknown` target.
+2. Install the Stellar CLI used by the repository deployment scripts.
+3. Have the admin secret or another signer that can authorize the current admin address.
+4. Know the deployed contract ID for the `nova-rewards` instance you are upgrading.
 
-# Install Soroban CLI
-cargo install --locked soroban-cli
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install --locked stellar-cli --features opt
 ```
 
----
+## Build the new artifact
 
-## Step 1 — Build the new WASM
+Build the specific contract crate so the output path matches the package name used by this repository.
 
 ```bash
 cd contracts
-cargo build --release --target wasm32-unknown-unknown
-
-# Optimised binary is at:
-# target/wasm32-unknown-unknown/release/nova_rewards.wasm
+cargo build --release --target wasm32-unknown-unknown -p nova_rewards
 ```
 
----
-
-## Step 2 — Get the WASM hash
+Optional optimization step:
 
 ```bash
-soroban contract install \
-  --network testnet \
-  --source <ADMIN_SECRET_KEY> \
-  --wasm target/wasm32-unknown-unknown/release/nova_rewards.wasm
+wasm-opt -Oz --strip-debug \
+  target/wasm32-unknown-unknown/release/nova_rewards.wasm \
+  -o target/wasm32-unknown-unknown/release/nova_rewards.optimized.wasm
 ```
 
-This prints the 64-character hex WASM hash, e.g.:
-```
-abc123...def456
-```
+Use the optimized artifact if `wasm-opt` is available; otherwise use the raw release WASM.
 
----
+## Upload the new WASM
 
-## Step 3 — Trigger the upgrade
+Upload the artifact to the target network and capture the returned WASM hash.
 
 ```bash
-soroban contract invoke \
-  --network testnet \
-  --source <ADMIN_SECRET_KEY> \
-  --id <CONTRACT_ID> \
+stellar contract upload \
+  --wasm target/wasm32-unknown-unknown/release/nova_rewards.optimized.wasm \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --source <DEPLOYER_SECRET>
+```
+
+The command returns the hash required by the `upgrade` entrypoint.
+
+## Execute the upgrade
+
+Call the contract's `upgrade` function with the uploaded hash. Only the current admin can authorize this call.
+
+```bash
+stellar contract invoke \
+  --id <NOVA_REWARDS_CONTRACT_ID> \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --source <ADMIN_SECRET> \
   -- \
   upgrade \
-  --new_wasm_hash <WASM_HASH_FROM_STEP_2>
+  --new_wasm_hash <UPLOADED_WASM_HASH>
 ```
 
-The contract emits an `upgrade` event on success.
+On success, the contract emits an `upgrade` event whose topics include the old identifier and new WASM hash, and whose data includes the migration version present before migration runs.
 
----
+## Run the migration
 
-## Step 4 — Run the migration
-
-Call `migrate` immediately after upgrading. This is idempotent — calling it
-again for the same version is a no-op (panics with "migration already applied").
+Immediately invoke `migrate` after a successful WASM update.
 
 ```bash
-soroban contract invoke \
-  --network testnet \
-  --source <ADMIN_SECRET_KEY> \
-  --id <CONTRACT_ID> \
+stellar contract invoke \
+  --id <NOVA_REWARDS_CONTRACT_ID> \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --source <ADMIN_SECRET> \
   -- \
   migrate
 ```
 
----
+`migrate()` will panic with `migration already applied` if `CONTRACT_VERSION` is not greater than the stored `MigratedVersion`, so bump the version constant whenever the release requires a migration step.
 
-## Version tracking
+## Verification checklist
 
-| Key | Storage | Description |
-|-----|---------|-------------|
-| `MigratedVersion` | `instance()` | Last successfully applied migration version |
+After the upgrade:
 
-`CONTRACT_VERSION` in `src/lib.rs` must be bumped for each release that
-requires a migration. The `migrate` function is a no-op if
-`CONTRACT_VERSION <= stored MigratedVersion`.
+1. Invoke `get_migrated_version` and confirm it matches the new `CONTRACT_VERSION`.
+2. Query representative balances with `get_balance` to confirm state survived the code swap.
+3. Re-run the repository upgrade tests in `contracts/nova-rewards/tests/upgrade.rs`.
+4. If staking or swap logic changed, also run the staking and swap test suites before promoting the release.
 
----
+## Rollback considerations
 
-## Security
+- Soroban upgrades are forward-only at the contract level, so rollback means uploading and upgrading to a previously known-good WASM.
+- Keep the prior production WASM artifact and hash available before changing the live contract.
+- Do not run a migration that destroys or rewrites state unless the rollback path has been tested against a backup network snapshot.
 
-- Only the `admin` address set during `initialize` may call `upgrade` or `migrate`.
-- Attempting either without admin auth panics immediately.
+## Security notes
+
+- `upgrade` and `migrate` both require admin authorization.
+- Separate artifact upload from contract invocation so the WASM hash can be reviewed before promotion.
+- Treat the optimized WASM as the release artifact and checksum it in CI or release notes.

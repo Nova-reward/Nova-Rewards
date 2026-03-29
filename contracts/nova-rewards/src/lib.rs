@@ -47,7 +47,7 @@ const CONTRACT_VERSION: u32 = 1;
 /// e.g. a 3.3333% rate is passed as 33_333 (= 0.033333 × 1_000_000).
 pub const SCALE_FACTOR: i128 = 1_000_000;
 
-/// Seconds per year for yield calculations
+/// Seconds per year for staking yield calculations.
 pub const SECONDS_PER_YEAR: u64 = 31_536_000; // 365 * 24 * 60 * 60
 
 /// Computes the reward payout for a given balance and rate using fixed-point
@@ -112,7 +112,7 @@ impl NovaRewardsContract {
     // Initialisation
     // -----------------------------------------------------------------------
 
-    /// Must be called once after first deployment to set the admin.
+    /// Initializes the contract and records the admin plus migration version state.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
@@ -121,8 +121,7 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
     }
 
-    /// Sets the XLM SAC token address and DEX router address.
-    /// Admin only. Must be called before swap_for_xlm is usable.
+    /// Stores the swap configuration needed for router-based XLM redemptions.
     pub fn set_swap_config(env: Env, xlm_token: Address, router: Address) {
         let admin: Address = env
             .storage()
@@ -224,9 +223,7 @@ impl NovaRewardsContract {
     // Upgrade (Issue #206)
     // -----------------------------------------------------------------------
 
-    /// Replaces the contract WASM with `new_wasm_hash`.
-    /// Only the admin may call this.
-    /// Emits: topics=(upgrade, old_hash, new_hash), data=migration_version
+    /// Upgrades the deployed contract code to a new WASM hash.
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
         let admin: Address = env
             .storage()
@@ -251,8 +248,7 @@ impl NovaRewardsContract {
         );
     }
 
-    /// Runs data migrations for the current code version.
-    /// Safe to call multiple times — only executes once per version bump.
+    /// Applies the migration associated with the current `CONTRACT_VERSION`.
     pub fn migrate(env: Env) {
         let admin: Address = env
             .storage()
@@ -283,12 +279,14 @@ impl NovaRewardsContract {
     // State helpers (used by tests to verify state survives upgrade)
     // -----------------------------------------------------------------------
 
+    /// Test helper that writes a balance directly into contract storage.
     pub fn set_balance(env: Env, user: Address, amount: i128) {
         env.storage()
             .instance()
             .set(&DataKey::Balance(user), &amount);
     }
 
+    /// Returns the raw Nova balance recorded for a user.
     pub fn get_balance(env: Env, user: Address) -> i128 {
         env.storage()
             .instance()
@@ -296,6 +294,7 @@ impl NovaRewardsContract {
             .unwrap_or(0)
     }
 
+    /// Returns the last migration version stored by the contract.
     pub fn get_migrated_version(env: Env) -> u32 {
         env.storage()
             .instance()
@@ -313,8 +312,7 @@ impl NovaRewardsContract {
     // Staking functionality
     // -----------------------------------------------------------------------
 
-    /// Set the annual staking rate in basis points (10000 = 100%).
-    /// Admin only.
+    /// Updates the annual staking rate in basis points.
     pub fn set_annual_rate(env: Env, rate: i128) {
         let admin: Address = env
             .storage()
@@ -330,7 +328,7 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::AnnualRate, &rate);
     }
 
-    /// Get the current annual staking rate.
+    /// Returns the configured annual staking rate in basis points.
     pub fn get_annual_rate(env: Env) -> i128 {
         env.storage()
             .instance()
@@ -470,14 +468,14 @@ impl NovaRewardsContract {
         total_return
     }
 
-    /// Get stake information for a user.
+    /// Returns the active stake record for a staker, if one exists.
     pub fn get_stake(env: Env, staker: Address) -> Option<StakeRecord> {
         env.storage()
             .instance()
             .get(&DataKey::Stake(staker))
     }
 
-    /// Calculate expected yield for a stake without unstaking.
+    /// Computes accrued staking yield without removing the stake.
     pub fn calculate_yield(env: Env, staker: Address) -> i128 {
         let stake_record: StakeRecord = env
             .storage()
