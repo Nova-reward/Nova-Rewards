@@ -8,6 +8,9 @@
     "frontend",
     "blockchain"
   ],
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  },
   "scripts": {
     "test": "npm test -w backend",
     "setup:new": "node scripts/setup.js",
