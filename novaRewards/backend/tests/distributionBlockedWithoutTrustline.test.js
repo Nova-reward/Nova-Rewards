@@ -253,7 +253,7 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
             const { status, body } = await post(
               srv,
               '/api/rewards/distribute',
-              { customerWallet, amount, campaignId },
+              { walletAddress: customerWallet, amount, campaignId },
               { 'x-api-key': VALID_API_KEY }
             );
 
@@ -285,7 +285,7 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
             const { status, body } = await post(
               srv,
               '/api/rewards/distribute',
-              { customerWallet, amount, campaignId: CAMPAIGN.id },
+              { walletAddress: customerWallet, amount, campaignId: CAMPAIGN.id },
               { 'x-api-key': VALID_API_KEY }
             );
 
@@ -315,7 +315,7 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
             const { body } = await post(
               srv,
               '/api/rewards/distribute',
-              { customerWallet, amount: '10', campaignId: CAMPAIGN.id },
+              { walletAddress: customerWallet, amount: '10', campaignId: CAMPAIGN.id },
               { 'x-api-key': VALID_API_KEY }
             );
 
