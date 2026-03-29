@@ -12,8 +12,11 @@ const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer')
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
+const securityHeaders = require('./middleware/securityHeaders');
 
 const app = express();
+
+app.use(securityHeaders);
 
 // Configure CORS based on environment
 const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
