@@ -1,0 +1,129 @@
+:root {
+  /* Buttons */
+  --animation-button-press-duration: 80ms;
+  --animation-button-press-timing-function: ease-out;
+  --animation-button-hover-duration: 150ms;
+  --animation-button-hover-timing-function: ease;
+  --animation-button-focus-duration: 100ms;
+  --animation-button-focus-timing-function: ease-out;
+
+  /* Loading */
+  --animation-loading-skeleton-duration: 1.5s;
+  --animation-loading-skeleton-timing-function: linear;
+  --animation-loading-spinner-duration: 400ms;
+  --animation-loading-spinner-timing-function: linear;
+  --animation-progress-fill-duration: 240ms;
+  --animation-progress-fill-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Confetti */
+  --animation-confetti-duration: 1.2s;
+  --animation-confetti-timing-function: ease-out;
+  --animation-confetti-particles: 200;
+
+  /* Counter */
+  --animation-counter-increment-duration: 700ms;
+  --animation-counter-increment-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Button interaction pseudo-class animations */
+.btn {
+  transition: transform var(--animation-button-press-duration) var(--animation-button-press-timing-function),
+    background-color var(--animation-button-hover-duration) var(--animation-button-hover-timing-function),
+    box-shadow var(--animation-button-focus-duration) var(--animation-button-focus-timing-function);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:hover {
+  background-color: var(--btn-hover-bg, #005fcc);
+}
+
+.btn:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(95, 156, 255, 0.45);
+  animation: focus-ring-fade-in var(--animation-button-focus-duration) forwards;
+}
+
+@keyframes focus-ring-fade-in {
+  from { box-shadow: 0 0 0 0 rgba(95, 156, 255, 0); }
+  to { box-shadow: 0 0 0 3px rgba(95, 156, 255, 0.45); }
+}
+
+/* Loading states */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #e5e7eb;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 250%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: skeleton-shimmer var(--animation-loading-skeleton-duration) var(--animation-loading-skeleton-timing-function) infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 3px solid rgba(0, 0, 0, 0.15);
+  border-top-color: rgba(0, 0, 0, 0.65);
+  border-radius: 50%;
+  animation: spinner-rotate var(--animation-loading-spinner-duration) var(--animation-loading-spinner-timing-function) infinite;
+}
+
+@keyframes spinner-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.progress-bar {
+  height: 4px;
+  background: #dbeafe;
+  overflow: hidden;
+}
+
+.progress-bar__fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #06b6d4);
+  transition: width var(--animation-progress-fill-duration) var(--animation-progress-fill-timing-function);
+}
+
+/* Confetti particles (for CSS-based fallback) */
+.confetti-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  opacity: 0;
+  animation: confetti-burst var(--animation-confetti-duration) var(--animation-confetti-timing-function) forwards;
+}
+
+@keyframes confetti-burst {
+  0% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translate3d(var(--tx), var(--ty), 0) scale(0.5); opacity: 0; }
+}
+
+/* Points-counter increment style */
+.points-counter--increment{
+  animation: points-counter-pop var(--animation-counter-increment-duration) var(--animation-counter-increment-timing-function);
+}
+
+@keyframes points-counter-pop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}

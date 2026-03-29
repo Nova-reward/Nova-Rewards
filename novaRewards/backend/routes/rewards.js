@@ -8,7 +8,7 @@ const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
-const { verifyTrustline } = require('../services/stellar');
+const { verifyTrustline } = require('../../blockchain/trustline');
 
 /**
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
