@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nova-rewards-frontend
+  namespace: nova-rewards
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nova-rewards-frontend
+  template:
+    metadata:
+      labels:
+        app: nova-rewards-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: nova-rewards-frontend:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: nova-rewards-config
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
