@@ -10,6 +10,9 @@ process.env.STELLAR_NETWORK = 'testnet';
 const request = require('supertest');
 
 jest.mock('../middleware/validateEnv', () => ({ validateEnv: jest.fn() }));
+jest.mock('../middleware/authenticateUser', () => ({
+  authenticateUser: (req, _res, next) => { req.user = { id: 'user-abc' }; next(); },
+}));
 
 // --- Mock pg pool -----------------------------------------------------------
 const mockClient = {
