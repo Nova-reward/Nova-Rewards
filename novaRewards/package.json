@@ -12,6 +12,7 @@
     "test": "npm test -w backend",
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
-    "migrate": "node database/migrate.js"
+    "migrate": "node database/migrate.js",
+    "reset-testnet": "node scripts/reset-testnet.js"
   }
 }

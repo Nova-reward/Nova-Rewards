@@ -23,42 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-<<<<<<< HEAD
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/10</span>
-=======
-                <span class="strong">20% </span>
-                <span class="quiet">Statements</span>
-                <span class='fraction'>2/10</span>
->>>>>>> origin/main
+                <span class='fraction'>10/10</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/6</span>
+                <span class='fraction'>6/6</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/3</span>
+                <span class='fraction'>3/3</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-<<<<<<< HEAD
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/9</span>
-=======
-                <span class="strong">22.22% </span>
-                <span class="quiet">Lines</span>
-                <span class='fraction'>2/9</span>
->>>>>>> origin/main
+                <span class='fraction'>9/9</span>
             </div>
         
             
@@ -73,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -115,15 +103,12 @@
 <a name='L38'></a><a href='#L38'>38</a>
 <a name='L39'></a><a href='#L39'>39</a>
 <a name='L40'></a><a href='#L40'>40</a>
-<a name='L41'></a><a href='#L41'>41</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<<<<<<< HEAD
-<span class="cline-any cline-no">&nbsp;</span>
-=======
 <span class="cline-any cline-yes">1x</span>
->>>>>>> origin/main
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -141,37 +126,30 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">848x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">106x</span>
+<span class="cline-any cline-yes">103x</span>
+<span class="cline-any cline-yes">369x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">103x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<<<<<<< HEAD
-<span class="cline-any cline-no">&nbsp;</span>
-=======
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
->>>>>>> origin/main
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * Required environment variables for the NovaRewards backend.
  * Requirements: 11.1, 11.3
  */
-<<<<<<< HEAD
-const REQUIRED_ENV_VARS = <span class="cstat-no" title="statement not covered" >[</span>
-=======
 const REQUIRED_ENV_VARS = [
->>>>>>> origin/main
   'ISSUER_PUBLIC',
   'ISSUER_SECRET',
   'DISTRIBUTION_PUBLIC',
@@ -179,6 +157,7 @@ const REQUIRED_ENV_VARS = [
   'STELLAR_NETWORK',
   'HORIZON_URL',
   'DATABASE_URL',
+  'REDIS_URL',
 ];
 &nbsp;
 /**
@@ -188,29 +167,25 @@ const REQUIRED_ENV_VARS = [
  *
  * @throws {Error} if any required env vars are missing
  */
-function <span class="fstat-no" title="function not covered" >validateEnv(</span>) {
-  const missing = <span class="cstat-no" title="statement not covered" >REQUIRED_ENV_VARS.filter(<span class="fstat-no" title="function not covered" >(k</span>ey) =&gt; <span class="cstat-no" title="statement not covered" >!process.env[key])</span>;</span>
+function validateEnv() {
+  const missing = REQUIRED_ENV_VARS.filter((key) =&gt; !process.env[key]);
 &nbsp;
   // In production, ALLOWED_ORIGIN is also required for CORS security
-<span class="cstat-no" title="statement not covered" >  if (process.env.NODE_ENV === 'production' &amp;&amp; !process.env.ALLOWED_ORIGIN) {</span>
-<span class="cstat-no" title="statement not covered" >    missing.push('ALLOWED_ORIGIN');</span>
+  if (process.env.NODE_ENV === 'production' &amp;&amp; !process.env.ALLOWED_ORIGIN) {
+    missing.push('ALLOWED_ORIGIN');
   }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  if (missing.length &gt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >    missing.forEach(<span class="fstat-no" title="function not covered" >(k</span>ey) =&gt; {</span>
-<span class="cstat-no" title="statement not covered" >      console.error(`[validateEnv] Missing required environment variable: ${key}`);</span>
+  if (missing.length &gt; 0) {
+    missing.forEach((key) =&gt; {
+      console.error(`[validateEnv] Missing required environment variable: ${key}`);
     });
-<span class="cstat-no" title="statement not covered" >    throw new Error(</span>
+    throw new Error(
       `Server startup aborted. Missing environment variables: ${missing.join(', ')}`
     );
   }
 }
 &nbsp;
-<<<<<<< HEAD
-<span class="cstat-no" title="statement not covered" >module.exports = { validateEnv, REQUIRED_ENV_VARS };</span>
-=======
 module.exports = { validateEnv, REQUIRED_ENV_VARS };
->>>>>>> origin/main
 &nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
@@ -218,11 +193,7 @@ module.exports = { validateEnv, REQUIRED_ENV_VARS };
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-<<<<<<< HEAD
-                at 2026-03-26T04:40:38.712Z
-=======
-                at 2026-03-26T01:51:58.833Z
->>>>>>> origin/main
+                at 2026-03-28T04:17:20.681Z
             </div>
         <script src="../prettify.js"></script>
         <script>

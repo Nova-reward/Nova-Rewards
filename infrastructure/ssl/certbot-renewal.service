@@ -1,0 +1,15 @@
+[Unit]
+Description=Certbot SSL Certificate Renewal for Nova Rewards
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --quiet
+ExecStartPost=/bin/systemctl reload nginx
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=certbot-renewal
+
+# Failure notification
+OnFailure=certbot-renewal-failure@%n.service

@@ -1,11 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "../context/WalletContext";
+import DashboardLayout from "../components/DashboardLayout";
 import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
+import ReferralLink from "../components/ReferralLink";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
+import StellarDropModal from "../components/StellarDropModal";
 import { truncateAddress } from "../lib/truncateAddress";
 
 /**
@@ -24,10 +27,21 @@ function DashboardContent() {
     loading,
   } = useWallet();
   const router = useRouter();
+  const dropModalRef = useRef(null);
 
   useEffect(() => {
     if (!loading && !publicKey) router.push("/");
   }, [publicKey, loading, router]);
+
+  // Check for eligible drops when dashboard loads
+  useEffect(() => {
+    if (publicKey && !loading) {
+      // Trigger the drop modal's eligibility check
+      if (dropModalRef.current) {
+        dropModalRef.current.checkEligibility();
+      }
+    }
+  }, [publicKey, loading]);
 
   if (!publicKey) return null;
 
@@ -45,25 +59,15 @@ function DashboardContent() {
     return { type, counterparty, amount: tx.amount, date };
   }
 
-  return (
-    <>
-      <nav className="nav">
-        <span className="nav-brand">⭐ NovaRewards</span>
-        <div className="nav-links">
-          <span style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
-            {shortKey}
-          </span>
-          <button
-            className="btn btn-secondary"
-            onClick={disconnect}
-            style={{ padding: "0.4rem 1rem" }}
-          >
-            Disconnect
-          </button>
-        </div>
-      </nav>
+  // Handle successful drop claim
+  const handleDropClaimSuccess = (claimedAmount) => {
+    // Refresh the balance to show the new tokens
+    refreshBalance();
+  };
 
-      <div className="container">
+  return (
+    <DashboardLayout>
+      <div className="dashboard-content">
         {loading ? (
           <LoadingSkeleton />
         ) : (
@@ -136,7 +140,6 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Trustline */}
             <div className="card">
               <h2 style={{ marginBottom: "1rem" }}>Trustline</h2>
               <TrustlineButton
@@ -144,6 +147,10 @@ function DashboardContent() {
                 onSuccess={() => refreshBalance()}
               />
             </div>
+
+            {/* Referral Link — Requirement 168 */}
+            <ReferralLink userId={publicKey} />
+
 
             {/* Transfer */}
             <div className="card">
@@ -167,7 +174,13 @@ function DashboardContent() {
           </>
         )}
       </div>
-    </>
+      
+      {/* Stellar Drop Modal */}
+      <StellarDropModal 
+        ref={dropModalRef}
+        onClaimSuccess={handleDropClaimSuccess}
+      />
+    </DashboardLayout>
   );
 }
 

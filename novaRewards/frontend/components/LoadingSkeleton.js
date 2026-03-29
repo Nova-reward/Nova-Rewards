@@ -4,7 +4,7 @@ export default function LoadingSkeleton() {
       <style jsx>{`
         .skeleton-container {
           display: grid;
-          grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+          grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
           gap: 1.5rem;
           align-items: start;
           margin-bottom: 1.5rem;
