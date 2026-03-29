@@ -1,0 +1,44 @@
+name: Configure Branch Protection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure Branch Protection
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            console.log('Branch protection configuration:');
+            console.log('- Branch: main');
+            console.log('- Require pull request reviews: 1');
+            console.log('- Require status checks: CI, Vercel Preview Deployment');
+            console.log('- Require branches up to date: true');
+            console.log('- Require code reviews: true');
+            console.log('');
+            console.log('To apply these settings:');
+            console.log('1. Go to Settings → Branches');
+            console.log('2. Click "Add rule"');
+            console.log('3. Branch name pattern: main');
+            console.log('4. Enable:');
+            console.log('   - Require a pull request before merging');
+            console.log('   - Require status checks to pass before merging');
+            console.log('   - Require branches to be up to date before merging');
+            console.log('   - Require code reviews before merging (1 review)');
+            console.log('5. Select required status checks:');
+            console.log('   - CI');
+            console.log('   - Vercel Preview Deployment');
+            console.log('6. Save');

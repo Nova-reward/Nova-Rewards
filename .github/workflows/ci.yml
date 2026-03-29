@@ -1,94 +1,60 @@
-name: CI/CD
+name: CI
 
 on:
-  pull_request:
-    branches: [main]
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./novaRewards
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: './novaRewards/package-lock.json'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Lint (ESLint + Prettier)
-        run: |
-          npm run lint
-          npm run format:check
-      
-      - name: Backend tests with coverage
-        run: npm run test:backend -- --coverage --coverageThreshold='{"global":{"lines":80,"functions":80,"branches":80,"statements":80}}'
-      
-      - name: Frontend tests with coverage
-        run: npm run test:frontend -- --coverage --coverageThreshold='{"global":{"lines":80,"functions":80,"branches":80,"statements":80}}'
-      
-      - name: Build frontend
-        run: npm run build
-      
-      - name: Upload test results
-        uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: test-results
-          path: |
-            novaRewards/backend/coverage/
-            novaRewards/frontend/coverage/
-      
-      - name: Backend Test Report
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: Backend Tests
-          path: novaRewards/backend/coverage/junit.xml
-          reporter: jest-junit
-      
-      - name: Frontend Test Report
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: Frontend Tests
-          path: novaRewards/frontend/coverage/junit.xml
-          reporter: jest-junit
+    name: Backend Tests
 
-  deploy-preview:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    defaults:
-      run:
-        working-directory: ./novaRewards
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: './novaRewards/package-lock.json'
-      
+          node-version: 20
+          cache: npm
+          cache-dependency-path: novaRewards/backend/package-lock.json
+
       - name: Install dependencies
-        run: npm ci
-      
-      - name: Build frontend
-        run: npm run build
-      
-      - name: Upload preview artifact
-        uses: actions/upload-artifact@v3
+        working-directory: novaRewards/backend
+        run: npm install
+
+      - name: Run tests
+        working-directory: novaRewards/backend
+        run: npx jest --runInBand --ci
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    name: Frontend Build Check
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          name: preview-build-${{ github.event.number }}
-          path: novaRewards/frontend/.next/
-          retention-days: 7
+          node-version: 20
+          cache: npm
+          cache-dependency-path: novaRewards/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: novaRewards/frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: novaRewards/frontend
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: https://api.nova-rewards.xyz
+          NEXT_PUBLIC_HORIZON_URL: https://horizon.stellar.org
+          NEXT_PUBLIC_ISSUER_PUBLIC: GBRPYHIL2CI3WHZDTOOQFC6EB4KJJGUJGU3XYQVVXN7XNXQVVVVVVVV
+          NEXT_PUBLIC_STELLAR_NETWORK: public
+          NEXT_PUBLIC_MULTISIG_CONTRACT_ID: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4

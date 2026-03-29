@@ -1,0 +1,57 @@
+# Docker Compose configuration for Nova Rewards with SSL/TLS support
+# This extends the base docker-compose.yml with NGINX reverse proxy
+# and Let's Encrypt certificate management.
+#
+# Usage: docker-compose -f docker-compose.yml -f docker-compose-ssl.yml up -d
+
+version: "3.9"
+
+services:
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # NGINX configuration
+      - ./infrastructure/ssl/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      
+      # SSL certificates (mounted from host)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      
+      # ACME challenge directory for Certbot
+      - /var/www/certbot:/var/www/certbot:ro
+      
+      # Logs
+      - nginx_logs:/var/log/nginx
+    
+    depends_on:
+      - backend
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    networks:
+      - nova_network
+
+  backend:
+    # ... existing backend configuration ...
+    networks:
+      - nova_network
+
+  postgres:
+    # ... existing postgres configuration ...
+    networks:
+      - nova_network
+
+networks:
+  nova_network:
+    driver: bridge
+
+volumes:
+  nginx_logs:
