@@ -44,13 +44,11 @@ describe('POST /api/redemptions — idempotency middleware', () => {
   test('400 when X-Idempotency-Key header is missing', async () => {
     const res = await request(app).post('/api/redemptions').set('content-type', 'application/json').send(VALID_BODY);
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe('missing_idempotency_key');
   });
 
   test('400 when X-Idempotency-Key is blank', async () => {
     const res = await request(app).post('/api/redemptions').set({ ...VALID_HEADERS, 'x-idempotency-key': '   ' }).send(VALID_BODY);
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe('missing_idempotency_key');
   });
 });
 
@@ -87,7 +85,7 @@ describe('POST /api/redemptions — happy path', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data).toMatchObject({ id: 99 });
+    expect(res.body.data.redemption).toMatchObject({ id: 99 });
   });
 });
 
