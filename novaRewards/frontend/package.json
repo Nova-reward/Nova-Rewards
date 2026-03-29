@@ -12,6 +12,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@stellar/freighter-api": "^2.0.0",
+    "albedo-link": "^0.2.3",
     "axios": "^1.7.2",
     "canvas-confetti": "^1.9.4",
     "next": "^14.2.5",
