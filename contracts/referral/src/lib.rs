@@ -1,7 +1,5 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 #[contracttype]
@@ -39,8 +37,14 @@ impl ReferralContract {
     pub fn fund_pool(env: Env, amount: i128) {
         Self::admin(&env).require_auth();
         assert!(amount > 0, "amount must be positive");
-        let bal: i128 = env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0);
-        env.storage().instance().set(&DataKey::PoolBalance, &(bal + amount));
+        let bal: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::PoolBalance, &(bal + amount));
     }
 
     /// Registers a one-time referral relationship for a wallet.
@@ -69,9 +73,7 @@ impl ReferralContract {
 
     /// Returns the referrer associated with the provided wallet, if any.
     pub fn get_referrer(env: Env, referred: Address) -> Option<Address> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Referral(referred))
+        env.storage().persistent().get(&DataKey::Referral(referred))
     }
 
     /// Pays a referral reward from the pool to the stored referrer relationship.
@@ -85,7 +87,11 @@ impl ReferralContract {
             .get(&DataKey::Referral(referred.clone()))
             .expect("no referrer found");
 
-        let pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0);
+        let pool_bal: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0);
         assert!(pool_bal >= reward_amount, "insufficient pool balance");
         env.storage()
             .instance()
@@ -109,7 +115,10 @@ impl ReferralContract {
 
     /// Returns the remaining reward balance held by the contract.
     pub fn pool_balance(env: Env) -> i128 {
-        env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0)
     }
 }
 
@@ -117,7 +126,10 @@ impl ReferralContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Events}, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Env,
+    };
 
     fn setup() -> (Env, Address, ReferralContractClient<'static>) {
         let env = Env::default();

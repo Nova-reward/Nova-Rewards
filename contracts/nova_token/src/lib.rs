@@ -1,7 +1,5 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
 // ── Storage keys ─────────────────────────────────────────────────────────────
 #[contracttype]
@@ -37,7 +35,9 @@ impl NovaToken {
         let key = DataKey::Balance(addr.clone());
         let balance = env.storage().persistent().get(&key).unwrap_or(0);
         // Extend TTL by 31 days (2,678,400 ledgers at 5s/ledger)
-        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 2_678_400, 2_678_400);
         balance
     }
 
@@ -46,7 +46,9 @@ impl NovaToken {
         let key = DataKey::Balance(addr.clone());
         env.storage().persistent().set(&key, &amount);
         // Extend TTL by 31 days
-        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 2_678_400, 2_678_400);
     }
 
     // ── Mint ──────────────────────────────────────────────────────────────────
@@ -100,7 +102,9 @@ impl NovaToken {
         let key = DataKey::Allowance(owner.clone(), spender.clone());
         env.storage().persistent().set(&key, &amount);
         // Extend TTL by 31 days
-        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 2_678_400, 2_678_400);
 
         env.events().publish(
             (symbol_short!("nova_tok"), symbol_short!("approve")),
@@ -118,7 +122,9 @@ impl NovaToken {
         let key = DataKey::Allowance(owner, spender);
         let allowance = env.storage().persistent().get(&key).unwrap_or(0);
         // Extend TTL by 31 days
-        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 2_678_400, 2_678_400);
         allowance
     }
 }
@@ -127,7 +133,10 @@ impl NovaToken {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Events}, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Env,
+    };
 
     fn setup() -> (Env, Address, NovaTokenClient<'static>) {
         let env = Env::default();

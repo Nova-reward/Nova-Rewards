@@ -1,7 +1,5 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, vec, Address, Env, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, vec, Address, Env, Vec};
 
 // ── Storage keys ────────────────────────────────────────────────────────────
 #[contracttype]
@@ -19,18 +17,15 @@ pub struct AdminRolesContract;
 #[contractimpl]
 impl AdminRolesContract {
     /// Initializes the contract with the first admin and optional multisig settings.
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        signers: Vec<Address>,
-        threshold: u32,
-    ) {
+    pub fn initialize(env: Env, admin: Address, signers: Vec<Address>, threshold: u32) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Signers, &signers);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -50,7 +45,9 @@ impl AdminRolesContract {
     /// Stores a pending admin that can later accept ownership.
     pub fn propose_admin(env: Env, new_admin: Address) {
         Self::require_admin(&env);
-        env.storage().instance().set(&DataKey::PendingAdmin, &new_admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
 
         // emit admin_proposed event
         env.events().publish(
@@ -84,7 +81,9 @@ impl AdminRolesContract {
     /// Updates the multisig approval threshold.
     pub fn update_threshold(env: Env, threshold: u32) {
         Self::require_admin(&env);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
     }
 
     /// Replaces the configured multisig signer set.
@@ -129,7 +128,10 @@ impl AdminRolesContract {
 
     /// Returns the configured multisig threshold, defaulting to `1`.
     pub fn get_threshold(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::Threshold).unwrap_or(1)
+        env.storage()
+            .instance()
+            .get(&DataKey::Threshold)
+            .unwrap_or(1)
     }
 
     /// Returns the configured signer set, or an empty vector when unset.
