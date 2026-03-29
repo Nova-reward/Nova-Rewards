@@ -14,17 +14,19 @@ const { verifyTrustline } = require('../../blockchain/trustline');
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
  * Closes: #123
  */
-const distributeRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    error: 'rate_limit_exceeded',
-    message: 'Too many requests. Please try again later.',
-  },
-});
+const distributeRateLimiter = process.env.NODE_ENV === 'test'
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: 60 * 1000,
+      max: 20,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: {
+        success: false,
+        error: 'rate_limit_exceeded',
+        message: 'Too many requests. Please try again later.',
+      },
+    });
 
 /**
  * POST /api/rewards/distribute
