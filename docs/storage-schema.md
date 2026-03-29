@@ -4,6 +4,8 @@ This document describes the storage layout optimizations applied to Nova Rewards
 
 ## Optimization Strategy
 
+This audit reviewed the `nova-rewards`, `nova_token`, `vesting`, `referral`, `reward_pool`, and `admin_roles` contracts. Existing keys are already mostly consolidated; the new `DailyUsage` struct in `reward_pool` further reduces per-wallet storage overhead.
+
 ### 1. Storage Key Consolidation
 Where multiple fields are always read/written together, they have been consolidated into single struct values to reduce storage overhead.
 
@@ -97,17 +99,17 @@ All persistent storage entries have appropriate TTL extensions to prevent ledger
 **Storage Keys:**
 - `Admin` (instance) - Administrator address
 - `Balance` (instance) - Pool balance
-- `Deposits(Address)` (persistent) - Deposit amounts per address
-- `Withdrawals(Address)` (persistent) - Withdrawal amounts per address
+- `DailyLimit` (instance) - Global per-wallet daily withdraw limit
+- `DailyUsage(Address)` (persistent) - Per-wallet daily usage and window start
 
 **Optimizations Applied:**
 - Single balance field instead of multiple pool tracking fields
-- Per-user deposit/withdrawal history in persistent storage
-- Admin and global balance in instance storage
+- Daily usage consolidated into a single `DailyUsage` struct for each wallet
+- Daily limit stored in instance storage for admin configuration
 
 **TTL Extensions:**
-- Deposit and Withdrawal entries: Extended on each operation
-- Recommended TTL: 180 days (15,552,000 ledgers)
+- `DailyUsage` entries: Extended on each withdraw/check to preserve rolling window state
+- Recommended TTL: 2 days (172,800 ledgers)
 
 ## Storage Budget Guidelines
 

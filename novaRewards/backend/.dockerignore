@@ -8,3 +8,15 @@ coverage
 .git
 npm-debug.log
 **/test-results
+.git
+dist
+coverage
+tests
+*.test.js
+*.spec.js
+jest.config.js
+jest.setup.js
+.eslintrc.js
+.env
+.env.*
+npm-debug.log*
