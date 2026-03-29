@@ -1,28 +1,17 @@
 #![cfg(test)]
 
+mod test_helpers;
+
 use soroban_sdk::{
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Events},
-    Address, BytesN, Env, IntoVal, Symbol,
+    testutils::Address as _,
+    Address,
+    BytesN,
+    Env,
 };
 
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient};
+use nova_rewards::NovaRewardsContractClient;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn deploy(env: &Env) -> (NovaRewardsContractClient, Address) {
-    let admin = Address::generate(env);
-    let contract_id = env.register_contract(None, NovaRewardsContract);
-    let client = NovaRewardsContractClient::new(env, &contract_id);
-    client.initialize(&admin);
-    (client, admin)
-}
-
-/// Returns a dummy 32-byte hash (simulates a new WASM hash).
-fn dummy_hash(env: &Env, seed: u8) -> BytesN<32> {
-    BytesN::from_array(env, &[seed; 32])
-}
+use test_helpers::{assert_event_emitted, deploy, dummy_hash};
 
 // ---------------------------------------------------------------------------
 // Tests
