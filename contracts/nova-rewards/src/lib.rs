@@ -10,6 +10,13 @@ use soroban_sdk::{
 // ---------------------------------------------------------------------------
 
 #[contracttype]
+#[derive(Clone)]
+pub struct DailyUsage {
+    pub amount_used: i128,
+    pub window_start: u64,
+}
+
+#[contracttype]
 pub enum DataKey {
     Admin,
     Balance(Address),
@@ -18,10 +25,14 @@ pub enum DataKey {
     XlmToken,
     /// Address of the DEX router contract used for multi-hop swaps
     Router,
+    /// Daily usage tracking for each wallet (Issue #204)
+    DailyUsage(Address),
+    /// Daily claim limit configurable by admin
+    DailyLimit,
 }
 
 // Current code version — bump this with every upgrade that needs a migration.
-const CONTRACT_VERSION: u32 = 1;
+const CONTRACT_VERSION: u32 = 2;
 
 // ---------------------------------------------------------------------------
 // Fixed-point arithmetic (Issue #205)
@@ -82,6 +93,62 @@ pub fn calculate_payout(balance: i128, rate: i128) -> i128 {
 }
 
 // ---------------------------------------------------------------------------
+// Daily limit enforcer (Issue #204)
+// ---------------------------------------------------------------------------
+
+/// Checks and updates daily usage for the given user and amount.
+/// Resets the window if 24 hours have passed.
+/// Panics with "DailyLimitExceeded" if the limit would be exceeded.
+fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
+    let now = env.ledger().timestamp();
+    let daily_limit: i128 = env
+        .storage()
+        .instance()
+        .get(&DataKey::DailyLimit)
+        .unwrap_or(0);
+
+    if daily_limit <= 0 {
+        // No limit set, allow
+        return;
+    }
+
+    let usage_key = DataKey::DailyUsage(user.clone());
+    let mut usage: DailyUsage = env
+        .storage()
+        .persistent()
+        .get(&usage_key)
+        .unwrap_or(DailyUsage {
+            amount_used: 0,
+            window_start: now,
+        });
+
+    // Extend TTL for persistent storage
+    env.storage()
+        .persistent()
+        .extend_ttl(&usage_key, 31_536_000, 31_536_000);
+
+    // Check if window has expired (24 hours = 86,400 seconds)
+    if now - usage.window_start >= 86_400 {
+        usage.amount_used = 0;
+        usage.window_start = now;
+        env.storage().persistent().set(&usage_key, &usage);
+        // Set TTL for persistent storage (365 days)
+        env.storage().persistent().extend_ttl(&usage_key, 31_536_000, 31_536_000);
+    }
+
+    // Check limit
+    if usage.amount_used + requested_amount > daily_limit {
+        panic!("DailyLimitExceeded");
+    }
+
+    // Update usage
+    usage.amount_used += requested_amount;
+    env.storage().persistent().set(&usage_key, &usage);
+    // Set TTL for persistent storage (365 days)
+    env.storage().persistent().extend_ttl(&usage_key, 31_536_000, 31_536_000);
+}
+
+// ---------------------------------------------------------------------------
 // Contract
 // ---------------------------------------------------------------------------
 
@@ -114,6 +181,25 @@ impl NovaRewardsContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::XlmToken, &xlm_token);
         env.storage().instance().set(&DataKey::Router, &router);
+    }
+
+    /// Sets the daily claim limit. Admin only.
+    /// Emits a daily_limit_updated event.
+    pub fn set_daily_limit(env: Env, limit: i128) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        if limit < 0 {
+            panic!("daily limit must be non-negative");
+        }
+        env.storage().instance().set(&DataKey::DailyLimit, &limit);
+        env.events().publish(
+            (symbol_short!("daily_lim"), symbol_short!("updated")),
+            limit,
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -153,6 +239,9 @@ impl NovaRewardsContract {
         if path.len() > 5 {
             panic!("path exceeds maximum of 5 hops");
         }
+
+        // Check daily limit (Issue #204)
+        check_daily_limit(&env, &user, nova_amount);
 
         // --- Burn Nova points ---
         let balance: i128 = env
@@ -283,6 +372,25 @@ impl NovaRewardsContract {
             .instance()
             .get(&DataKey::MigratedVersion)
             .unwrap_or(0)
+    }
+
+    /// Returns the current daily limit.
+    pub fn get_daily_limit(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::DailyLimit)
+            .unwrap_or(0)
+    }
+
+    /// Returns the daily usage for a user.
+    pub fn get_daily_usage(env: Env, user: Address) -> DailyUsage {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DailyUsage(user))
+            .unwrap_or(DailyUsage {
+                amount_used: 0,
+                window_start: 0,
+            })
     }
 
     /// Thin contract entry-point that delegates to the free `calculate_payout`
