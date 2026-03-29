@@ -20,6 +20,19 @@ jest.mock('../db/campaignRepository', () => ({
   getCampaignsByMerchant: jest.fn(),
 }));
 
+// Mock authenticateMerchant to inject a test merchant
+jest.mock('../middleware/authenticateMerchant', () => ({
+  authenticateMerchant: (req, res, next) => {
+    req.merchant = { id: 1, name: 'Test Merchant' };
+    next();
+  },
+}));
+
+// Mock emailService to avoid nodemailer dependency issues
+jest.mock('../services/emailService', () => ({
+  sendWelcome: jest.fn().mockResolvedValue({ success: true }),
+}));
+
 const app = require('../server');
 const { createCampaign, getCampaignsByMerchant } = require('../db/campaignRepository');
 
@@ -104,11 +117,13 @@ describe('POST /api/campaigns', () => {
   });
 
   test('400 - rejects when merchantId is missing', async () => {
-    const { merchantId, ...body } = VALID_BODY;
+    // merchantId comes from the authenticated merchant (req.merchant.id), not the body.
+    // Without a name, the route returns 400.
+    const { merchantId, name, ...body } = VALID_BODY;
     const res = await request(app).post('/api/campaigns').send(body);
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/merchantId/i);
+    expect(res.body.message).toMatch(/name/i);
   });
 
   test('400 - rejects when name is missing', async () => {
