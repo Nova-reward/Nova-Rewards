@@ -39,7 +39,10 @@ jobs:
         with:
           node-version: 20
 
+      # Install from workspace root so shared deps (eslint, etc.) resolve correctly
       - run: npm install
+        working-directory: novaRewards
+
       - run: npm run lint
       - run: npm test
 
@@ -63,5 +66,8 @@ jobs:
         with:
           node-version: 20
 
+      # Install from workspace root
       - run: npm install
+        working-directory: novaRewards
+
       - run: npm run build
