@@ -9,7 +9,8 @@
     "test": "jest --runInBand --coverage",
     "lint": "eslint .",
     "migrate": "node ../database/migrate.js",
-    "migrate:rollback": "node ../database/migrate.js --rollback"
+    "migrate:rollback": "node ../database/migrate.js --rollback",
+    "db:migrate": "node ../database/migrate.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -23,7 +24,8 @@
     "rate-limit-redis": "^4.2.0",
     "redis": "^4.7.0",
     "stellar-sdk": "^12.3.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "@aws-sdk/client-secrets-manager": "^3.0.0"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
