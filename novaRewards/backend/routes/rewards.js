@@ -1,10 +1,12 @@
 const router = require('express').Router();
 const rateLimit = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
 const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
+const { getRedisClient } = require('../cache/redisClient');
 
 /**
  * Middleware: validates the merchant API key from the x-api-key header.
@@ -39,13 +41,23 @@ async function merchantAuth(req, res, next) {
 
 /**
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
+ * Uses Redis as the backing store when REDIS_URL is set (production),
+ * falling back to in-memory for local development.
  * Closes: #123
  */
+const redisClient = getRedisClient();
 const distributeRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  // Use Redis store only when a client is available
+  ...(redisClient && {
+    store: new RedisStore({
+      sendCommand: (...args) => redisClient.call(...args),
+      prefix: 'rl:distribute:',
+    }),
+  }),
   message: {
     success: false,
     error: 'rate_limit_exceeded',
