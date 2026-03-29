@@ -11,6 +11,10 @@ backend:
     requests:
       cpu: 100m
       memory: 128Mi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
 
 frontend:
   replicaCount: 2
@@ -25,6 +29,10 @@ frontend:
     requests:
       cpu: 100m
       memory: 128Mi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
 
 ingress:
   enabled: true
@@ -33,6 +41,3 @@ ingress:
 
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 70

@@ -23,13 +23,13 @@ spec:
                 name: nova-rewards-config
           livenessProbe:
             httpGet:
-              path: /
+              path: /api/healthz
               port: 3000
             initialDelaySeconds: 30
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /
+              path: /api/healthz
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 5
