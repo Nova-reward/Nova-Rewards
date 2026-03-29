@@ -80,8 +80,8 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
     }
 
     // Verify trustline exists
-    const hasTrustline = await verifyTrustline(walletAddress);
-    if (!hasTrustline) {
+    const trustline = await verifyTrustline(walletAddress);
+    if (!trustline?.exists) {
       return res.status(400).json({
         success: false,
         error: 'no_trustline',

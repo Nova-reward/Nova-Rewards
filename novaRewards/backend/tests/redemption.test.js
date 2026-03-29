@@ -12,6 +12,8 @@ const request = require('supertest');
 jest.mock('../middleware/validateEnv', () => ({ validateEnv: jest.fn() }));
 jest.mock('../middleware/authenticateUser', () => ({
   authenticateUser: (req, _res, next) => { req.user = { id: 'user-abc' }; next(); },
+  requireAdmin: (_req, _res, next) => next(),
+  requireOwnershipOrAdmin: (_req, _res, next) => next(),
 }));
 
 // --- Mock pg pool -----------------------------------------------------------
