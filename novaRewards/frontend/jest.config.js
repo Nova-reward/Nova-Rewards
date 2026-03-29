@@ -1,14 +1,12 @@
-module.exports = {
-  testEnvironment: 'node',
-  testMatch: ['**/*.test.js'],
-  verbose: true,
-  setupFilesAfterEnv: ['./jest.setup.js'],
-  collectCoverageFrom: [
-    'routes/**/*.js',
-    'db/**/*.js',
-    'middleware/**/*.js',
-    '!**/*.test.js',
-  ],
+const nextJest = require('next/jest')
+
+const createJestConfig = nextJest({
+  dir: './',
+})
+
+const customJestConfig = {
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  testEnvironment: 'jsdom',
   coverageThreshold: {
     global: {
       lines: 80,
@@ -24,4 +22,6 @@ module.exports = {
       outputName: 'junit.xml',
     }],
   ],
-};
+}
+
+module.exports = createJestConfig(customJestConfig)
