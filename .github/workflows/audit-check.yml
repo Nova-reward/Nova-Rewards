@@ -1,0 +1,174 @@
+name: Audit Compliance Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'contracts/**/*.rs'
+      - 'contracts/**/*.toml'
+      - 'contracts/**/*.md'
+
+jobs:
+  audit-compliance:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Check for new contract files
+        id: check-contracts
+        run: |
+          # Get list of changed contract files
+          echo "Checking for new contract files..."
+          
+          # Find all .rs files in contracts directory
+          CONTRACT_FILES=$(find contracts -name "*.rs" -type f 2>/dev/null || echo "")
+          
+          if [ -z "$CONTRACT_FILES" ]; then
+            echo "No contract files found"
+            echo "has_contracts=false" >> $GITHUB_OUTPUT
+          else
+            echo "Contract files found:"
+            echo "$CONTRACT_FILES"
+            echo "has_contracts=true" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check if audit directory exists
+          if [ ! -d "docs/audits" ]; then
+            echo "Audit directory does not exist"
+            echo "audit_dir_exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "Audit directory exists"
+            echo "audit_dir_exists=true" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check if audit README exists
+          if [ ! -f "docs/audits/README.md" ]; then
+            echo "Audit README does not exist"
+            echo "audit_readme_exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "Audit README exists"
+            echo "audit_readme_exists=true" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Validate audit structure
+        if: steps.check-contracts.outputs.has_contracts == 'true'
+        run: |
+          echo "Validating audit structure..."
+          
+          # Check if audit directory exists
+          if [ ! -d "docs/audits" ]; then
+            echo "❌ FAIL: docs/audits directory does not exist"
+            echo "Please create the audit directory structure as documented in the project"
+            exit 1
+          fi
+          
+          # Check if README exists
+          if [ ! -f "docs/audits/README.md" ]; then
+            echo "❌ FAIL: docs/audits/README.md does not exist"
+            echo "Please create the audit README file"
+            exit 1
+          fi
+          
+          # Check if template exists
+          if [ ! -f "docs/audits/TEMPLATE.md" ]; then
+            echo "❌ FAIL: docs/audits/TEMPLATE.md does not exist"
+            echo "Please create the audit template file"
+            exit 1
+          fi
+          
+          # Check if reports directory exists
+          if [ ! -d "docs/audits/reports" ]; then
+            echo "❌ FAIL: docs/audits/reports directory does not exist"
+            echo "Please create the reports directory for PDF storage"
+            exit 1
+          fi
+          
+          echo "✅ Audit structure validation passed"
+          
+      - name: Check audit entries for new contracts
+        if: steps.check-contracts.outputs.has_contracts == 'true'
+        run: |
+          echo "Checking audit entries for new contracts..."
+          
+          # Get list of contract files
+          CONTRACT_FILES=$(find contracts -name "*.rs" -type f | sort)
+          
+          # Parse audit README to get list of audited contracts
+          AUDITED_CONTRACTS=""
+          if [ -f "docs/audits/README.md" ]; then
+            # Extract contract names from audit table
+            AUDITED_CONTRACTS=$(grep -i "nova-" docs/audits/README.md | grep -v "No completed audits" | wc -l)
+          fi
+          
+          echo "Found $(echo "$CONTRACT_FILES" | wc -l) contract files"
+          echo "Found $AUDITED_CONTRACTS audited contract entries"
+          
+          # Check if we have any audits at all
+          if [ "$AUDITED_CONTRACTS" -eq 0 ]; then
+            echo ""
+            echo "⚠️  WARNING: No audit entries found in docs/audits/README.md"
+            echo ""
+            echo "New smart contracts have been detected but no audit entries exist."
+            echo "Please ensure that:"
+            echo "1. All new contracts are audited before production deployment"
+            echo "2. Audit reports are documented in docs/audits/README.md"
+            echo "3. PDF reports are stored in docs/audits/reports/"
+            echo ""
+            echo "For new projects, you can:"
+            echo "- Add 'Scheduled' audit entries for upcoming audits"
+            echo "- Mark contracts as 'In Progress' while audits are being conducted"
+            echo ""
+            echo "This check will fail in production branches. For development, please"
+            echo "create appropriate audit entries to track the audit process."
+            echo ""
+            
+            # Check if this is a production branch
+            if [[ "$GITHUB_REF" == "refs/heads/main" || "$GITHUB_REF" == "refs/heads/production" || "$GITHUB_REF" == "refs/heads/master" ]]; then
+              echo "❌ FAIL: Production branch requires audit entries for all contracts"
+              exit 1
+            else
+              echo "⚠️  WARNING: Development branch - audit entries strongly recommended"
+            fi
+          else
+            echo "✅ Audit entries found"
+          fi
+          
+      - name: Generate audit compliance report
+        if: always()
+        run: |
+          echo "# Audit Compliance Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Status" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check-contracts.outputs.has_contracts }}" == "true" ]; then
+            echo "✅ Contract files detected" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️  No contract files found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.check-contracts.outputs.audit_dir_exists }}" == "true" ]; then
+            echo "✅ Audit directory exists" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Audit directory missing" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.check-contracts.outputs.audit_readme_exists }}" == "true" ]; then
+            echo "✅ Audit README exists" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Audit README missing" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Requirements" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] All new contracts must have corresponding audit entries" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Audit reports must be documented in docs/audits/README.md" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] PDF reports must be stored in docs/audits/reports/" >> $GITHUB_STEP_SUMMARY
+          echo "- [ ] Use docs/audits/TEMPLATE.md for consistent reporting" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- [Audit Documentation](docs/audits/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Audit Template](docs/audits/TEMPLATE.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Security Guidelines](docs/README.md)" >> $GITHUB_STEP_SUMMARY
