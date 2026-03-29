@@ -49,16 +49,6 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
       });
     }
 
-    // Verify trustline exists
-    const hasTrustline = await verifyTrustline(walletAddress);
-    if (!hasTrustline) {
-      return res.status(400).json({
-        success: false,
-        error: 'no_trustline',
-        message: 'Recipient does not have a NOVA trustline. Please add NOVA trustline first.',
-      });
-    }
-
     // Distinguish campaign not found vs inactive/expired for clearer client handling.
     const campaignExists = await getCampaignById(campaignId);
     if (!campaignExists) {
@@ -84,6 +74,16 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
         success: false,
         error: 'forbidden',
         message: 'Campaign does not belong to this merchant',
+      });
+    }
+
+    // Verify trustline exists
+    const hasTrustline = await verifyTrustline(walletAddress);
+    if (!hasTrustline) {
+      return res.status(400).json({
+        success: false,
+        error: 'no_trustline',
+        message: 'Recipient does not have a NOVA trustline. Please add NOVA trustline first.',
       });
     }
 
