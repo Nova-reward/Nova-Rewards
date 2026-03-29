@@ -11,7 +11,7 @@ const request = require('supertest');
 
 jest.mock('../middleware/validateEnv', () => ({ validateEnv: jest.fn() }));
 jest.mock('../middleware/authenticateUser', () => ({
-  authenticateUser: (req, _res, next) => { req.user = { id: 'user-abc' }; next(); },
+  authenticateUser: (req, _res, next) => { req.user = { id: 1 }; next(); },
   requireAdmin: (_req, _res, next) => next(),
   requireOwnershipOrAdmin: (_req, _res, next) => next(),
 }));
@@ -40,9 +40,9 @@ const VALID_HEADERS = {
   'x-idempotency-key': 'test-key-123',
   'content-type': 'application/json',
 };
-const VALID_BODY = { userId: 'user-abc', rewardId: 1 };
+const VALID_BODY = { userId: 1, rewardId: 1 };
 
-const BALANCE_ROW = { user_id: 'user-abc', points: '100' };
+const BALANCE_ROW = { user_id: 1, points: '100' };
 const REWARD_ROW  = { id: 1, name: 'Free Coffee', points_cost: '50', inventory: 1 };
 const TX_ROW      = { id: 99, user_id: 'user-abc', reward_id: 1, points_spent: '50', idempotency_key: 'test-key-123' };
 
