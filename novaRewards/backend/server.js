@@ -5,6 +5,7 @@ validateEnv();
 
 require('./db/index');
 
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const { connectRedis } = require('./lib/redis');
@@ -12,13 +13,17 @@ const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer')
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
+const { initSocketIO } = require('./services/socketService');
 
 const app = express();
+const httpServer = http.createServer(app);
 
 // Configure CORS based on environment
 const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
   ? { origin: process.env.ALLOWED_ORIGIN }
   : {}; // Open CORS for development
+
+initSocketIO(httpServer, corsOptions);
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -70,6 +75,7 @@ app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Swagger/OpenAPI docs
 const swaggerUi = require('swagger-ui-express');
@@ -91,7 +97,7 @@ const PORT = process.env.PORT || 3001;
 
 // Only start the server when this file is run directly (not when required by tests)
 if (require.main === module) {
-  app.listen(PORT, async () => {
+  httpServer.listen(PORT, async () => {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
