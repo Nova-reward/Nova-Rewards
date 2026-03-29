@@ -1,10 +1,10 @@
 const os = require('os');
 const { pool } = require('../db');
 const { client: redisClient } = require('../lib/redis');
-const StellarSdk = require('stellar-sdk');
+const { Horizon } = require('stellar-sdk');
 
 // Horizon server instance
-const server = new StellarSdk.Horizon.Server(
+const server = new Horizon.Server(
   process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org'
 );
 

@@ -8,6 +8,7 @@ module.exports = {
     'routes/**/*.js',
     'db/**/*.js',
     'middleware/**/*.js',
+    'services/**/*.js',
     'src/**/*.js',
     '!**/*.test.js',
   ],
