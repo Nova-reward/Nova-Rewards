@@ -247,13 +247,14 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
           validStellarAddressArb,
           positiveAmountArb,
           campaignIdArb,
-          async (customerWallet, amount, campaignId) => {
+          async (walletAddress, amount, campaignId) => {
             verifyTrustline.mockResolvedValue({ exists: false });
 
             const { status, body } = await post(
               srv,
               '/api/rewards/distribute',
-              { customerWallet, amount, campaignId },
+              { walletAddress, amount, campaignId },
+              { walletAddress: customerWallet, amount, campaignId },
               { 'x-api-key': VALID_API_KEY }
             );
 
@@ -279,13 +280,13 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
         fc.asyncProperty(
           validStellarAddressArb,
           fc.integer({ min: 1, max: 100_000 }).map(String),
-          async (customerWallet, amount) => {
+          async (walletAddress, amount) => {
             verifyTrustline.mockResolvedValue({ exists: false });
 
             const { status, body } = await post(
               srv,
               '/api/rewards/distribute',
-              { customerWallet, amount, campaignId: CAMPAIGN.id },
+              { walletAddress: customerWallet, amount, campaignId: CAMPAIGN.id },
               { 'x-api-key': VALID_API_KEY }
             );
 
@@ -307,7 +308,7 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
       await fc.assert(
         fc.asyncProperty(
           validStellarAddressArb,
-          async (customerWallet) => {
+          async (walletAddress) => {
             // Trustline exists — gate is cleared, but loadAccount throws to stop further execution
             verifyTrustline.mockResolvedValue({ exists: true });
             horizonServer.loadAccount.mockRejectedValue(new Error('Horizon error'));
@@ -315,7 +316,7 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
             const { body } = await post(
               srv,
               '/api/rewards/distribute',
-              { customerWallet, amount: '10', campaignId: CAMPAIGN.id },
+              { walletAddress: customerWallet, amount: '10', campaignId: CAMPAIGN.id },
               { 'x-api-key': VALID_API_KEY }
             );
 

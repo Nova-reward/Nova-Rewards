@@ -5,20 +5,32 @@ validateEnv();
 
 require('./db/index');
 
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const { connectRedis } = require('./lib/redis');
 const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
-const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
+const { startWebhookRetryJob } = require('./jobs/webhookRetry');
+const {
+  globalLimiter, authLimiter,
+  slidingGlobal, slidingAuth, slidingUser,
+  slidingSearch, slidingWebhook, slidingRewards, slidingAdmin,
+} = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
+const { initSocketIO } = require('./services/socketService');
 
 const app = express();
+const httpServer = http.createServer(app);
+
+app.use(securityHeaders);
 
 // Configure CORS based on environment
 const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
   ? { origin: process.env.ALLOWED_ORIGIN }
   : {}; // Open CORS for development
+
+initSocketIO(httpServer, corsOptions);
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -36,15 +48,25 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// Rate limiting — global default, stricter on auth endpoints
+// Rate limiting — fixed-window global baseline
 app.use(globalLimiter);
-app.use('/api/auth/login', authLimiter);
+
+// Sliding-window per-endpoint limits
+app.use('/api/auth/login',           slidingAuth);
+app.use('/api/auth/forgot-password', slidingAuth);
+app.use('/api/auth',                 slidingUser);
+app.use('/api/search',               slidingSearch);
+app.use('/api/webhooks',             slidingWebhook);
+app.use('/api/rewards/distribute',   slidingRewards);
+app.use('/api/admin',                slidingAdmin);
+app.use('/api',                      slidingGlobal);
+
+// Legacy fixed-window auth limiter (belt-and-suspenders)
+app.use('/api/auth/login',           authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ success: true, data: { status: 'ok' } });
-});
+// Health check routes
+app.use('/api/health', require('./routes/health'));
 
 // Prometheus metrics scrape endpoint
 app.get('/metrics', async (req, res) => {
@@ -69,12 +91,41 @@ app.use('/api/contract-events', require('./routes/contractEvents'));
 app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin/batch', require('./routes/batch'));
 app.use('/api/drops', require('./routes/drops'));
+app.use('/api/search', require('./routes/search'));
+app.use('/api/webhooks', require('./routes/webhooks'));
 
 // Swagger/OpenAPI docs
+// In production, gate /api/docs behind HTTP Basic Auth.
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+if (process.env.NODE_ENV === 'production') {
+  const DOCS_USER = process.env.DOCS_USER || 'nova';
+  const DOCS_PASS = process.env.DOCS_PASS;
+
+  app.use('/api/docs', (req, res, next) => {
+    if (!DOCS_PASS) return next(); // skip guard if password not configured
+    const auth = req.headers.authorization || '';
+    const [scheme, encoded] = auth.split(' ');
+    if (scheme !== 'Basic' || !encoded) {
+      res.set('WWW-Authenticate', 'Basic realm="Nova Rewards API Docs"');
+      return res.status(401).send('Authentication required');
+    }
+    const [user, pass] = Buffer.from(encoded, 'base64').toString().split(':');
+    if (user !== DOCS_USER || pass !== DOCS_PASS) {
+      res.set('WWW-Authenticate', 'Basic realm="Nova Rewards API Docs"');
+      return res.status(401).send('Invalid credentials');
+    }
+    next();
+  });
+}
+
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  swaggerOptions: { persistAuthorization: true },
+  customSiteTitle: 'NovaRewards API Docs',
+}));
 app.get('/api/docs/openapi.json', (req, res) => res.json(swaggerSpec));
 
 // Global error handler — returns consistent error envelope
@@ -91,12 +142,15 @@ const PORT = process.env.PORT || 3001;
 
 // Only start the server when this file is run directly (not when required by tests)
 if (require.main === module) {
-  app.listen(PORT, async () => {
+  httpServer.listen(PORT, async () => {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
+    startWebhookRetryJob();
     // Register event listeners
     require('./services/redemptionEventListener').registerRedemptionEventListener();
+    // Start batch processing workers
+    require('./services/batchQueue');
     console.log(`NovaRewards backend running on port ${PORT}`);
   });
 }
