@@ -1,0 +1,42 @@
+name: Vercel Preview Deployment
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      statuses: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel Preview
+        uses: vercel/vercel-action@v23
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: novaRewards/frontend
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Comment PR with deployment URL
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const deploymentUrl = process.env.DEPLOYMENT_URL;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 Preview deployment ready!\n\n[View Preview](${deploymentUrl})`
+            });
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.preview-url }}

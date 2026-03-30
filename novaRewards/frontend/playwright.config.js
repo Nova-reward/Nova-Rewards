@@ -10,7 +10,29 @@ module.exports = defineConfig({
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
   },
+  expect: {
+    toHaveScreenshot: {
+      // Allow up to 2% pixel difference to tolerate minor anti-aliasing changes
+      maxDiffPixelRatio: 0.02,
+      // Wait for fonts and images to fully load before snapshotting
+      animations: 'disabled',
+    },
+  },
   projects: [
+    // Desktop browsers
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
+    // Mobile browsers
     {
       name: 'chromium-mobile',
       use: { ...devices['Pixel 5'] },

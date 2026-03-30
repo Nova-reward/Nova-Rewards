@@ -9,20 +9,20 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@types/node": "^20.0.0"
+  },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@stellar/freighter-api": "^2.0.0",
     "axios": "^1.7.2",
-    "lottie-react": "^2.4.0",
+    "canvas-confetti": "^1.9.4",
     "next": "^14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.72.0",
-    "react-joyride": "^3.0.0",
     "stellar-sdk": "^12.3.0",
     "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.44.0"
   }
 }

@@ -10,7 +10,9 @@ const cors = require('cors');
 const { connectRedis } = require('./lib/redis');
 const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
+const { startWebhookRetryJob } = require('./jobs/webhookRetry');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
+const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
 
 const app = express();
 
@@ -21,6 +23,7 @@ const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(metricsMiddleware);
 
 // Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
 app.use((err, req, res, next) => {
@@ -44,6 +47,16 @@ app.get('/health', (req, res) => {
   res.json({ success: true, data: { status: 'ok' } });
 });
 
+// Prometheus metrics scrape endpoint
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', registry.contentType);
+    res.end(await registry.metrics());
+  } catch (err) {
+    res.status(500).end(err.message);
+  }
+});
+
 // Routes (wired in as they are implemented)
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/merchants', require('./routes/merchants'));
@@ -58,6 +71,8 @@ app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
+app.use('/api/search', require('./routes/search'));
+app.use('/api/webhooks', require('./routes/webhooks'));
 
 // Swagger/OpenAPI docs
 const swaggerUi = require('swagger-ui-express');
@@ -83,6 +98,7 @@ if (require.main === module) {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
+    startWebhookRetryJob();
     // Register event listeners
     require('./services/redemptionEventListener').registerRedemptionEventListener();
     console.log(`NovaRewards backend running on port ${PORT}`);

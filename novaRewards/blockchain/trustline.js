@@ -58,7 +58,7 @@ async function verifyTrustline(walletAddress) {
     return { exists };
   } catch (err) {
     // Account not found on network — no trustline possible
-    if (err.response && err.response.status === 404) {
+    if ((err.response?.status === 404) || err.message?.toLowerCase().includes('not found')) {
       return { exists: false };
     }
     throw err;
