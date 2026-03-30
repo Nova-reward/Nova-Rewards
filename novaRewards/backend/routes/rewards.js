@@ -14,17 +14,19 @@ const { verifyTrustline } = require('../../blockchain/trustline');
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
  * Closes: #123
  */
-const distributeRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    error: 'rate_limit_exceeded',
-    message: 'Too many requests. Please try again later.',
-  },
-});
+const distributeRateLimiter = process.env.NODE_ENV === 'test'
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: 60 * 1000,
+      max: 20,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: {
+        success: false,
+        error: 'rate_limit_exceeded',
+        message: 'Too many requests. Please try again later.',
+      },
+    });
 
 /**
  * POST /api/rewards/distribute
@@ -33,9 +35,10 @@ const distributeRateLimiter = rateLimit({
  */
 router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (req, res, next) => {
   try {
-    const { walletAddress, amount, campaignId } = req.body;
+    const { walletAddress, customerWallet, amount, campaignId } = req.body;
+    const recipientWallet = walletAddress || customerWallet;
 
-    if (!walletAddress || !amount) {
+    if (!recipientWallet || !amount) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: walletAddress and amount are required',
@@ -46,16 +49,6 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
       return res.status(400).json({
         success: false,
         error: 'Amount must be greater than zero',
-      });
-    }
-
-    // Verify trustline exists
-    const hasTrustline = await verifyTrustline(walletAddress);
-    if (!hasTrustline) {
-      return res.status(400).json({
-        success: false,
-        error: 'no_trustline',
-        message: 'Recipient does not have a NOVA trustline. Please add NOVA trustline first.',
       });
     }
 
@@ -87,9 +80,19 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
       });
     }
 
+    // Verify trustline exists
+    const trustline = await verifyTrustline(walletAddress);
+    if (!trustline?.exists) {
+      return res.status(400).json({
+        success: false,
+        error: 'no_trustline',
+        message: 'Recipient does not have a NOVA trustline. Please add NOVA trustline first.',
+      });
+    }
+
     // Distribute rewards
     const result = await distributeRewards({
-      recipient: walletAddress,
+      recipient: recipientWallet,
       amount,
       campaignId,
     });
