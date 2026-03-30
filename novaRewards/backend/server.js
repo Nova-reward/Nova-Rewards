@@ -70,6 +70,7 @@ app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
+app.use('/api/search', require('./routes/search'));
 
 // Swagger/OpenAPI docs
 const swaggerUi = require('swagger-ui-express');
