@@ -958,3 +958,44 @@ td {
     display: none;
   }
 }
+
+/* ============================================================
+   Infinite Scroll — Rewards Page (Issue #333)
+   ============================================================ */
+
+.rewards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Skeleton loader for reward cards */
+.reward-skeleton {
+  pointer-events: none;
+}
+
+.skeleton-block {
+  background: var(--surface-2);
+  border-radius: 6px;
+  animation: skeleton-pulse var(--animation-loading-skeleton-duration) var(--animation-loading-skeleton-timing-function) infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* Spinner used in the bottom loading indicator */
+.scroll-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin var(--animation-loading-spinner-duration) var(--animation-loading-spinner-timing-function) infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
