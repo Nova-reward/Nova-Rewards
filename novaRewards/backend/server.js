@@ -19,6 +19,8 @@ const { initSocketIO } = require('./services/socketService');
 const app = express();
 const httpServer = http.createServer(app);
 
+app.use(securityHeaders);
+
 // Configure CORS based on environment
 const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
   ? { origin: process.env.ALLOWED_ORIGIN }
