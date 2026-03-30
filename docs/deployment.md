@@ -1,15 +1,25 @@
-# Deployment Guide
+# Smart Contract Deployment Guide
+
+This guide documents the deployment flow implemented by [`scripts/deploy-contracts.sh`](../scripts/deploy-contracts.sh) for the workspace contracts under `contracts/`:
+
+- `nova_token`
+- `reward_pool`
+- `vesting`
+- `referral`
+- `admin_roles`
+
+The script builds each package, optimizes the generated WASM, uploads it to the selected network, deploys a contract instance, invokes `initialize`, and records the contract ID in `.env.<network>`.
 
 ## Prerequisites
 
-### 1. Install Rust + wasm32 target
+Install the required toolchain:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup target add wasm32-unknown-unknown
+cargo install --locked stellar-cli --features opt
 ```
 
-### 2. Install wasm-opt
+Install `wasm-opt`:
 
 ```bash
 # macOS
@@ -17,95 +27,85 @@ brew install binaryen
 
 # Ubuntu / Debian
 sudo apt install binaryen
-
-# Or via cargo
-cargo install wasm-opt
 ```
 
-### 3. Install Stellar CLI
-
-```bash
-cargo install --locked stellar-cli --features opt
-```
-
-Verify: `stellar --version`
-
-### 4. Fund the deployer account
-
-On testnet, use Friendbot:
-
-```bash
-curl "https://friendbot.stellar.org?addr=<DEPLOYER_PUBLIC_KEY>"
-```
-
-On mainnet, fund the account via an exchange or existing wallet before deploying.
-
----
+Fund the deployer account before broadcasting transactions. Use Friendbot on testnet, or your standard treasury process on mainnet.
 
 ## Environment Variables
 
-Create a `.env.testnet` or `.env.mainnet` file (or export variables in your shell):
+Export these variables before running the deployment script:
 
 | Variable | Required | Description |
-|---|---|---|
-| `DEPLOYER_SECRET` | ✅ | Secret key (`S...`) of the account paying fees |
-| `ADMIN_ADDRESS` | ✅ | Public key (`G...`) set as contract admin |
-| `NETWORK` | — | `testnet` (default) or `mainnet` |
-| `TESTNET_RPC_URL` | — | Override testnet RPC (default: `https://soroban-testnet.stellar.org`) |
-| `MAINNET_RPC_URL` | — | Override mainnet RPC (default: `https://soroban-rpc.stellar.org`) |
-| `ADMIN_SIGNERS` | — | Space-separated list of multisig signer addresses (default: `ADMIN_ADDRESS`) |
-| `ADMIN_THRESHOLD` | — | Multisig approval threshold (default: `1`) |
+| --- | --- | --- |
+| `DEPLOYER_SECRET` | Yes | Secret key used for upload, deploy, and initialize transactions |
+| `ADMIN_ADDRESS` | Yes | Address passed to each contract initializer |
+| `NETWORK` | No | `testnet` by default, or `mainnet` |
+| `TESTNET_RPC_URL` | No | Overrides the default testnet RPC endpoint |
+| `MAINNET_RPC_URL` | No | Overrides the default mainnet RPC endpoint |
+| `ADMIN_SIGNERS` | No | Space-separated signer list for `admin_roles`; defaults to `ADMIN_ADDRESS` |
+| `ADMIN_THRESHOLD` | No | Threshold for `admin_roles`; defaults to `1` |
 
----
-
-## Usage
-
-### Deploy to testnet
+Example:
 
 ```bash
 export DEPLOYER_SECRET=S...
 export ADMIN_ADDRESS=G...
-NETWORK=testnet bash scripts/deploy-contracts.sh
+export NETWORK=testnet
+export ADMIN_SIGNERS="$ADMIN_ADDRESS"
+export ADMIN_THRESHOLD=1
 ```
 
-### Deploy to mainnet
+## Run the Script
+
+From the repository root:
 
 ```bash
-export DEPLOYER_SECRET=S...
-export ADMIN_ADDRESS=G...
-NETWORK=mainnet bash scripts/deploy-contracts.sh
+bash scripts/deploy-contracts.sh
 ```
 
-### Dry run (simulate without broadcasting)
+To preview the generated commands without broadcasting:
 
 ```bash
-export DEPLOYER_SECRET=S...
-export ADMIN_ADDRESS=G...
-NETWORK=testnet bash scripts/deploy-contracts.sh --dry-run
+bash scripts/deploy-contracts.sh --dry-run
 ```
 
-Dry run prints every command that would be executed and exits without submitting any transactions.
+## Deployment Order
 
----
+The script deploys contracts in this order:
 
-## What the script does
+| Order | Package | Output env key | `initialize` arguments |
+| --- | --- | --- | --- |
+| 1 | `nova_token` | `NOVA_TOKEN_CONTRACT_ID` | `admin` |
+| 2 | `reward_pool` | `REWARD_POOL_CONTRACT_ID` | `admin` |
+| 3 | `vesting` | `CLAIM_DISTRIBUTION_CONTRACT_ID` | `admin` |
+| 4 | `referral` | `STAKING_CONTRACT_ID` | `admin` |
+| 5 | `admin_roles` | `ADMIN_ROLES_CONTRACT_ID` | `admin`, `signers`, `threshold` |
 
-For each contract — **NovaToken**, **RewardPool**, **ClaimDistribution** (vesting), **Staking** (referral), **AdminRoles** — the script:
+For each package, it performs this pipeline:
 
-1. Builds the contract with `cargo build --target wasm32-unknown-unknown --release`
-2. Optimises the `.wasm` binary with `wasm-opt -Oz --strip-debug`
-3. Uploads the binary with `stellar contract upload` and captures the wasm hash
-4. Deploys a contract instance with `stellar contract deploy` and captures the contract ID
-5. Writes the contract ID to `.env.<NETWORK>` (e.g. `NOVA_TOKEN_CONTRACT_ID=C...`)
-6. Calls `initialize` on the contract with the appropriate arguments
+1. `cargo build --manifest-path contracts/Cargo.toml --target wasm32-unknown-unknown --release -p <package>`
+2. `wasm-opt -Oz --strip-debug`
+3. `stellar contract upload`
+4. `stellar contract deploy`
+5. `stellar contract invoke -- initialize ...`
+6. Upsert the resulting contract ID into `.env.<NETWORK>`
 
----
+## Network Defaults
+
+The script derives RPC settings from `NETWORK`:
+
+| Network | Default RPC URL | Network passphrase |
+| --- | --- | --- |
+| `testnet` | `https://soroban-testnet.stellar.org` | `Test SDF Network ; September 2015` |
+| `mainnet` | `https://soroban-rpc.stellar.org` | `Public Global Stellar Network ; September 2015` |
+
+Override these with `TESTNET_RPC_URL` or `MAINNET_RPC_URL` when required.
 
 ## Output
 
-After a successful run, `.env.testnet` (or `.env.mainnet`) will contain:
+After a successful run, `.env.testnet` or `.env.mainnet` will contain entries like:
 
-```
+```text
 NOVA_TOKEN_CONTRACT_ID=C...
 REWARD_POOL_CONTRACT_ID=C...
 CLAIM_DISTRIBUTION_CONTRACT_ID=C...
@@ -113,10 +113,26 @@ STAKING_CONTRACT_ID=C...
 ADMIN_ROLES_CONTRACT_ID=C...
 ```
 
-These values are automatically upserted — re-running the script after an upgrade will overwrite existing entries.
+Re-running the script updates existing values for the same keys.
 
----
+## Post-Deployment Checks
 
-## Re-deploying / Upgrading
+After deployment:
 
-To upgrade a single contract, comment out the other `deploy` calls in `scripts/deploy-contracts.sh` and re-run. The new contract ID will overwrite the old one in the env file.
+1. Inspect `.env.<NETWORK>` and confirm all five contract IDs were written.
+2. Invoke representative read methods on each deployed contract to confirm initialization succeeded.
+3. Store the uploaded WASM hashes alongside the contract IDs for future upgrades.
+
+Useful checks include:
+
+- `nova_token.balance`
+- `reward_pool.get_balance`
+- `vesting.pool_balance`
+- `referral.pool_balance`
+- `admin_roles.get_admin`
+
+## Notes
+
+- This script only covers the workspace contracts listed in `contracts/Cargo.toml`.
+- The separate `contracts/nova-rewards` crate is not part of that workspace and must be built and deployed independently.
+- If an `initialize` signature changes, update the contract and [`scripts/deploy-contracts.sh`](../scripts/deploy-contracts.sh) together.
