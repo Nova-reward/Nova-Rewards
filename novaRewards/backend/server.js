@@ -72,9 +72,35 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
 
 // Swagger/OpenAPI docs
+// In production, gate /api/docs behind HTTP Basic Auth.
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+if (process.env.NODE_ENV === 'production') {
+  const DOCS_USER = process.env.DOCS_USER || 'nova';
+  const DOCS_PASS = process.env.DOCS_PASS;
+
+  app.use('/api/docs', (req, res, next) => {
+    if (!DOCS_PASS) return next(); // skip guard if password not configured
+    const auth = req.headers.authorization || '';
+    const [scheme, encoded] = auth.split(' ');
+    if (scheme !== 'Basic' || !encoded) {
+      res.set('WWW-Authenticate', 'Basic realm="Nova Rewards API Docs"');
+      return res.status(401).send('Authentication required');
+    }
+    const [user, pass] = Buffer.from(encoded, 'base64').toString().split(':');
+    if (user !== DOCS_USER || pass !== DOCS_PASS) {
+      res.set('WWW-Authenticate', 'Basic realm="Nova Rewards API Docs"');
+      return res.status(401).send('Invalid credentials');
+    }
+    next();
+  });
+}
+
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  swaggerOptions: { persistAuthorization: true },
+  customSiteTitle: 'NovaRewards API Docs',
+}));
 app.get('/api/docs/openapi.json', (req, res) => res.json(swaggerSpec));
 
 // Global error handler — returns consistent error envelope

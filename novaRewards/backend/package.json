@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "migrate": "node ../database/migrate.js",
     "migrate:rollback": "node ../database/migrate.js --rollback",
-    "generate:openapi": "node -e \"const fs=require('fs'); const swagger=require('./swagger'); fs.mkdirSync('../..//docs', { recursive: true}); fs.writeFileSync('../../docs/openapi.json', JSON.stringify(swagger, null, 2)); console.log('docs/openapi.json generated');\""  
+    "generate:openapi": "node -e \"const fs=require('fs'); const swagger=require('./swagger'); const outDir='../../docs/api'; fs.mkdirSync(outDir, { recursive: true }); fs.writeFileSync(outDir+'/openapi.json', JSON.stringify(swagger, null, 2)); console.log('docs/api/openapi.json generated');\""
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

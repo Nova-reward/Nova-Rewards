@@ -27,9 +27,60 @@ const distributeRateLimiter = rateLimit({
 });
 
 /**
- * POST /api/rewards/distribute
- * Distributes NOVA tokens to a customer wallet.
- * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 7.4, 7.5
+ * @openapi
+ * /rewards/distribute:
+ *   post:
+ *     tags: [Rewards]
+ *     summary: Distribute NOVA tokens to a customer wallet
+ *     security:
+ *       - merchantApiKey: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [walletAddress, amount]
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+ *               amount:
+ *                 type: number
+ *                 example: 50
+ *               campaignId:
+ *                 type: integer
+ *                 example: 3
+ *     responses:
+ *       200:
+ *         description: Tokens distributed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 txHash: { type: string, example: "a1b2c3d4..." }
+ *       400:
+ *         description: Validation error or no trustline.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Missing or invalid API key.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Campaign does not belong to this merchant.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: Campaign not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (req, res, next) => {
   try {
