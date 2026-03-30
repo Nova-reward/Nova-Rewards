@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
+import BottomNav from './BottomNav';
 
 /**
  * Dashboard layout with collapsible sidebar and header
@@ -210,6 +211,9 @@ export default function DashboardLayout({ children }) {
           {children}
         </main>
       </div>
+
+      {/* Bottom navigation — mobile only */}
+      <BottomNav />
     </div>
   );
 }

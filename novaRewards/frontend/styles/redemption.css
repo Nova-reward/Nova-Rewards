@@ -1,0 +1,150 @@
+/* =============================================================================
+   Redemption catalogue & modal styles
+   ============================================================================= */
+
+.redemption-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.redemption-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.redemption-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.redemption-balance {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  font-size: 0.875rem;
+}
+
+.redemption-balance-value {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Filter bar */
+.redemption-filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.filter-chip {
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filter-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-chip--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Empty state */
+.redemption-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+}
+
+.redemption-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Redemption confirmation sheet */
+.redemption-confirm-details {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.redemption-confirm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.redemption-confirm-label {
+  color: var(--muted);
+}
+
+.redemption-confirm-value {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.redemption-confirm-value--cost {
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+.redemption-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.redemption-actions .btn {
+  flex: 1;
+}
+
+/* Success state */
+.redemption-success {
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+.redemption-success-icon {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+}
+
+.redemption-success-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--success);
+  margin-bottom: 0.5rem;
+}
+
+.redemption-success-message {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
