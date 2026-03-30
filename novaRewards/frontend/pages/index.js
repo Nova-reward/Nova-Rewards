@@ -70,6 +70,8 @@ export default function Home() {
         )}
 
         {error && <p className="error" style={{ marginTop: '1rem' }}>{error}</p>}
+
+        {/* TODO: link tokenomics doc — add a "Tokenomics" section here pointing to docs/tokenomics.md or the hosted URL */}
       </div>
     </>
   );
