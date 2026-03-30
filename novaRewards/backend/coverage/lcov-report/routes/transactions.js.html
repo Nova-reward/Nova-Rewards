@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">13.75% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/80</span>
+                <span class='fraction'>11/80</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">13.92% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/79</span>
+                <span class='fraction'>11/79</span>
             </div>
         
             
@@ -328,12 +328,12 @@
 <a name='L263'></a><a href='#L263'>263</a>
 <a name='L264'></a><a href='#L264'>264</a>
 <a name='L265'></a><a href='#L265'>265</a>
-<a name='L266'></a><a href='#L266'>266</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<a name='L266'></a><a href='#L266'>266</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -341,7 +341,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -420,10 +420,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -435,9 +435,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -492,7 +492,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -593,12 +593,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">const router = <span class="cstat-no" title="statement not covered" >require('express').Router();</span>
-const { server, NOVA, isValidStellarAddress } = <span class="cstat-no" title="statement not covered" >require('../../blockchain/stellarService');</span>
-const { recordTransaction, getTransactionsByMerchant, getMerchantTotals, getTransactionsByUser } = <span class="cstat-no" title="statement not covered" >require('../db/transactionRepository');</span>
-const { query } = <span class="cstat-no" title="statement not covered" >require('../db/index');</span>
-const { authenticateMerchant } = <span class="cstat-no" title="statement not covered" >require('../middleware/authenticateMerchant');</span>
-const { getUserByWallet } = <span class="cstat-no" title="statement not covered" >require('../db/userRepository');</span>
+<span class="cline-any cline-yes">1x</span></td><td class="text"><pre class="prettyprint lang-js">const router = require('express').Router();
+const { server, NOVA, isValidStellarAddress } = require('../../blockchain/stellarService');
+const { recordTransaction, getTransactionsByMerchant, getMerchantTotals, getTransactionsByUser } = require('../db/transactionRepository');
+const { query } = require('../db/index');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { getUserByWallet } = require('../db/userRepository');
 &nbsp;
 /**
  * POST /api/transactions/record
@@ -606,7 +606,7 @@ const { getUserByWallet } = <span class="cstat-no" title="statement not covered"
  * Used for client-signed transactions (redemptions, transfers).
  * Requirements: 4.3, 5.4
  */
-<span class="cstat-no" title="statement not covered" >router.post('/record', <span class="fstat-no" title="function not covered" >as</span>ync (req, res, next) =&gt; {</span>
+router.post('/record', <span class="fstat-no" title="function not covered" >as</span>ync (req, res, next) =&gt; {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { txHash, txType, amount, fromWallet, toWallet, merchantId, campaignId } = <span class="cstat-no" title="statement not covered" >req.body;</span>
 &nbsp;
@@ -685,7 +685,7 @@ const { getUserByWallet } = <span class="cstat-no" title="statement not covered"
  * Returns total NOVA distributed and redeemed for the authenticated merchant.
  * Requirements: 10.2
  */
-<span class="cstat-no" title="statement not covered" >router.get('/merchant-totals', authenticateMerchant, <span class="fstat-no" title="function not covered" >as</span>ync (req, res, next) =&gt; {</span>
+router.get('/merchant-totals', authenticateMerchant, <span class="fstat-no" title="function not covered" >as</span>ync (req, res, next) =&gt; {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const totals = <span class="cstat-no" title="statement not covered" >await getMerchantTotals(req.merchant.id);</span>
 <span class="cstat-no" title="statement not covered" >    res.json({ success: true, data: totals });</span>
@@ -700,7 +700,7 @@ const { getUserByWallet } = <span class="cstat-no" title="statement not covered"
  * Queries Horizon first; falls back to PostgreSQL if Horizon is unavailable.
  * Requirements: 6.1, 6.4, 6.5
  */
-<span class="cstat-no" title="statement not covered" >router.get('/:walletAddress', <span class="fstat-no" title="function not covered" >as</span>ync (req, res, next) =&gt; {</span>
+router.get('/:walletAddress', <span class="fstat-no" title="function not covered" >as</span>ync (req, res, next) =&gt; {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { walletAddress } = <span class="cstat-no" title="statement not covered" >req.params;</span>
 &nbsp;
@@ -757,7 +757,7 @@ const { getUserByWallet } = <span class="cstat-no" title="statement not covered"
  * Returns paginated transaction history for the authenticated user.
  * Requirements: #180
  */
-<span class="cstat-no" title="statement not covered" >router.get('/user/history', <span class="fstat-no" title="function not covered" >as</span>ync (req, res, next) =&gt; {</span>
+router.get('/user/history', <span class="fstat-no" title="function not covered" >as</span>ync (req, res, next) =&gt; {
 <span class="cstat-no" title="statement not covered" >  try {</span>
     const { userId, page = <span class="branch-0 cbranch-no" title="branch not covered" >1,</span> limit = <span class="branch-0 cbranch-no" title="branch not covered" >20,</span> type, startDate, endDate } = <span class="cstat-no" title="statement not covered" >req.query;</span>
 &nbsp;
@@ -858,14 +858,14 @@ const { getUserByWallet } = <span class="cstat-no" title="statement not covered"
   }
 });
 &nbsp;
-<span class="cstat-no" title="statement not covered" >module.exports = router;</span></pre></td></tr></table></pre>
+module.exports = router;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-03-29T18:21:20.321Z
+                at 2026-03-30T06:33:37.182Z
             </div>
         <script src="../prettify.js"></script>
         <script>
