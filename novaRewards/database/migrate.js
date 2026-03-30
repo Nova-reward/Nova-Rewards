@@ -65,30 +65,7 @@ async function migrate() {
       return;
     }
 
-    for (const file of pending) {
-      const sql = fs.readFileSync(path.join(__dirname, '..', 'database', file), 'utf8');
-      console.log(`Applying: ${file}`);
-      await client.query('BEGIN');
-      try {
-        await client.query(sql);
-        await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
-        await client.query('COMMIT');
-        console.log(`  ✓ Applied`);
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw new Error(`Migration failed [${file}]: ${err.message}`);
-      }
-    }
-    console.log(`${pending.length} migration(s) applied.`);
-  } finally {
-    client.release();
-    await pool.end();
-  }
-}
-
-async function status() {
-  const pool = new Pool({ connectionString: await getConnectionString(),
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false });
+async function migrate() {
   const client = await pool.connect();
   try {
     await ensureMigrationsTable(client);
@@ -98,9 +75,10 @@ async function status() {
     for (const f of files) {
       console.log(`  ${applied.has(f) ? '✓' : '○'} ${f}`);
     }
+
+    console.log(`\nMigrations complete. Applied ${pending.length} migration(s).`);
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
@@ -109,7 +87,18 @@ async function rollback() {
     console.error('Rollback is disabled in production.');
     process.exit(1);
   }
-  const pool = new Pool({ connectionString: await getConnectionString() });
+
+  const connectionString = await getConnectionString();
+  const pool = new Pool({ connectionString });
+
+  const sqlDir = path.join(__dirname, '..', 'database');
+  const tables = fs.readdirSync(sqlDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort()
+    .reverse()
+    .map(f => f.replace(/^\d+_create_/, '').replace(/\.sql$/, ''));
+
+async function status() {
   const client = await pool.connect();
   try {
     const tables = getSqlFiles()
@@ -123,7 +112,6 @@ async function rollback() {
     console.log('Rollback complete.');
   } finally {
     client.release();
-    await pool.end();
   }
 }
 

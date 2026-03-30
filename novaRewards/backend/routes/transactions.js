@@ -4,6 +4,8 @@ const { recordTransaction, getTransactionsByMerchant, getMerchantTotals, getTran
 const { query } = require('../db/index');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 const { getUserByWallet } = require('../db/userRepository');
+const circuitBreakerService = require('../services/circuitBreakerService');
+const { logSpan } = require('../middleware/tracingMiddleware');
 
 /**
  * @openapi
@@ -103,13 +105,23 @@ router.post('/record', async (req, res, next) => {
     // Verify the transaction exists on Horizon before recording
     let stellarLedger = null;
     try {
-      const txRecord = await server.transactions().transaction(txHash).call();
+      const txRecord = await circuitBreakerService.execute(
+        'horizon_transaction',
+        () => server.transactions().transaction(txHash).call(),
+        () => {
+          console.warn(`[Horizon] Circuit breaker executing fallback for txHash=${txHash}`);
+          return { ledger_attr: null }; // Minimal valid object for recording with warnings
+        },
+        { retries: 3 }
+      );
       stellarLedger = txRecord.ledger_attr || txRecord.ledger;
-    } catch {
+      logSpan(req, 'horizon_tx_verification', { txHash, success: true });
+    } catch (err) {
+      logSpan(req, 'horizon_tx_verification', { txHash, success: false, error: err.message });
       return res.status(400).json({
         success: false,
         error: 'tx_not_found',
-        message: 'Transaction not found on Stellar network',
+        message: 'Transaction not found on Stellar network or Horizon is unavailable',
       });
     }
 
@@ -219,31 +231,39 @@ router.get('/:walletAddress', async (req, res, next) => {
 
     try {
       // Fetch all NOVA payments from Horizon with pagination
-      const transactions = [];
-      let page = await server
-        .payments()
-        .forAccount(walletAddress)
-        .order('desc')
-        .limit(100)
-        .call();
+      const transactions = await circuitBreakerService.execute(
+        'horizon_payments',
+        async () => {
+          const results = [];
+          let page = await server
+            .payments()
+            .forAccount(walletAddress)
+            .order('desc')
+            .limit(100)
+            .call();
 
-      while (page.records.length > 0) {
-        const novaPayments = page.records.filter(
-          (r) =>
-            r.type === 'payment' &&
-            r.asset_code === NOVA.code &&
-            r.asset_issuer === NOVA.issuer
-        );
-        transactions.push(...novaPayments);
+          while (page.records.length > 0) {
+            const novaPayments = page.records.filter(
+              (r) =>
+                r.type === 'payment' &&
+                r.asset_code === NOVA.code &&
+                r.asset_issuer === NOVA.issuer
+            );
+            results.push(...novaPayments);
 
-        // Stop after 500 records to avoid runaway pagination
-        if (transactions.length >= 500) break;
-        page = await page.next();
-      }
+            // Stop after 500 records to avoid runaway pagination
+            if (results.length >= 500) break;
+            page = await page.next();
+          }
+          return results;
+        }
+      );
 
+      logSpan(req, 'horizon_payments_fetch', { walletAddress, success: true });
       return res.json({ success: true, data: transactions, source: 'horizon' });
-    } catch {
+    } catch (err) {
       // Horizon unavailable — fall back to PostgreSQL records
+      logSpan(req, 'horizon_payments_fetch', { walletAddress, success: false, error: err.message, fallback: true });
       const result = await query(
         `SELECT * FROM transactions
          WHERE from_wallet = $1 OR to_wallet = $1
