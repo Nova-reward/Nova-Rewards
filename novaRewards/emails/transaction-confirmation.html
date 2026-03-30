@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transaction Confirmation - Nova Rewards</title>
+  <style>
+    /* Base styles */
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    table, td {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      -ms-interpolation-mode: bicubic;
+    }
+
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+    }
+
+    .header {
+      background-color: #1a365d;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .header img {
+      max-width: 150px;
+      height: auto;
+    }
+
+    .content {
+      padding: 30px 20px;
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #333333;
+    }
+
+    .transaction-details {
+      background-color: #f7fafc;
+      padding: 20px;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #3182ce;
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+
+    .footer {
+      background-color: #f7fafc;
+      padding: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #718096;
+    }
+
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+      }
+      .content {
+        padding: 20px 10px !important;
+      }
+      .button {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f7fafc;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+    <tr>
+      <td align="center" style="padding: 20px 0;">
+        <table class="email-container" role="presentation" width="600" cellspacing="0" cellpadding="0" border="0">
+          <tr>
+            <td class="header">
+              <img src="https://novarewards.com/logo.png" alt="Nova Rewards" />
+            </td>
+          </tr>
+          <tr>
+            <td class="content">
+              <h1>Transaction Confirmed</h1>
+              <p>Hi {{firstName}},</p>
+              <p>Your transaction has been successfully processed and recorded on the Stellar network.</p>
+
+              <div class="transaction-details">
+                <h3>Transaction Details</h3>
+                <p><strong>Type:</strong> {{transactionType}}</p>
+                <p><strong>Amount:</strong> {{amount}} NOVA</p>
+                <p><strong>Transaction Hash:</strong> {{txHash}}</p>
+                <p><strong>Date:</strong> {{date}}</p>
+                <p><strong>Status:</strong> Confirmed</p>
+              </div>
+
+              <p>You can view all your transactions in your <a href="{{dashboard_link}}">dashboard</a>.</p>
+              <p>
+                <a href="{{dashboard_link}}" class="button">View Dashboard</a>
+              </p>
+              <p>If you have any questions about this transaction, please <a href="mailto:support@novarewards.com">contact support</a>.</p>
+              <p>Thank you for using Nova Rewards!</p>
+              <p>Best regards,<br>The Nova Rewards Team</p>
+            </td>
+          </tr>
+          <tr>
+            <td class="footer">
+              <p>
+                Nova Rewards<br>
+                <a href="https://novarewards.com">Visit our website</a> |
+                <a href="https://novarewards.com/privacy">Privacy Policy</a> |
+                <a href="https://novarewards.com/terms">Terms of Service</a>
+              </p>
+              <p>
+                You received this email because you have an account with Nova Rewards.<br>
+                <a href="{{unsubscribe_link}}">Unsubscribe</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

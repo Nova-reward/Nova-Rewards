@@ -1,7 +1,6 @@
 # Contributing to Nova Rewards
 
-Welcome, and thank you for taking the time to contribute! 🎉  
-This guide covers everything you need to get started — from setting up your environment to submitting a polished pull request.
+Thank you for your interest in contributing to Nova Rewards! This guide outlines how open-source contributors can add features and fix bugs in the Nova Rewards frontend.
 
 ---
 
@@ -28,106 +27,114 @@ By participating in this project, you agree to uphold a respectful and inclusive
 
 ## Getting Started
 
-1. **Fork** the repository and clone your fork locally.
-2. Create a branch from `main` following the [branch naming conventions](#branch-naming-conventions) below.
-3. Follow the setup instructions in [README.md](README.md).
-4. Make your changes — no regressions in existing tests.
-5. Open a pull request referencing the relevant issue.
+### Fork and Clone the Repository
 
-### Prerequisites
+1. Fork the repository on GitHub by clicking the "Fork" button.
+2. Clone your fork locally:
+   ```bash
+   git clone https://github.com/your-username/Nova-Rewards.git
+   cd Nova-Rewards
+   ```
+3. Add the upstream remote:
+   ```bash
+   git remote add upstream https://github.com/milah-247/Nova-Rewards.git
+   ```
 
-- Node.js ≥ 18
-- Stellar CLI / SDK
-- Rust + Soroban SDK (for contract work)
-- A Freighter wallet (for local testing)
+### Local Setup
 
----
+1. Navigate to the frontend directory:
+   ```bash
+   cd novaRewards/frontend
+   ```
 
-## Branch Naming Conventions
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-| Type        | Pattern                                  | Example                              |
-|-------------|------------------------------------------|--------------------------------------|
-| Feature     | `feat/<short-description>-<issue>`       | `feat/referral-bonus-101`            |
-| Bug Fix     | `fix/<short-description>-<issue>`        | `fix/token-overflow-88`              |
-| Documentation | `docs/<short-description>-<issue>`     | `docs/issue-430-contributing-standards` |
-| Chore/Refactor | `chore/<short-description>-<issue>`   | `chore/cleanup-unused-deps-55`       |
+3. Set up environment variables:
+   - Copy `.env.example` to `.env.local` (if it exists) and fill in the required values.
+   - Ensure you have the necessary API keys and configuration for Stellar integration.
 
----
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+   The application should now be running at `http://localhost:3000`.
 
-## Commit Style
+## Branching Strategy
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
+We follow a Git Flow-inspired branching model:
 
-```
-<type>(<scope>): <description> (#<issue>)
-```
+- **`main`**: Production-ready code. Only updated via pull requests from `develop`.
+- **`develop`**: Integration branch for ongoing development. Feature and fix branches merge here.
+- **`feature/*`**: For new features (e.g., `feature/user-dashboard`).
+- **`fix/*`**: For bug fixes (e.g., `fix/login-validation`).
 
-| Type       | When to use                              |
-|------------|------------------------------------------|
-| `feat`     | New feature                              |
-| `fix`      | Bug fix                                  |
-| `docs`     | Documentation only                       |
-| `chore`    | Tooling, deps, config (no logic change)  |
-| `refactor` | Code restructure without behavior change |
-| `test`     | Adding or updating tests                 |
-
-**Examples:**
-```
-feat(referral): add bonus multiplier logic (#101)
-fix(token): prevent overflow on large reward amounts (#88)
-docs: add contributing guidelines and issue templates (#430)
-```
-
----
-
-## Development Workflow
-
-1. Pick an open issue or create one before starting work.
-2. Comment on the issue to signal you're working on it.
-3. Branch off `main`, make focused commits, and keep PRs small.
-4. Run linting and tests locally before pushing.
-5. Open a PR and fill out the checklist — see [Pull Request Process](docs/pr-process.md).
-
----
+Always create feature branches from `develop` and merge back to `develop` via pull requests.
 
 ## Pull Request Process
 
-See the full workflow and mandatory reviewer checklist in **[docs/pr-process.md](docs/pr-process.md)**.
+1. Create a feature branch from `develop`:
+   ```bash
+   git checkout develop
+   git pull upstream develop
+   git checkout -b feature/your-feature-name
+   ```
 
----
+2. Make your changes, following the code standards below.
 
-## Reporting Bugs
+3. Commit your changes using conventional commits:
+   ```
+   feat: add user dashboard component
+   fix: resolve login validation bug
+   ```
 
-Use the [Bug Report issue template](.github/ISSUE_TEMPLATE/bug_report.md) and include:
-- Steps to reproduce
-- Expected vs. actual behavior
-- Environment details (OS, Node version, browser, wallet)
+4. Push your branch and create a pull request to `develop`:
+   - Provide a clear description of the changes.
+   - Reference any related issues.
+   - Ensure all tests pass and code style checks are met.
 
----
+5. Wait for review and address any feedback.
 
-## Requesting Features
+## Component Standards
 
-Use the [Feature Request issue template](.github/ISSUE_TEMPLATE/feature_request.md) and describe:
-- The problem you're solving
-- Your proposed solution
-- Any alternatives you considered
+### File Naming
+- Use PascalCase for component files: `UserDashboard.tsx`
 
----
+### Folder Structure
+Organize code into the following directories within `novaRewards/frontend/src/`:
+- `components/`: Reusable UI components
+- `hooks/`: Custom React hooks
+- `services/`: API calls and external service integrations
+- `pages/`: Next.js pages
 
-## Code Style Guide
+### Testing
+- Every component must have a co-located test file: `ComponentName.test.tsx`
+- Write unit tests for components, hooks, and services.
 
-See **[docs/code-style.md](docs/code-style.md)** for the full coding standards covering TypeScript/JavaScript, Rust/Soroban, naming conventions, and linting expectations.
+## Code Style
 
----
+Code style is enforced by ESLint and Prettier.
 
-## Required Reading
+- Run linting: `npm run lint`
+- Auto-fix issues: `npm run lint:fix`
 
-Before touching the blockchain layer, transaction logic, or Soroban contracts, read:
+Ensure your code passes all linting checks before submitting a pull request.
 
-- **[Stellar & Soroban Integration Guide](docs/stellar/integration.md)**
-- **[Contract Events Reference](docs/contract-events.md)**
-- **[Upgrade Guide](docs/upgrade-guide.md)**
+## Testing
 
----
+### Running Tests
+- Run unit tests: `npm test`
+- Run tests with coverage: `npm run test:coverage`
 
-> Questions? Open a [Discussion](https://github.com/milah-247/Nova-Rewards/discussions) or drop a comment on the relevant issue.
+### Writing Tests
+- Use Jest for unit testing.
+- Place test files alongside the code they test (e.g., `Component.tsx` and `Component.test.tsx`).
+- Aim for high test coverage, especially for critical business logic.
+
+## Good First Issues
+
+Looking for a place to start contributing? Check out our [Good First Issues](https://github.com/milah-247/Nova-Rewards/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue) on GitHub. These are beginner-friendly tasks that introduce you to the codebase.
+
+If you have any questions, feel free to open an issue or join our discussions!

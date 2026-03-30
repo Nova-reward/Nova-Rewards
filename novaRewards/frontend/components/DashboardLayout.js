@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
+import ThemeToggle from './ThemeToggle';
 
 /**
  * Dashboard layout with collapsible sidebar and header
@@ -154,6 +155,9 @@ export default function DashboardLayout({ children }) {
           </div>
 
           <div className="header-right">
+            {/* Theme toggle */}
+            <ThemeToggle />
+
             {/* Notification bell */}
             <button className="header-icon-btn" aria-label="Notifications" data-tour="notification-centre">
               <span className="notification-icon">🔔</span>
