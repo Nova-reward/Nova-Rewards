@@ -1063,3 +1063,123 @@ td {
 .notification-empty span {
   font-size: 1.75rem;
 }
+
+/* ── Connection Status ───────────────────────────────────────────────────── */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.connection-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Multi-Step Form ─────────────────────────────────────────────────────── */
+.msf {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.msf-indicator {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.msf-step {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  position: relative;
+}
+
+.msf-step-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.msf-step-active .msf-step-circle { border-color: var(--accent); background: var(--accent); color: #fff; }
+.msf-step-done  .msf-step-circle  { border-color: var(--success); background: var(--success); color: #fff; }
+
+.msf-step-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: 0.4rem;
+  white-space: nowrap;
+}
+
+.msf-step-active .msf-step-label { color: var(--text); font-weight: 600; }
+.msf-step-done  .msf-step-label  { color: var(--success); }
+
+.msf-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin: 0 0.5rem;
+  margin-top: 13px;
+  align-self: flex-start;
+}
+
+.msf-step-done .msf-step-line { background: var(--success); }
+
+.msf-body { min-height: 120px; }
+
+.msf-step-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
+.msf-fields { display: flex; flex-direction: column; }
+
+.msf-review-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
+
+.msf-summary-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.msf-summary-row {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.msf-summary-row:last-child { border-bottom: none; }
+.msf-summary-row dt { width: 140px; flex-shrink: 0; color: var(--muted); font-weight: 500; }
+.msf-summary-row dd { color: var(--text); word-break: break-word; }
+
+.msf-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.msf-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem 0;
+  color: var(--success);
+  font-weight: 600;
+}
+.msf-done-icon { font-size: 2.5rem; }
