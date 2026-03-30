@@ -14,6 +14,10 @@ const REQUIRED_ENV_VARS = [
   'JWT_SECRET',
 ];
 
+const BACKUP_ENV_VARS = [
+  'BACKUP_PASSPHRASE',
+];
+
 /**
  * Validates that all required environment variables are set.
  * Logs each missing key and throws an error to halt server initialization.
@@ -24,9 +28,17 @@ const REQUIRED_ENV_VARS = [
 function validateEnv() {
   const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 
-  // In production, ALLOWED_ORIGIN is also required for CORS security
-  if (process.env.NODE_ENV === 'production' && !process.env.ALLOWED_ORIGIN) {
-    missing.push('ALLOWED_ORIGIN');
+  if (process.env.NODE_ENV === 'production') {
+    // ALLOWED_ORIGIN is required for CORS security in production
+    if (!process.env.ALLOWED_ORIGIN) missing.push('ALLOWED_ORIGIN');
+    // REDIS_URL is required in production (sourced from Secrets Manager)
+    if (!process.env.REDIS_URL) missing.push('REDIS_URL');
+  }
+
+  if (process.env.BACKUP_ENABLED === 'true') {
+    BACKUP_ENV_VARS.forEach((key) => {
+      if (!process.env[key]) missing.push(key);
+    });
   }
 
   if (missing.length > 0) {
@@ -39,4 +51,4 @@ function validateEnv() {
   }
 }
 
-module.exports = { validateEnv, REQUIRED_ENV_VARS };
+module.exports = { validateEnv, REQUIRED_ENV_VARS, BACKUP_ENV_VARS };

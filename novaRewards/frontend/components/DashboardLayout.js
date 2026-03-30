@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
+import NotificationCenter from './NotificationCenter';
 
 /**
  * Dashboard layout with collapsible sidebar and header
@@ -67,6 +68,7 @@ export default function DashboardLayout({ children }) {
     { href: '/history', label: 'History', icon: '📜' },
     { href: '/referral', label: 'Referral', icon: '👥', tourId: 'referral-link' },
     { href: '/settings', label: 'Settings', icon: '⚙️' },
+    { href: '/help', label: 'Help Center', icon: '❓' },
   ];
 
   // Get page title from current route
@@ -158,11 +160,8 @@ export default function DashboardLayout({ children }) {
             {/* Theme toggle */}
             <ThemeToggle />
 
-            {/* Notification bell */}
-            <button className="header-icon-btn" aria-label="Notifications" data-tour="notification-centre">
-              <span className="notification-icon">🔔</span>
-              <span className="notification-badge">3</span>
-            </button>
+            {/* Notification centre */}
+            <NotificationCenter />
 
             {/* User profile menu */}
             <div className="profile-menu-container">
@@ -210,6 +209,9 @@ export default function DashboardLayout({ children }) {
           {children}
         </main>
       </div>
+
+      {/* Bottom navigation — mobile only */}
+      <BottomNav />
     </div>
   );
 }

@@ -1,84 +1,117 @@
 'use client';
-import { useState } from 'react';
+
+import MultiStepForm from './MultiStepForm';
 import api from '../lib/api';
-import { useAuthStore } from '../store/authStore';
 
-/**
- * Form for creating a new reward campaign.
- * Client-side validation mirrors backend validateCampaign rules.
- * Requirements: 7.2, 7.3, 10.3
- */
-export default function CampaignForm({ onSuccess }) {
-  const { user: merchant, token: apiKey } = useAuthStore();
-  const merchantId = merchant?.id;
-  const [form, setForm] = useState({
-    name: '',
-    rewardRate: '',
-    startDate: '',
-    endDate: '',
-  });
-  const [status, setStatus] = useState('idle');
-  const [message, setMessage] = useState('');
+const STEPS = [
+  {
+    title: 'Campaign Details',
+    validate(data) {
+      const errors = {};
+      if (!data.name?.trim()) errors.name = 'Campaign name is required.';
+      if (!data.rewardRate || isNaN(Number(data.rewardRate)) || Number(data.rewardRate) <= 0)
+        errors.rewardRate = 'Reward rate must be a positive number.';
+      return errors;
+    },
+    fields(data, update, errors) {
+      return (
+        <>
+          <label className="label">Campaign Name</label>
+          <input
+            className="input"
+            value={data.name ?? ''}
+            onChange={(e) => update('name', e.target.value)}
+            placeholder="Summer Rewards"
+          />
+          {errors.name && <p className="error">{errors.name}</p>}
 
-  function validate() {
-    const errors = [];
-    if (!form.name.trim()) errors.push('Campaign name is required.');
-    if (!form.rewardRate || isNaN(Number(form.rewardRate)) || Number(form.rewardRate) <= 0)
-      errors.push('Reward rate must be a positive number.');
-    if (!form.startDate || !form.endDate)
-      errors.push('Start date and end date are required.');
-    else if (new Date(form.endDate) <= new Date(form.startDate))
-      errors.push('End date must be after start date.');
-    return errors;
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setMessage('');
-    const errors = validate();
-    if (errors.length > 0) {
-      setMessage(errors.join(' '));
-      setStatus('error');
-      return;
-    }
-
-    setStatus('loading');
-    try {
-      await api.post(
-        '/api/campaigns',
-        { merchantId, name: form.name.trim(), rewardRate: form.rewardRate, startDate: form.startDate, endDate: form.endDate },
-        { headers: { 'x-api-key': apiKey } }
+          <label className="label" style={{ marginTop: '1rem' }}>
+            Reward Rate (NOVA per unit of spend)
+          </label>
+          <input
+            className="input"
+            type="number"
+            min="0.0000001"
+            step="any"
+            value={data.rewardRate ?? ''}
+            onChange={(e) => update('rewardRate', e.target.value)}
+            placeholder="1.5"
+          />
+          {errors.rewardRate && <p className="error">{errors.rewardRate}</p>}
+        </>
       );
-      setStatus('done');
-      setMessage('Campaign created successfully.');
-      setForm({ name: '', rewardRate: '', startDate: '', endDate: '' });
-      onSuccess?.();
-    } catch (err) {
-      setStatus('error');
-      setMessage(err.response?.data?.message || err.message);
-    }
-  }
+    },
+  },
+  {
+    title: 'Schedule',
+    validate(data) {
+      const errors = {};
+      if (!data.startDate) errors.startDate = 'Start date is required.';
+      if (!data.endDate) errors.endDate = 'End date is required.';
+      if (data.startDate && data.endDate && new Date(data.endDate) <= new Date(data.startDate))
+        errors.endDate = 'End date must be after start date.';
+      return errors;
+    },
+    fields(data, update, errors) {
+      return (
+        <>
+          <label className="label">Start Date</label>
+          <input
+            className="input"
+            type="date"
+            value={data.startDate ?? ''}
+            onChange={(e) => update('startDate', e.target.value)}
+          />
+          {errors.startDate && <p className="error">{errors.startDate}</p>}
 
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+          <label className="label" style={{ marginTop: '1rem' }}>End Date</label>
+          <input
+            className="input"
+            type="date"
+            value={data.endDate ?? ''}
+            onChange={(e) => update('endDate', e.target.value)}
+          />
+          {errors.endDate && <p className="error">{errors.endDate}</p>}
+        </>
+      );
+    },
+  },
+];
+
+function renderSummary(data) {
+  return (
+    <dl className="msf-summary-list">
+      <div className="msf-summary-row"><dt>Name</dt><dd>{data.name}</dd></div>
+      <div className="msf-summary-row"><dt>Reward Rate</dt><dd>{data.rewardRate} NOVA</dd></div>
+      <div className="msf-summary-row"><dt>Start Date</dt><dd>{data.startDate}</dd></div>
+      <div className="msf-summary-row"><dt>End Date</dt><dd>{data.endDate}</dd></div>
+    </dl>
+  );
+}
+
+export default function CampaignForm({ merchantId, apiKey, onSuccess }) {
+  async function handleSubmit(data) {
+    await api.post(
+      '/api/campaigns',
+      {
+        merchantId,
+        name: data.name.trim(),
+        rewardRate: data.rewardRate,
+        startDate: data.startDate,
+        endDate: data.endDate,
+      },
+      { headers: { 'x-api-key': apiKey } }
+    );
+    onSuccess?.();
+  }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <label className="label">Campaign Name</label>
-      <input className="input" value={form.name} onChange={set('name')} placeholder="Summer Rewards" disabled={status === 'loading'} />
-
-      <label className="label">Reward Rate (NOVA per unit of spend)</label>
-      <input className="input" type="number" min="0.0000001" step="any" value={form.rewardRate} onChange={set('rewardRate')} placeholder="1.5" disabled={status === 'loading'} />
-
-      <label className="label">Start Date</label>
-      <input className="input" type="date" value={form.startDate} onChange={set('startDate')} disabled={status === 'loading'} />
-
-      <label className="label">End Date</label>
-      <input className="input" type="date" value={form.endDate} onChange={set('endDate')} disabled={status === 'loading'} />
-
-      <button className="btn btn-primary" type="submit" disabled={status === 'loading'}>
-        {status === 'loading' ? 'Creating…' : 'Create Campaign'}
-      </button>
-      {message && <p className={status === 'error' ? 'error' : 'success'}>{message}</p>}
-    </form>
+    <MultiStepForm
+      steps={STEPS}
+      initialData={{ name: '', rewardRate: '', startDate: '', endDate: '' }}
+      storageKey={`campaign-form-${merchantId}`}
+      onSubmit={handleSubmit}
+      renderSummary={renderSummary}
+    />
   );
 }
