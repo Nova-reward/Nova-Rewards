@@ -34,13 +34,73 @@ services:
       - -c
       - archive_command=/usr/local/bin/archive-wal.sh %p %f
 
+  # Runs pending migrations once on every `docker compose up`
+  migrate:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install --prefix /app/database 2>/dev/null; node database/migrate.js"
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nova}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-nova_rewards}
+      NODE_ENV: ${NODE_ENV:-development}
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --maxmemory ${REDIS_MAXMEMORY:-256mb}
+      --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Scheduled PostgreSQL backups (runs every 6 hours via supercronic)
+  pg-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nova}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-nova_rewards}
+      BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-7}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - ./scripts/pg-backup.sh:/usr/local/bin/pg-backup.sh:ro
+      - pg_backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Run backup on container start, then every 6 hours via crond
+    command: >
+      sh -c "
+        apk add --no-cache aws-cli &&
+        chmod +x /usr/local/bin/pg-backup.sh &&
+        echo '0 */6 * * * /usr/local/bin/pg-backup.sh >> /var/log/pg-backup.log 2>&1' | crontab - &&
+        /usr/local/bin/pg-backup.sh &&
+        crond -f -l 8
+      "
 
   # One-shot service: runs all pending migrations then exits.
   # backend depends on this completing successfully before it starts.
@@ -72,6 +132,7 @@ services:
       NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: postgresql://${POSTGRES_USER:-nova}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-nova_rewards}
       REDIS_URL: redis://redis:6379
+      REDIS_MODE: single
       ALLOWED_ORIGIN: http://localhost:3000
     ports:
       - "3001:3001"
@@ -79,7 +140,9 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
@@ -117,5 +180,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  pg_backups:
   backend_node_modules:
   frontend_node_modules:
