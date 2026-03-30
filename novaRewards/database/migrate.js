@@ -39,6 +39,7 @@ async function migrate() {
   const sqlDir = path.join(__dirname, '..', 'database');
   const files  = fs.readdirSync(sqlDir).filter(f => f.endsWith('.sql')).sort();
 
+async function migrate() {
   const client = await pool.connect();
   try {
     for (const file of files) {
@@ -47,10 +48,10 @@ async function migrate() {
       await client.query(sql);
       console.log(`  ✓ Done`);
     }
-    console.log('All migrations complete.');
+
+    console.log(`\nMigrations complete. Applied ${pending.length} migration(s).`);
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
@@ -70,16 +71,19 @@ async function rollback() {
     .reverse()
     .map(f => f.replace(/^\d+_create_/, '').replace(/\.sql$/, ''));
 
+async function status() {
   const client = await pool.connect();
   try {
     for (const table of tables) {
       console.log(`Dropping table: ${table}`);
       await client.query(`DROP TABLE IF EXISTS ${table} CASCADE`);
     }
-    console.log('Rollback complete.');
+
+    const pendingCount = available.filter((v) => !applied.has(v)).length;
+    console.log('─'.repeat(60));
+    console.log(`  ${applied.size} applied, ${pendingCount} pending\n`);
   } finally {
     client.release();
-    await pool.end();
   }
 }
 

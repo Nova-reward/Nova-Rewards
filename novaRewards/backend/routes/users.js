@@ -9,6 +9,32 @@ const { authenticateUser, requireOwnershipOrAdmin } = require('../middleware/aut
 const { validateUpdateUserDto } = require('../middleware/validateDto');
 const { isValidStellarAddress, getNOVABalance } = require('../../blockchain/stellarService');
 const { client: redisClient } = require('../lib/redis');
+const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
+
+const SALT_ROUNDS = 12;
+
+// Store avatars in memory; persist to disk under /public/avatars
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, '../../frontend/public/avatars');
+      require('fs').mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `user-${req.params.id}-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+  },
+});
 
 /**
  * @openapi
@@ -580,6 +606,78 @@ router.post('/:id/referrals/process', async (req, res, next) => {
     }
 
     res.json({ success: true, data: result.bonus, message: result.message });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/users/:id/profile-picture
+ * Upload avatar image (JPEG/PNG/WebP, max 5 MB).
+ * Requirements: #171
+ */
+router.post('/:id/profile-picture', authenticateUser, (req, res, next) => {
+  const userId = parseInt(req.params.id, 10);
+  if (req.user.id !== userId && req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+  }
+  upload.single('avatar')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: 'upload_error', message: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'No file uploaded' });
+    }
+    const avatarUrl = `/avatars/${req.file.filename}`;
+    await query(
+      `UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2`,
+      [avatarUrl, userId]
+    );
+    res.json({ success: true, data: { avatarUrl } });
+  });
+});
+
+/**
+ * PATCH /api/users/:id/password
+ * Change password — requires current password verification.
+ * Requirements: #171
+ */
+router.patch('/:id/password', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (req.user.id !== userId) {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false, error: 'validation_error', message: 'currentPassword and newPassword are required',
+      });
+    }
+    if (newPassword.length < 8 || !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+      return res.status(400).json({
+        success: false, error: 'validation_error',
+        message: 'New password must be at least 8 characters with uppercase, lowercase, and a number',
+      });
+    }
+
+    const result = await query(
+      'SELECT password_hash FROM users WHERE id = $1 AND is_deleted = FALSE',
+      [userId]
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const match = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!match) {
+      return res.status(401).json({ success: false, error: 'invalid_credentials', message: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
+    res.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     next(err);
   }

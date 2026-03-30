@@ -68,6 +68,7 @@ export default function DashboardLayout({ children }) {
     { href: '/history', label: 'History', icon: '📜' },
     { href: '/referral', label: 'Referral', icon: '👥', tourId: 'referral-link' },
     { href: '/settings', label: 'Settings', icon: '⚙️' },
+    { href: '/help', label: 'Help Center', icon: '❓' },
   ];
 
   // Get page title from current route
