@@ -35,9 +35,10 @@ const distributeRateLimiter = process.env.NODE_ENV === 'test'
  */
 router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (req, res, next) => {
   try {
-    const { walletAddress, amount, campaignId } = req.body;
+    const { walletAddress, customerWallet, amount, campaignId } = req.body;
+    const recipientWallet = walletAddress || customerWallet;
 
-    if (!walletAddress || !amount) {
+    if (!recipientWallet || !amount) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: walletAddress and amount are required',
@@ -91,7 +92,7 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
 
     // Distribute rewards
     const result = await distributeRewards({
-      recipient: walletAddress,
+      recipient: recipientWallet,
       amount,
       campaignId,
     });
