@@ -1,9 +1,9 @@
-import { useWallet } from '../context/WalletContext';
+import { useWalletStore } from '../store/walletStore';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 
 export default function Home() {
-  const { publicKey, connect, loading, error, freighterInstalled } = useWallet();
+  const { publicKey, connect, isLoading, error, freighterInstalled } = useWalletStore();
   const router = useRouter();
 
   useEffect(() => {
@@ -47,9 +47,9 @@ export default function Home() {
             className="btn btn-primary"
             style={{ fontSize: '1.1rem', padding: '0.8rem 2rem' }}
             onClick={connect}
-            disabled={loading}
+            disabled={isLoading}
           >
-            {loading ? 'Connecting…' : 'Connect Freighter Wallet'}
+            {isLoading ? 'Connecting…' : 'Connect Freighter Wallet'}
           </button>
         )}
 

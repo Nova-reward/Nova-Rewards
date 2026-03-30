@@ -2,12 +2,17 @@
 import { useState } from 'react';
 import { StrKey } from 'stellar-sdk';
 import api from '../lib/api';
+import { useAuthStore } from '../store/authStore';
+import { useCampaignStore } from '../store/campaignStore';
 
 /**
  * Form for issuing NOVA rewards to a customer wallet.
  * Requirements: 10.4, 10.5, 3.1
  */
-export default function IssueRewardForm({ merchantId, apiKey, campaigns, onSuccess }) {
+export default function IssueRewardForm({ onSuccess }) {
+  const { user: merchant, token: apiKey } = useAuthStore();
+  const { campaigns } = useCampaignStore();
+  const merchantId = merchant?.id;
   const [customerWallet, setCustomerWallet] = useState('');
   const [amount, setAmount] = useState('');
   const [campaignId, setCampaignId] = useState('');

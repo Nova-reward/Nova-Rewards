@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useWallet } from '../context/WalletContext';
+import { useWalletStore } from '../store/walletStore';
+
 import TrustlineButton from '../components/TrustlineButton';
 import TransferForm from '../components/TransferForm';
 import RedeemForm from '../components/RedeemForm';
@@ -10,12 +11,12 @@ import RedeemForm from '../components/RedeemForm';
  * Requirements: 9.1, 9.2, 9.3, 8.5
  */
 export default function Dashboard() {
-  const { publicKey, balance, transactions, connect, disconnect, refreshBalance, freighterInstalled, loading } = useWallet();
+  const { publicKey, balance, transactions, disconnect, refreshBalance, isLoading } = useWalletStore();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !publicKey) router.push('/');
-  }, [publicKey, loading, router]);
+    if (!isLoading && !publicKey) router.push('/');
+  }, [publicKey, isLoading, router]);
 
   if (!publicKey) return null;
 
@@ -61,15 +62,13 @@ export default function Dashboard() {
         {/* Trustline */}
         <div className="card">
           <h2 style={{ marginBottom: '1rem' }}>Trustline</h2>
-          <TrustlineButton walletAddress={publicKey} onSuccess={() => refreshBalance()} />
+          <TrustlineButton onSuccess={() => refreshBalance()} />
         </div>
 
         {/* Transfer */}
         <div className="card">
           <h2 style={{ marginBottom: '1rem' }}>Send NOVA</h2>
           <TransferForm
-            senderPublicKey={publicKey}
-            senderBalance={balance}
             onSuccess={() => refreshBalance()}
           />
         </div>
@@ -78,8 +77,6 @@ export default function Dashboard() {
         <div className="card">
           <h2 style={{ marginBottom: '1rem' }}>Redeem NOVA</h2>
           <RedeemForm
-            senderPublicKey={publicKey}
-            senderBalance={balance}
             onSuccess={() => refreshBalance()}
           />
         </div>

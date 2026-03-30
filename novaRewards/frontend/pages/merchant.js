@@ -2,21 +2,23 @@ import { useState, useEffect, useCallback } from 'react';
 import CampaignForm from '../components/CampaignForm';
 import IssueRewardForm from '../components/IssueRewardForm';
 import api from '../lib/api';
+import { useAuthStore } from '../store/authStore';
+import { useCampaignStore } from '../store/campaignStore';
 
 /**
  * Merchant dashboard — registration, campaigns, reward issuance, totals.
  * Requirements: 10.1, 10.2, 10.3, 10.4
  */
 export default function MerchantDashboard() {
+  const { user: merchant, token: apiKey, login } = useAuthStore();
+  const { campaigns, setCampaigns } = useCampaignStore();
+
   // Registration state
   const [regForm, setRegForm] = useState({ name: '', walletAddress: '', businessCategory: '' });
-  const [merchant, setMerchant] = useState(null);
-  const [apiKey, setApiKey] = useState('');
   const [regStatus, setRegStatus] = useState('idle');
   const [regMessage, setRegMessage] = useState('');
 
   // Dashboard state
-  const [campaigns, setCampaigns] = useState([]);
   const [totals, setTotals] = useState({ totalDistributed: 0, totalRedeemed: 0 });
 
   const loadDashboard = useCallback(async (mid) => {
@@ -30,7 +32,7 @@ export default function MerchantDashboard() {
     } catch {
       // silently ignore on first load
     }
-  }, []);
+  }, [setCampaigns]);
 
   useEffect(() => {
     if (merchant?.id) loadDashboard(merchant.id);
@@ -42,8 +44,8 @@ export default function MerchantDashboard() {
     setRegStatus('loading');
     try {
       const { data } = await api.post('/api/merchants/register', regForm);
-      setMerchant(data.data);
-      setApiKey(data.data.api_key);
+      // login(user, token)
+      login(data.data, data.data.api_key);
       setRegStatus('done');
     } catch (err) {
       setRegStatus('error');
@@ -121,9 +123,6 @@ export default function MerchantDashboard() {
             <div className="card">
               <h2 style={{ marginBottom: '1rem' }}>Issue Rewards</h2>
               <IssueRewardForm
-                merchantId={merchant.id}
-                apiKey={apiKey}
-                campaigns={campaigns}
                 onSuccess={() => loadDashboard(merchant.id)}
               />
             </div>
@@ -132,8 +131,6 @@ export default function MerchantDashboard() {
             <div className="card">
               <h2 style={{ marginBottom: '1rem' }}>Create Campaign</h2>
               <CampaignForm
-                merchantId={merchant.id}
-                apiKey={apiKey}
                 onSuccess={() => loadDashboard(merchant.id)}
               />
             </div>
