@@ -8,8 +8,19 @@
     "frontend",
     "blockchain"
   ],
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "eslint": "^8.57.0"
+  },
   "scripts": {
-    "test": "npm test -w backend",
+    "test": "npm test -w backend && npm test -w frontend",
+    "test:backend": "npm test -w backend",
+    "test:frontend": "npm test -w frontend",
+    "lint": "npm run lint -w backend && npm run lint -w frontend",
+    "lint:fix": "npm run lint:fix -w backend && npm run lint:fix -w frontend",
+    "format": "npm run format -w frontend",
+    "format:check": "npm run format:check -w frontend",
+    "build": "npm run build -w frontend",
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
     "migrate": "node database/migrate.js",
