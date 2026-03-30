@@ -1,7 +1,5 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 #[contracttype]
@@ -32,6 +30,7 @@ pub struct VestingContract;
 
 #[contractimpl]
 impl VestingContract {
+    /// Initializes the vesting contract and resets its funding pool.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
@@ -40,19 +39,26 @@ impl VestingContract {
         env.storage().instance().set(&DataKey::PoolBalance, &0_i128);
     }
 
+    /// Returns the admin address allowed to manage schedules.
     fn admin(env: &Env) -> Address {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
-    /// Fund the vesting pool (admin-gated).
+    /// Adds tokens to the vesting pool used for future releases.
     pub fn fund_pool(env: Env, amount: i128) {
         Self::admin(&env).require_auth();
         assert!(amount > 0, "amount must be positive");
-        let bal: i128 = env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0);
-        env.storage().instance().set(&DataKey::PoolBalance, &(bal + amount));
+        let bal: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::PoolBalance, &(bal + amount));
     }
 
-    /// Create a new vesting schedule for a beneficiary (admin-gated).
+    /// Creates a vesting schedule for a beneficiary and returns its schedule id.
     pub fn create_schedule(
         env: Env,
         beneficiary: Address,
@@ -79,13 +85,15 @@ impl VestingContract {
         let schedule_key = DataKey::Schedule(beneficiary.clone(), id);
         env.storage().persistent().set(&schedule_key, &schedule);
         // Extend TTL by 365 days (31,536,000 ledgers)
-        env.storage().persistent().extend_ttl(&schedule_key, 31_536_000, 31_536_000);
-        
+        env.storage()
+            .persistent()
+            .extend_ttl(&schedule_key, 31_536_000, 31_536_000);
+
         env.storage().instance().set(&next_id_key, &(id + 1));
         id
     }
 
-    /// Calculate how much is currently releasable for a given schedule.
+    /// Computes the total vested amount for a schedule at a specific timestamp.
     fn vested_amount(schedule: &VestingSchedule, now: u64) -> i128 {
         if now < schedule.start_time + schedule.cliff_duration {
             return 0;
@@ -98,7 +106,7 @@ impl VestingContract {
         }
     }
 
-    /// Release vested tokens for a specific schedule to the beneficiary.
+    /// Releases the newly vested portion of a schedule.
     pub fn release(env: Env, beneficiary: Address, schedule_id: u32) -> i128 {
         let key = DataKey::Schedule(beneficiary.clone(), schedule_id);
         let mut schedule: VestingSchedule = env
@@ -107,7 +115,9 @@ impl VestingContract {
             .get(&key)
             .expect("schedule not found");
         // Extend TTL by 365 days (31,536,000 ledgers)
-        env.storage().persistent().extend_ttl(&key, 31_536_000, 31_536_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 31_536_000, 31_536_000);
 
         let now = env.ledger().timestamp();
         let vested = Self::vested_amount(&schedule, now);
@@ -115,7 +125,11 @@ impl VestingContract {
         assert!(releasable > 0, "nothing to release");
 
         // deduct from pool
-        let pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0);
+        let pool_bal: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0);
         assert!(pool_bal >= releasable, "insufficient pool balance");
         env.storage()
             .instance()
@@ -124,7 +138,9 @@ impl VestingContract {
         schedule.released += releasable;
         env.storage().persistent().set(&key, &schedule);
         // Extend TTL again after update
-        env.storage().persistent().extend_ttl(&key, 31_536_000, 31_536_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 31_536_000, 31_536_000);
 
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("tok_rel")),
@@ -134,16 +150,27 @@ impl VestingContract {
         releasable
     }
 
+    /// Returns the stored schedule for a beneficiary and schedule id.
     pub fn get_schedule(env: Env, beneficiary: Address, schedule_id: u32) -> VestingSchedule {
         let key = DataKey::Schedule(beneficiary, schedule_id);
-        let schedule = env.storage().persistent().get(&key).expect("schedule not found");
+        let schedule = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("schedule not found");
         // Extend TTL by 365 days
-        env.storage().persistent().extend_ttl(&key, 31_536_000, 31_536_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 31_536_000, 31_536_000);
         schedule
     }
 
+    /// Returns the remaining unfunded vesting pool balance.
     pub fn pool_balance(env: Env) -> i128 {
-        env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0)
     }
 }
 
@@ -151,7 +178,10 @@ impl VestingContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Events, Ledger}, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Events, Ledger},
+        Env,
+    };
 
     fn setup() -> (Env, Address, VestingContractClient<'static>) {
         let env = Env::default();

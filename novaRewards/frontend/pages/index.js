@@ -23,8 +23,9 @@ export default function Home() {
       <nav className="nav">
         <span className="nav-brand">{t('nav.brand')}</span>
         <div className="nav-links">
-          <a href="/merchant">{t('nav.merchantPortal')}</a>
-          <LanguageSwitcher />
+          <a href="/merchant">Merchant Portal</a>
+          <a href="/auth/register">Email Sign Up</a>
+          <a href="/auth/login">Email Login</a>
           {publicKey && (
             <button
               className="btn btn-secondary"
@@ -71,6 +72,8 @@ export default function Home() {
         )}
 
         {error && <p className="error" style={{ marginTop: '1rem' }}>{error}</p>}
+
+        {/* TODO: link tokenomics doc — add a "Tokenomics" section here pointing to docs/tokenomics.md or the hosted URL */}
       </div>
     </>
   );

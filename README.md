@@ -1,5 +1,9 @@
 # Nova Rewards
 
+<p align="center">
+  <img src="repo_avatar.png" width="300" alt="Nova Rewards Logo">
+</p>
+
 **Nova Rewards** is a next-generation, blockchain-powered loyalty platform that enables businesses to reward users with tokenized incentives on the Stellar network.
 
 It transforms traditional reward systems into transparent, secure, and interoperable digital experiences.
@@ -65,6 +69,36 @@ Users can store and manage rewards in their crypto wallets.
 - **Smart Contracts:** Soroban  
 - **Frontend:** React / Next.js  
 - **Backend:** Node.js (optional)  
+
+---
+
+## Product
+
+For detailed product vision, roadmap, and feature specifications, see the [Product Requirements Document (PRD)](docs/PRD.md).
+
+---
+
+## Security
+
+### Security Audits
+
+All smart contracts undergo comprehensive security audits before production deployment. 
+
+📋 **View Audit Reports:** [Security Audit Documentation](docs/audits/)
+
+### Audit Process
+
+- **Independent Auditors:** Third-party security firms review all contract code
+- **Comprehensive Testing:** Static analysis, dynamic testing, and manual review
+- **Findings Tracking:** All issues documented and remediated
+- **Public Reports:** Full transparency with published audit findings
+
+### Security Best Practices
+
+- Regular security updates and patching
+- Multi-signature controls for admin functions
+- Gradual rollout with testing phases
+- Bug bounty program for responsible disclosure
 
 ---
 

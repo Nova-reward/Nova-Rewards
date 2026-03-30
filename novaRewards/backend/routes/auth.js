@@ -8,10 +8,53 @@ const { validateLoginDto } = require('../dtos/loginDto');
 const SALT_ROUNDS = 12;
 
 /**
- * POST /api/auth/register
- * Creates a new user account with a hashed password.
- * Returns 201 with the new user record (no password hash exposed).
- * Returns 400 on validation failure, 409 on duplicate email.
+ * @openapi
+ * /auth/register:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Register a new user account
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password, firstName, lastName]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: alice@example.com
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: "S3cur3P@ss!"
+ *               firstName:
+ *                 type: string
+ *                 example: Alice
+ *               lastName:
+ *                 type: string
+ *                 example: Smith
+ *     responses:
+ *       201:
+ *         description: User created.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: Email already registered.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/register', async (req, res, next) => {
   try {
@@ -57,9 +100,46 @@ router.post('/register', async (req, res, next) => {
 });
 
 /**
- * POST /api/auth/login
- * Validates credentials and returns a signed JWT access token + refresh token.
- * Returns 400 on validation failure, 401 on bad credentials.
+ * @openapi
+ * /auth/login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Authenticate and obtain JWT tokens
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: alice@example.com
+ *               password:
+ *                 type: string
+ *                 example: "S3cur3P@ss!"
+ *     responses:
+ *       200:
+ *         description: Login successful.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/AuthTokens' }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Invalid credentials.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/login', async (req, res, next) => {
   try {

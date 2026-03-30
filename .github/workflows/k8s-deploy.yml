@@ -1,0 +1,70 @@
+name: Kubernetes Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: novaRewards/backend
+          push: true
+          tags: ${{ secrets.REGISTRY }}/nova-rewards-backend:${{ github.sha }}
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: novaRewards/frontend
+          push: true
+          tags: ${{ secrets.REGISTRY }}/nova-rewards-frontend:${{ github.sha }}
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+
+      # Only apply bootstrap resources — Helm owns everything else
+      - name: Apply bootstrap resources
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/configmap.yaml
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install nova-rewards helm/nova-rewards \
+            --namespace nova-rewards \
+            --create-namespace \
+            -f helm/nova-rewards/values-production.yaml \
+            --set backend.image.repository=${{ secrets.REGISTRY }}/nova-rewards-backend \
+            --set backend.image.tag=${{ github.sha }} \
+            --set frontend.image.repository=${{ secrets.REGISTRY }}/nova-rewards-frontend \
+            --set frontend.image.tag=${{ github.sha }} \
+            --wait \
+            --timeout 5m

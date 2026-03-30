@@ -5,16 +5,11 @@
 //! All rates are expressed as integers scaled by SCALE_FACTOR (1_000_000).
 //! e.g. 3.3333% → rate = 33_333
 
-use nova_rewards::{calculate_payout, NovaRewardsContract, NovaRewardsContractClient, SCALE_FACTOR};
-use soroban_sdk::{testutils::Address as _, Address, Env};
+mod test_helpers;
 
-fn deploy(env: &Env) -> NovaRewardsContractClient {
-    let admin = Address::generate(env);
-    let id = env.register_contract(None, NovaRewardsContract);
-    let client = NovaRewardsContractClient::new(env, &id);
-    client.initialize(&admin);
-    client
-}
+use nova_rewards::{calculate_payout, NovaRewardsContractClient, SCALE_FACTOR};
+use soroban_sdk::{testutils::Address as _, Address, Env};
+use test_helpers::deploy;
 
 // ---------------------------------------------------------------------------
 // Bug reproduction — "difficult" numbers
