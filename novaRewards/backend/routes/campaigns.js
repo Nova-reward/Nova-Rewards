@@ -7,9 +7,55 @@ const {
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
 /**
- * POST /api/campaigns
- * Creates a new reward campaign after validating inputs.
- * Requirements: 7.2, 7.3
+ * @openapi
+ * /campaigns:
+ *   post:
+ *     tags: [Campaigns]
+ *     summary: Create a reward campaign
+ *     security:
+ *       - merchantApiKey: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, rewardRate, startDate, endDate]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Summer Loyalty Drive
+ *               rewardRate:
+ *                 type: number
+ *                 example: 1.5
+ *               startDate:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-06-01"
+ *               endDate:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-08-31"
+ *     responses:
+ *       201:
+ *         description: Campaign created.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/Campaign' }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Missing or invalid API key.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', authenticateMerchant, async (req, res, next) => {
   try {
@@ -48,9 +94,30 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
 });
 
 /**
- * GET /api/campaigns
- * Returns all campaigns for the authenticated merchant.
- * Requirements: 7.2
+ * @openapi
+ * /campaigns:
+ *   get:
+ *     tags: [Campaigns]
+ *     summary: List campaigns for the authenticated merchant
+ *     security:
+ *       - merchantApiKey: []
+ *     responses:
+ *       200:
+ *         description: Campaign list.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/Campaign' }
+ *       401:
+ *         description: Missing or invalid API key.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
@@ -62,9 +129,33 @@ router.get('/', authenticateMerchant, async (req, res, next) => {
 });
 
 /**
- * GET /api/campaigns/:merchantId
- * Returns all campaigns for a given merchant.
- * Requirements: 7.2, 10.1
+ * @openapi
+ * /campaigns/{merchantId}:
+ *   get:
+ *     tags: [Campaigns]
+ *     summary: List campaigns for a given merchant ID
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         schema: { type: integer, example: 7 }
+ *     responses:
+ *       200:
+ *         description: Campaign list.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/Campaign' }
+ *       400:
+ *         description: Invalid merchantId.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:merchantId', async (req, res, next) => {
   try {

@@ -6,7 +6,7 @@ members = [
     "admin_roles",
     "vesting",
     "referral",
-    "governance",
+    "nova-rewards",
 ]
 
 [workspace.dependencies]
