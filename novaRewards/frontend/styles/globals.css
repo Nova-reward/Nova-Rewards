@@ -958,3 +958,112 @@ td {
     display: none;
   }
 }
+
+/* ============================================================
+   Analytics Dashboard — Issue #331
+   ============================================================ */
+
+/* Header row */
+.analytics-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.analytics-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Date range picker */
+.analytics-range-picker {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.25rem;
+}
+.analytics-range-btn {
+  padding: 0.35rem 0.85rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.analytics-range-btn:hover { background: var(--surface); color: var(--text); }
+.analytics-range-btn.active { background: var(--accent); color: #fff; }
+
+/* Summary cards — 4-column grid */
+.analytics-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.analytics-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0;
+}
+.analytics-stat-icon  { font-size: 1.5rem; }
+.analytics-stat-label { font-size: 0.8rem; color: var(--muted); }
+.analytics-stat-value { font-size: 1.6rem; font-weight: 700; }
+.analytics-stat-change { font-size: 0.78rem; font-weight: 600; }
+.analytics-stat-change.positive { color: var(--success); }
+.analytics-stat-change.negative { color: var(--error); }
+
+/* Charts grid — 2-column, first row full-width */
+.analytics-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.analytics-chart-wide {
+  grid-column: 1 / -1;
+}
+.analytics-chart-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.analytics-chart-skeleton {
+  height: 260px;
+  border-radius: 8px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .analytics-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 768px) {
+  .analytics-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .analytics-charts-grid {
+    grid-template-columns: 1fr;
+  }
+  .analytics-chart-wide {
+    grid-column: 1;
+  }
+  .analytics-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+@media (max-width: 480px) {
+  .analytics-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
