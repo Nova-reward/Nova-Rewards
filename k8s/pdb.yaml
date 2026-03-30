@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nova-rewards-backend
+  namespace: nova-rewards
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: nova-rewards-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nova-rewards-frontend
+  namespace: nova-rewards
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: nova-rewards-frontend
