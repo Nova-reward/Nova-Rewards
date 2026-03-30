@@ -1,0 +1,8 @@
+# Copy this file to terraform.tfvars (gitignored) and fill in real values.
+# Sensitive values (db_password, redis_auth_token, etc.) must be stored in
+# AWS Secrets Manager at the secret named by app_secret_name — NOT here.
+
+environment     = "dev"
+aws_region      = "us-east-1"
+certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
+app_secret_name = "nova-rewards/app"
