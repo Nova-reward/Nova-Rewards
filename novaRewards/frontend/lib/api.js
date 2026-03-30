@@ -7,9 +7,26 @@ const api = axios.create({
 });
 
 // Rewards API
-export async function getRewards() {
-  const response = await api.get('/rewards');
-  return response.data;
+
+/**
+ * Fetch a single page of rewards.
+ * @param {number} page  1-based page number
+ * @param {number} limit Items per page
+ * @returns {Promise<{ rewards: any[], userPoints: number, hasMore: boolean, total: number }>}
+ */
+export async function getRewards(page = 1, limit = 12) {
+  const response = await api.get('/rewards', { params: { page, limit } });
+  // Support both paginated and legacy (array) responses
+  const data = response.data;
+  if (Array.isArray(data)) {
+    return { rewards: data, userPoints: 0, hasMore: false, total: data.length };
+  }
+  return {
+    rewards: data.rewards ?? [],
+    userPoints: data.userPoints ?? 0,
+    hasMore: data.hasMore ?? false,
+    total: data.total ?? 0,
+  };
 }
 
 export async function redeemReward(rewardId) {
