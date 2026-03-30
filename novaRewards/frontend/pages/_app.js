@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { WalletProvider } from '../context/WalletContext';
 import { AuthProvider } from '../context/AuthContext';
 import { TourProvider } from '../context/TourContext';
@@ -10,6 +11,10 @@ import '../styles/globals.css';
 import '../styles/redemption.css';
 
 export default function App({ Component, pageProps }) {
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
   return (
     <ThemeProvider>
       <Head>
