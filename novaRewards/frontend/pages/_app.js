@@ -1,18 +1,1 @@
-import { WalletProvider } from '../context/WalletContext';
-import { AuthProvider } from '../context/AuthContext';
-import { TourProvider } from '../context/TourContext';
-import OnboardingTour from '../components/OnboardingTour';
-import '../styles/globals.css';
-
-export default function App({ Component, pageProps }) {
-  return (
-    <AuthProvider>
-      <WalletProvider>
-        <TourProvider>
-          <Component {...pageProps} />
-          <OnboardingTour />
-        </TourProvider>
-      </WalletProvider>
-    </AuthProvider>
-  );
-}
+import { appWithTranslation } from 'next-i18next';\nimport { WalletProvider } from '../context/WalletContext';\nimport { AuthProvider } from '../context/AuthContext';\nimport { TourProvider } from '../context/TourContext';\nimport OnboardingTour from '../components/OnboardingTour';\nimport '../styles/globals.css';\n\nfunction App({ Component, pageProps }) {\n  return (\n    <AuthProvider>\n      <WalletProvider>\n        <TourProvider>\n          <Component {...pageProps} />\n          <OnboardingTour />\n        </TourProvider>\n      </WalletProvider>\n    </AuthProvider>\n  );\n}\n\nexport default appWithTranslation(App);

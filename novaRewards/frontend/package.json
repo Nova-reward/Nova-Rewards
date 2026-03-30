@@ -12,9 +12,15 @@
   "dependencies": {
     "@stellar/freighter-api": "^2.0.0",
     "axios": "^1.7.2",
+    "i18next": "^23.16.8",
+    "i18next-http-backend": "^3.0.2",
+    "i18next-http-middleware": "^3.9.2",
+    "luxon": "^3.7.2",
     "next": "^14.2.5",
+    "next-i18next": "^14.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^13.5.0",
     "react-joyride": "^3.0.0",
     "stellar-sdk": "^12.3.0"
   },
