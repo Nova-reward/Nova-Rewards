@@ -1,100 +1,52 @@
-#!/usr/bin/env node
 /**
- * NovaRewards Database Migration Runner
+ * Nova Rewards — database migration runner
  *
- * Schema versioning with up/down support and per-migration transactions.
+ * In production: fetches nova_migrate credentials from AWS Secrets Manager.
+ * In development: falls back to DATABASE_MIGRATE_URL or DATABASE_URL env vars.
  *
  * Usage:
- *   node database/migrate.js                  # run all pending migrations
- *   node database/migrate.js --rollback       # roll back the last applied migration
- *   node database/migrate.js --rollback 3     # roll back the last 3 applied migrations
- *   node database/migrate.js --status         # show applied / pending migrations
+ *   node migrate.js              # run all pending migrations
+ *   node migrate.js --rollback   # drop all tables (dev only)
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
-
+require('dotenv').config({ path: '../.env' });
 const { Pool } = require('pg');
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+async function getConnectionString() {
+  const secretArn = process.env.DB_MIGRATE_SECRET_ARN;
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+  if (secretArn) {
+    // Production: pull credentials from Secrets Manager
+    const { SecretsManagerClient, GetSecretValueCommand } =
+      await import('@aws-sdk/client-secrets-manager');
 
-/**
- * Ensure the schema_migrations tracking table exists.
- * This is idempotent and always runs first.
- */
-async function ensureMigrationsTable(client) {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      version     VARCHAR(255) PRIMARY KEY,
-      applied_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-    )
-  `);
+    const client = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-east-1' });
+    const { SecretString } = await client.send(new GetSecretValueCommand({ SecretId: secretArn }));
+    const { username, password, host, port, dbname } = JSON.parse(SecretString);
+    return `postgresql://${username}:${encodeURIComponent(password)}@${host}:${port}/${dbname}`;
+  }
+
+  // Development fallback
+  return process.env.DATABASE_MIGRATE_URL || process.env.DATABASE_URL;
 }
 
-/**
- * Return sorted list of migration version strings that have up-SQL files.
- * Version = filename without extension, e.g. "001_create_merchants"
- */
-function getAvailableMigrations() {
-  return fs
-    .readdirSync(__dirname)
-    .filter((f) => f.endsWith('.up.sql'))
-    .map((f) => f.replace(/\.up\.sql$/, ''))
-    .sort();
-}
+async function migrate() {
+  const connectionString = await getConnectionString();
+  const pool = new Pool({ connectionString, ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false });
 
-/** Return set of already-applied versions from the DB. */
-async function getAppliedVersions(client) {
-  const { rows } = await client.query(
-    'SELECT version FROM schema_migrations ORDER BY version'
-  );
-  return new Set(rows.map((r) => r.version));
-}
-
-/** Read a migration SQL file; returns null if the file doesn't exist. */
-function readSql(version, direction) {
-  const file = path.join(__dirname, `${version}.${direction}.sql`);
-  if (!fs.existsSync(file)) return null;
-  return fs.readFileSync(file, 'utf8');
-}
-
-// ─── commands ───────────────────────────────────────────────────────────────
+  const sqlDir = path.join(__dirname, '..', 'database');
+  const files  = fs.readdirSync(sqlDir).filter(f => f.endsWith('.sql')).sort();
 
 async function migrate() {
   const client = await pool.connect();
   try {
-    await ensureMigrationsTable(client);
-    const applied = await getAppliedVersions(client);
-    const pending = getAvailableMigrations().filter((v) => !applied.has(v));
-
-    if (pending.length === 0) {
-      console.log('Nothing to migrate — database is up to date.');
-      return;
-    }
-
-    for (const version of pending) {
-      const sql = readSql(version, 'up');
-      if (!sql) {
-        throw new Error(`Missing up-migration file: ${version}.up.sql`);
-      }
-
-      console.log(`Applying migration: ${version}`);
-      await client.query('BEGIN');
-      try {
-        await client.query(sql);
-        await client.query(
-          'INSERT INTO schema_migrations (version) VALUES ($1)',
-          [version]
-        );
-        await client.query('COMMIT');
-        console.log(`  ✓ ${version}`);
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw new Error(`Migration failed [${version}]: ${err.message}`);
-      }
+    for (const file of files) {
+      const sql = fs.readFileSync(path.join(sqlDir, file), 'utf8');
+      console.log(`Running migration: ${file}`);
+      await client.query(sql);
+      console.log(`  ✓ Done`);
     }
 
     console.log(`\nMigrations complete. Applied ${pending.length} migration(s).`);
@@ -103,66 +55,28 @@ async function migrate() {
   }
 }
 
-async function rollback(steps = 1) {
-  const client = await pool.connect();
-  try {
-    await ensureMigrationsTable(client);
-    const { rows } = await client.query(
-      'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT $1',
-      [steps]
-    );
-
-    if (rows.length === 0) {
-      console.log('Nothing to roll back — no migrations have been applied.');
-      return;
-    }
-
-    for (const { version } of rows) {
-      const sql = readSql(version, 'down');
-      if (!sql) {
-        throw new Error(
-          `Missing down-migration file: ${version}.down.sql — cannot roll back safely.`
-        );
-      }
-
-      console.log(`Rolling back: ${version}`);
-      await client.query('BEGIN');
-      try {
-        await client.query(sql);
-        await client.query(
-          'DELETE FROM schema_migrations WHERE version = $1',
-          [version]
-        );
-        await client.query('COMMIT');
-        console.log(`  ✓ rolled back ${version}`);
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw new Error(`Rollback failed [${version}]: ${err.message}`);
-      }
-    }
-
-    console.log(`\nRollback complete. Reverted ${rows.length} migration(s).`);
-  } finally {
-    client.release();
+async function rollback() {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Rollback is disabled in production.');
+    process.exit(1);
   }
-}
+
+  const connectionString = await getConnectionString();
+  const pool = new Pool({ connectionString });
+
+  const sqlDir = path.join(__dirname, '..', 'database');
+  const tables = fs.readdirSync(sqlDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort()
+    .reverse()
+    .map(f => f.replace(/^\d+_create_/, '').replace(/\.sql$/, ''));
 
 async function status() {
   const client = await pool.connect();
   try {
-    await ensureMigrationsTable(client);
-    const applied = await getAppliedVersions(client);
-    const available = getAvailableMigrations();
-
-    console.log('\nMigration Status\n' + '─'.repeat(60));
-    if (available.length === 0) {
-      console.log('No migration files found.');
-      return;
-    }
-
-    for (const version of available) {
-      const state = applied.has(version) ? '✓ applied ' : '○ pending ';
-      console.log(`  ${state}  ${version}`);
+    for (const table of tables) {
+      console.log(`Dropping table: ${table}`);
+      await client.query(`DROP TABLE IF EXISTS ${table} CASCADE`);
     }
 
     const pendingCount = available.filter((v) => !applied.has(v)).length;
@@ -173,34 +87,8 @@ async function status() {
   }
 }
 
-// ─── CLI entry ───────────────────────────────────────────────────────────────
-
-async function main() {
-  const args = process.argv.slice(2);
-
-  let command = 'migrate';
-  let rollbackSteps = 1;
-
-  if (args.includes('--status')) {
-    command = 'status';
-  } else if (args.includes('--rollback')) {
-    command = 'rollback';
-    const stepsArg = args[args.indexOf('--rollback') + 1];
-    if (stepsArg && /^\d+$/.test(stepsArg)) {
-      rollbackSteps = parseInt(stepsArg, 10);
-    }
-  }
-
-  try {
-    if (command === 'migrate') await migrate();
-    else if (command === 'rollback') await rollback(rollbackSteps);
-    else if (command === 'status') await status();
-  } catch (err) {
-    console.error(`\nError: ${err.message}`);
-    process.exit(1);
-  } finally {
-    await pool.end();
-  }
-}
-
-main();
+const isRollback = process.argv.includes('--rollback');
+(isRollback ? rollback() : migrate()).catch(err => {
+  console.error(`${isRollback ? 'Rollback' : 'Migration'} failed:`, err.message);
+  process.exit(1);
+});

@@ -1,26 +1,34 @@
-const router = require('express').Router();
-<<<<<<< Testing-—-Property-Tests-Write-property-test-for-merchant-totals-consistency-(Property-12)
-const { getActiveCampaign } = require('../db/campaignRepository');
+const express = require('express');
+const router = express.Router();
 const rateLimit = require('express-rate-limit');
-=======
 const { createHash } = require('crypto');
->>>>>>> main
 const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { verifyTrustline } = require('../../blockchain/trustline');
 
 /**
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
+ * Uses Redis as the backing store when REDIS_URL is set (production),
+ * falling back to in-memory for local development.
  * Closes: #123
  */
+const redisClient = getRedisClient();
 const distributeRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  // Use Redis store only when a client is available
+  ...(redisClient && {
+    store: new RedisStore({
+      sendCommand: (...args) => redisClient.call(...args),
+      prefix: 'rl:distribute:',
+    }),
+  }),
   message: {
     success: false,
     error: 'rate_limit_exceeded',
@@ -29,27 +37,77 @@ const distributeRateLimiter = rateLimit({
 });
 
 /**
- * POST /api/rewards/distribute
- * Distributes NOVA tokens to a customer wallet.
- * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 7.4, 7.5
+ * @openapi
+ * /rewards/distribute:
+ *   post:
+ *     tags: [Rewards]
+ *     summary: Distribute NOVA tokens to a customer wallet
+ *     security:
+ *       - merchantApiKey: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [walletAddress, amount]
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+ *               amount:
+ *                 type: number
+ *                 example: 50
+ *               campaignId:
+ *                 type: integer
+ *                 example: 3
+ *     responses:
+ *       200:
+ *         description: Tokens distributed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 txHash: { type: string, example: "a1b2c3d4..." }
+ *       400:
+ *         description: Validation error or no trustline.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Missing or invalid API key.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Campaign does not belong to this merchant.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: Campaign not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/distribute', authenticateMerchant, async (req, res, next) => {
+router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (req, res, next) => {
   try {
-    const { customerWallet, amount, campaignId } = req.body;
+    const { walletAddress, customerWallet, amount, campaignId } = req.body;
+    const recipientWallet = walletAddress || customerWallet;
 
-    if (!customerWallet || !isValidStellarAddress(customerWallet)) {
+    if (!recipientWallet || !amount) {
       return res.status(400).json({
         success: false,
-        error: 'validation_error',
-        message: 'customerWallet must be a valid Stellar public key',
+        error: 'Missing required fields: walletAddress and amount are required',
       });
     }
 
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+    if (amount <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'validation_error',
-        message: 'amount must be a positive number',
+        error: 'Amount must be greater than zero',
       });
     }
 
@@ -81,24 +139,24 @@ router.post('/distribute', authenticateMerchant, async (req, res, next) => {
       });
     }
 
-    // Distribute via Stellar — throws on no_trustline or insufficient_balance
-    const { txHash } = await distributeRewards({
-      toWallet: customerWallet,
-      amount: String(amount),
-    });
+    // Verify trustline exists
+    const trustline = await verifyTrustline(walletAddress);
+    if (!trustline?.exists) {
+      return res.status(400).json({
+        success: false,
+        error: 'no_trustline',
+        message: 'Recipient does not have a NOVA trustline. Please add NOVA trustline first.',
+      });
+    }
 
-    // Record in database
-    const tx = await recordTransaction({
-      txHash,
-      txType: 'distribution',
+    // Distribute rewards
+    const result = await distributeRewards({
+      recipient: recipientWallet,
       amount,
-      fromWallet: process.env.DISTRIBUTION_PUBLIC,
-      toWallet: customerWallet,
-      merchantId: req.merchant.id,
-      campaignId: campaign.id,
+      campaignId,
     });
 
-    res.json({ success: true, txHash, transaction: tx });
+    res.json({ success: true, txHash: result.txHash, transaction: result.tx });
   } catch (err) {
     if (err.code === 'no_trustline') {
       return res.status(400).json({
@@ -107,14 +165,13 @@ router.post('/distribute', authenticateMerchant, async (req, res, next) => {
         message: err.message,
       });
     }
-    if (err.code === 'insufficient_balance') {
-      return res.status(400).json({
-        success: false,
-        error: 'insufficient_balance',
-        message: err.message,
-      });
-    }
-    next(err);
+    
+    console.error('Error distributing rewards:', err);
+    res.status(500).json({
+      success: false,
+      error: 'internal_server_error',
+      message: err.message || 'Failed to distribute rewards',
+    });
   }
 });
 
