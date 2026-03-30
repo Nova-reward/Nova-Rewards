@@ -36,6 +36,12 @@ pub enum DataKey {
     AnnualRate,
     /// Individual stake records
     Stake(Address),
+    /// Whether the contract is paused
+    Paused,
+    /// Expiry timestamp for an emergency pause (0 = no expiry / manual unpause)
+    EmergencyPauseExpiry,
+    /// Pending WASM hash for upgrade
+    PendingWasmHash,
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +126,94 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
     }
 
+    // -----------------------------------------------------------------------
+    // Pause mechanism
+    // -----------------------------------------------------------------------
+
+    fn require_not_paused(env: &Env) {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if paused {
+            // Check if an emergency pause has expired
+            let expiry: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::EmergencyPauseExpiry)
+                .unwrap_or(0);
+            if expiry == 0 || env.ledger().timestamp() < expiry {
+                panic!("contract is paused");
+            }
+            // Expiry passed — auto-clear the pause
+            env.storage().instance().set(&DataKey::Paused, &false);
+            env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
+        }
+    }
+
+    /// Pause all state-changing operations. Admin only.
+    pub fn pause(env: Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
+        env.events().publish((symbol_short!("paused"),), ());
+    }
+
+    /// Unpause the contract. Admin only.
+    pub fn unpause(env: Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
+        env.events().publish((symbol_short!("unpaused"),), ());
+    }
+
+    /// Emergency pause with a maximum duration in seconds. Admin only.
+    /// The contract auto-unpauses once `duration_secs` have elapsed.
+    pub fn emergency_pause(env: Env, duration_secs: u64) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        if duration_secs == 0 {
+            panic!("duration must be > 0");
+        }
+        let expiry = env.ledger().timestamp() + duration_secs;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &expiry);
+        env.events().publish((symbol_short!("emrg_paus"),), expiry);
+    }
+
+    /// Returns true if the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if !paused {
+            return false;
+        }
+        let expiry: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyPauseExpiry)
+            .unwrap_or(0);
+        expiry == 0 || env.ledger().timestamp() < expiry
+    }
+
     /// Sets the XLM SAC token address and DEX router address.
     /// Admin only. Must be called before swap_for_xlm is usable.
     pub fn set_swap_config(env: Env, xlm_token: Address, router: Address) {
@@ -146,6 +240,7 @@ impl NovaRewardsContract {
         min_xlm_out: i128,
         path: Vec<Address>,
     ) -> i128 {
+        Self::require_not_paused(&env);
         user.require_auth();
 
         if nova_amount <= 0 {
@@ -366,6 +461,7 @@ impl NovaRewardsContract {
     /// # Events
     /// Emits `(Symbol("staked"), staker)` with data `(amount, timestamp)`.
     pub fn stake(env: Env, staker: Address, amount: i128) {
+        Self::require_not_paused(&env);
         staker.require_auth();
         
         if amount <= 0 {
@@ -421,6 +517,7 @@ impl NovaRewardsContract {
     /// # Events
     /// Emits `(Symbol("unstaked"), staker)` with data `(principal, yield, timestamp)`.
     pub fn unstake(env: Env, staker: Address) -> i128 {
+        Self::require_not_paused(&env);
         staker.require_auth();
         
         // Get stake record
