@@ -8,6 +8,10 @@
     "frontend",
     "blockchain"
   ],
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "eslint": "^8.57.0"
+  },
   "scripts": {
     "test": "npm test -w backend && npm test -w frontend",
     "test:backend": "npm test -w backend",
@@ -21,5 +25,10 @@
     "setup": "node scripts/setup.js --use-env",
     "migrate": "node database/migrate.js",
     "reset-testnet": "node scripts/reset-testnet.js"
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }

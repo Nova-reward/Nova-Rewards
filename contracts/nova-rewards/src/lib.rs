@@ -1,8 +1,10 @@
 #![no_std]
 
+pub mod utils;
+
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    Address, BytesN, Env, Vec,
+    Address, BytesN, Env, IntoVal, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -32,6 +34,8 @@ pub enum DataKey {
     XlmToken,
     /// Address of the DEX router contract used for multi-hop swaps
     Router,
+    /// Pending WASM hash stored by upgrade() for use by migrate()
+    PendingWasmHash,
     /// Staking annual rate in basis points (10000 = 100%)
     AnnualRate,
     /// Individual stake records
@@ -181,10 +185,10 @@ impl NovaRewardsContract {
             &soroban_sdk::Symbol::new(&env, "swap_exact_in"),
             soroban_sdk::vec![
                 &env,
-                user.clone().into(),
-                nova_amount.into(),
-                min_xlm_out.into(),
-                path.clone().into(),
+                user.clone().to_val(),
+                nova_amount.into_val(&env),
+                min_xlm_out.into_val(&env),
+                path.clone().to_val(),
             ],
         );
 
@@ -498,10 +502,14 @@ impl NovaRewardsContract {
 
     /// Calculate expected yield for a stake without unstaking.
     pub fn calculate_yield(env: Env, staker: Address) -> i128 {
-        let stake_record: StakeRecord = env
+        let stake_record: StakeRecord = match env
             .storage()
             .instance()
-            .get(&DataKey::Stake(staker.clone()))?;
+            .get(&DataKey::Stake(staker.clone()))
+        {
+            Some(r) => r,
+            None => return 0,
+        };
         
         let annual_rate: i128 = env
             .storage()

@@ -5,6 +5,7 @@ validateEnv();
 
 require('./db/index');
 
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const { connectRedis } = require('./lib/redis');
@@ -13,13 +14,17 @@ const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
 const { startWebhookRetryJob } = require('./jobs/webhookRetry');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
+const { initSocketIO } = require('./services/socketService');
 
 const app = express();
+const httpServer = http.createServer(app);
 
 // Configure CORS based on environment
 const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
   ? { origin: process.env.ALLOWED_ORIGIN }
   : {}; // Open CORS for development
+
+initSocketIO(httpServer, corsOptions);
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -42,10 +47,8 @@ app.use(globalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ success: true, data: { status: 'ok' } });
-});
+// Health check routes
+app.use('/api/health', require('./routes/health'));
 
 // Prometheus metrics scrape endpoint
 app.get('/metrics', async (req, res) => {
@@ -75,9 +78,35 @@ app.use('/api/search', require('./routes/search'));
 app.use('/api/webhooks', require('./routes/webhooks'));
 
 // Swagger/OpenAPI docs
+// In production, gate /api/docs behind HTTP Basic Auth.
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./swagger');
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+if (process.env.NODE_ENV === 'production') {
+  const DOCS_USER = process.env.DOCS_USER || 'nova';
+  const DOCS_PASS = process.env.DOCS_PASS;
+
+  app.use('/api/docs', (req, res, next) => {
+    if (!DOCS_PASS) return next(); // skip guard if password not configured
+    const auth = req.headers.authorization || '';
+    const [scheme, encoded] = auth.split(' ');
+    if (scheme !== 'Basic' || !encoded) {
+      res.set('WWW-Authenticate', 'Basic realm="Nova Rewards API Docs"');
+      return res.status(401).send('Authentication required');
+    }
+    const [user, pass] = Buffer.from(encoded, 'base64').toString().split(':');
+    if (user !== DOCS_USER || pass !== DOCS_PASS) {
+      res.set('WWW-Authenticate', 'Basic realm="Nova Rewards API Docs"');
+      return res.status(401).send('Invalid credentials');
+    }
+    next();
+  });
+}
+
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  swaggerOptions: { persistAuthorization: true },
+  customSiteTitle: 'NovaRewards API Docs',
+}));
 app.get('/api/docs/openapi.json', (req, res) => res.json(swaggerSpec));
 
 // Global error handler — returns consistent error envelope
@@ -94,7 +123,7 @@ const PORT = process.env.PORT || 3001;
 
 // Only start the server when this file is run directly (not when required by tests)
 if (require.main === module) {
-  app.listen(PORT, async () => {
+  httpServer.listen(PORT, async () => {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
