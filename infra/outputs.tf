@@ -1,20 +1,14 @@
-output "alb_dns_name" {
-  description = "ALB DNS name"
-  value       = module.ec2.alb_dns_name
-}
-
 output "rds_endpoint" {
-  description = "RDS endpoint"
-  value       = module.rds.endpoint
-  sensitive   = true
+  description = "RDS instance endpoint (host:port)"
+  value       = "${aws_db_instance.nova.address}:${aws_db_instance.nova.port}"
 }
 
-output "redis_endpoint" {
-  description = "ElastiCache endpoint"
-  value       = module.elasticache.endpoint
-  sensitive   = true
+output "rds_secret_arn" {
+  description = "ARN of the Secrets Manager secret holding RDS master credentials"
+  value       = aws_secretsmanager_secret.rds_master.arn
 }
 
-output "vpc_id" {
-  value = module.vpc.vpc_id
+output "pgbouncer_port" {
+  description = "PgBouncer listens on this port on each EC2 instance"
+  value       = 5432
 }
