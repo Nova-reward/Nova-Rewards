@@ -11,6 +11,31 @@ jobs:
     runs-on: ubuntu-latest
     name: Backend Tests
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nova_rewards_test
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,11 +49,17 @@ jobs:
 
       - name: Install dependencies
         working-directory: novaRewards/backend
-        run: npm install
+        run: npm ci
 
       - name: Run tests
         working-directory: novaRewards/backend
-        run: npx jest --runInBand --ci
+        run: npm test -- --ci --coverage --maxWorkers=2
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://nova:test_password@localhost:5432/nova_rewards_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret_key_for_ci
+          JWT_REFRESH_SECRET: test_jwt_refresh_secret_key_for_ci
 
   frontend-build:
     runs-on: ubuntu-latest
@@ -42,8 +73,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: novaRewards/frontend
