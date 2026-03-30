@@ -1,7 +1,5 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
 // ── Storage keys ─────────────────────────────────────────────────────────────
 #[contracttype]
@@ -17,6 +15,7 @@ pub struct NovaToken;
 
 #[contractimpl]
 impl NovaToken {
+    /// Initializes the token contract with the admin allowed to mint.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
@@ -26,28 +25,35 @@ impl NovaToken {
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
+    /// Returns the configured token admin.
     fn admin(env: &Env) -> Address {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
+    /// Reads a wallet balance from persistent storage and refreshes its TTL.
     fn balance_of(env: &Env, addr: &Address) -> i128 {
         let key = DataKey::Balance(addr.clone());
         let balance = env.storage().persistent().get(&key).unwrap_or(0);
         // Extend TTL by 31 days (2,678,400 ledgers at 5s/ledger)
-        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 2_678_400, 2_678_400);
         balance
     }
 
+    /// Stores a wallet balance and refreshes the persistent entry TTL.
     fn set_balance(env: &Env, addr: &Address, amount: i128) {
         let key = DataKey::Balance(addr.clone());
         env.storage().persistent().set(&key, &amount);
         // Extend TTL by 31 days
-        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 2_678_400, 2_678_400);
     }
 
     // ── Mint ──────────────────────────────────────────────────────────────────
 
-    /// Mint `amount` tokens to `to`. Admin-gated.
+    /// Mints new tokens to a recipient.
     pub fn mint(env: Env, to: Address, amount: i128) {
         Self::admin(&env).require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -60,7 +66,7 @@ impl NovaToken {
         );
     }
 
-    /// Burn `amount` tokens from `from`. Caller must be `from`.
+    /// Burns tokens from the caller's balance.
     pub fn burn(env: Env, from: Address, amount: i128) {
         from.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -74,7 +80,7 @@ impl NovaToken {
         );
     }
 
-    /// Transfer `amount` tokens from `from` to `to`.
+    /// Transfers tokens between two accounts.
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -90,13 +96,15 @@ impl NovaToken {
         );
     }
 
-    /// Approve `spender` to spend up to `amount` on behalf of `owner`.
+    /// Sets an allowance for a spender on behalf of an owner.
     pub fn approve(env: Env, owner: Address, spender: Address, amount: i128) {
         owner.require_auth();
         let key = DataKey::Allowance(owner.clone(), spender.clone());
         env.storage().persistent().set(&key, &amount);
         // Extend TTL by 31 days
-        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 2_678_400, 2_678_400);
 
         env.events().publish(
             (symbol_short!("nova_tok"), symbol_short!("approve")),
@@ -104,15 +112,19 @@ impl NovaToken {
         );
     }
 
+    /// Returns the current token balance for an address.
     pub fn balance(env: Env, addr: Address) -> i128 {
         Self::balance_of(&env, &addr)
     }
 
+    /// Returns the remaining allowance recorded for an owner and spender pair.
     pub fn allowance(env: Env, owner: Address, spender: Address) -> i128 {
         let key = DataKey::Allowance(owner, spender);
         let allowance = env.storage().persistent().get(&key).unwrap_or(0);
         // Extend TTL by 31 days
-        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 2_678_400, 2_678_400);
         allowance
     }
 }
@@ -121,7 +133,10 @@ impl NovaToken {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Events}, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Env,
+    };
 
     fn setup() -> (Env, Address, NovaTokenClient<'static>) {
         let env = Env::default();

@@ -1,4 +1,4 @@
-const { pool } = require('../db/index');
+const { pool } = require('../../db/index');
 
 /**
  * Inserts a point_transaction record within an existing client transaction.
