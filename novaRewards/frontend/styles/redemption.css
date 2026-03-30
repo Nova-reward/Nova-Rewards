@@ -1,0 +1,310 @@
+/* ── Redemption catalogue ─────────────────────────────────────── */
+.redemption-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.redemption-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.redemption-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.redemption-subtitle {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.redemption-controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.control-group label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.rewards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+}
+
+/* ── Redemption modal ─────────────────────────────────────────── */
+.redemption-modal {
+  max-width: 480px;
+  width: 100%;
+}
+
+.redemption-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.redemption-image {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.redemption-info h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.redemption-description {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Amount stepper */
+.redemption-amount-row {
+  margin: 0.75rem 0;
+}
+
+.amount-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.stepper-btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.stepper-input {
+  width: 64px;
+  text-align: center;
+  margin-bottom: 0;
+}
+
+/* Points summary */
+.redemption-points {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.points-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.points-deduction .points-value {
+  color: var(--error);
+}
+
+.points-total {
+  border-top: 1px solid var(--border);
+  padding-top: 0.4rem;
+  font-weight: 600;
+}
+
+.redemption-wallet-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+/* ── Tx status panel ──────────────────────────────────────────── */
+.tx-status-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
+.tx-status-panel h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.tx-status-msg {
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 320px;
+}
+
+.tx-status-msg.error {
+  color: var(--error);
+}
+
+.tx-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin var(--animation-loading-spinner-duration, 400ms) linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.tx-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.tx-icon-success {
+  background: var(--badge-green-bg);
+  color: var(--badge-green-text);
+}
+
+.tx-icon-error {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--error);
+}
+
+.tx-hash-link {
+  font-size: 0.85rem;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+/* ── Redemption history table ─────────────────────────────────── */
+.redemption-history-table {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  gap: 0;
+  font-size: 0.9rem;
+}
+
+.rh-header {
+  display: contents;
+}
+
+.rh-header > span {
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid var(--border);
+}
+
+.rh-row {
+  display: contents;
+}
+
+.rh-row > span {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+}
+
+.rh-row:last-child > span {
+  border-bottom: none;
+}
+
+.rh-reward-name {
+  font-weight: 500;
+}
+
+.rh-points {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.rh-date {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ── Status badges ────────────────────────────────────────────── */
+.badge-yellow {
+  background: #fef9c3;
+  color: #854d0e;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-red {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--error);
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .badge-yellow {
+  background: #422006;
+  color: #fde68a;
+}
+
+/* ── Pagination ───────────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.pagination-info {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .redemption-history-table {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .rh-header > span:nth-child(4),
+  .rh-header > span:nth-child(5),
+  .rh-row > span:nth-child(4),
+  .rh-row > span:nth-child(5) {
+    display: none;
+  }
+}

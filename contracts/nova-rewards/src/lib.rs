@@ -1,8 +1,10 @@
 #![no_std]
 
+pub mod utils;
+
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    Address, BytesN, Env, Vec,
+    Address, BytesN, Env, IntoVal, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -21,6 +23,13 @@ pub struct StakeRecord {
 // ---------------------------------------------------------------------------
 
 #[contracttype]
+#[derive(Clone)]
+pub struct DailyUsage {
+    pub amount_used: i128,
+    pub window_start: u64,
+}
+
+#[contracttype]
 pub enum DataKey {
     Admin,
     Balance(Address),
@@ -32,10 +41,18 @@ pub enum DataKey {
     XlmToken,
     /// Address of the DEX router contract used for multi-hop swaps
     Router,
+    /// Pending WASM hash stored by upgrade() for use by migrate()
+    PendingWasmHash,
     /// Staking annual rate in basis points (10000 = 100%)
     AnnualRate,
     /// Individual stake records
     Stake(Address),
+    /// Whether the contract is paused
+    Paused,
+    /// Expiry timestamp for an emergency pause (0 = no expiry / manual unpause)
+    EmergencyPauseExpiry,
+    /// Pending WASM hash for upgrade
+    PendingWasmHash,
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +62,7 @@ pub enum DataKey {
 /// Scale factor for 6 decimal places of precision.
 pub const SCALE_FACTOR: i128 = 1_000_000;
 
-/// Seconds per year for yield calculations
+/// Seconds per year for staking yield calculations.
 pub const SECONDS_PER_YEAR: u64 = 31_536_000; // 365 * 24 * 60 * 60
 
 /// Computes the reward payout for a given balance and rate using fixed-point
@@ -98,6 +115,62 @@ pub fn calculate_payout(balance: i128, rate: i128) -> i128 {
 }
 
 // ---------------------------------------------------------------------------
+// Daily limit enforcer (Issue #204)
+// ---------------------------------------------------------------------------
+
+/// Checks and updates daily usage for the given user and amount.
+/// Resets the window if 24 hours have passed.
+/// Panics with "DailyLimitExceeded" if the limit would be exceeded.
+fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
+    let now = env.ledger().timestamp();
+    let daily_limit: i128 = env
+        .storage()
+        .instance()
+        .get(&DataKey::DailyLimit)
+        .unwrap_or(0);
+
+    if daily_limit <= 0 {
+        // No limit set, allow
+        return;
+    }
+
+    let usage_key = DataKey::DailyUsage(user.clone());
+    let mut usage: DailyUsage = env
+        .storage()
+        .persistent()
+        .get(&usage_key)
+        .unwrap_or(DailyUsage {
+            amount_used: 0,
+            window_start: now,
+        });
+
+    // Extend TTL for persistent storage
+    env.storage()
+        .persistent()
+        .extend_ttl(&usage_key, 31_536_000, 31_536_000);
+
+    // Check if window has expired (24 hours = 86,400 seconds)
+    if now - usage.window_start >= 86_400 {
+        usage.amount_used = 0;
+        usage.window_start = now;
+        env.storage().persistent().set(&usage_key, &usage);
+        // Set TTL for persistent storage (365 days)
+        env.storage().persistent().extend_ttl(&usage_key, 31_536_000, 31_536_000);
+    }
+
+    // Check limit
+    if usage.amount_used + requested_amount > daily_limit {
+        panic!("DailyLimitExceeded");
+    }
+
+    // Update usage
+    usage.amount_used += requested_amount;
+    env.storage().persistent().set(&usage_key, &usage);
+    // Set TTL for persistent storage (365 days)
+    env.storage().persistent().extend_ttl(&usage_key, 31_536_000, 31_536_000);
+}
+
+// ---------------------------------------------------------------------------
 // Contract
 // ---------------------------------------------------------------------------
 
@@ -110,7 +183,7 @@ impl NovaRewardsContract {
     // Initialisation
     // -----------------------------------------------------------------------
 
-    /// Must be called once after first deployment to set the admin.
+    /// Initializes the contract and records the admin plus migration version state.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
@@ -118,6 +191,94 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::MigrationVersion, &0u32);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
+    }
+
+    // -----------------------------------------------------------------------
+    // Pause mechanism
+    // -----------------------------------------------------------------------
+
+    fn require_not_paused(env: &Env) {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if paused {
+            // Check if an emergency pause has expired
+            let expiry: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::EmergencyPauseExpiry)
+                .unwrap_or(0);
+            if expiry == 0 || env.ledger().timestamp() < expiry {
+                panic!("contract is paused");
+            }
+            // Expiry passed — auto-clear the pause
+            env.storage().instance().set(&DataKey::Paused, &false);
+            env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
+        }
+    }
+
+    /// Pause all state-changing operations. Admin only.
+    pub fn pause(env: Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
+        env.events().publish((symbol_short!("paused"),), ());
+    }
+
+    /// Unpause the contract. Admin only.
+    pub fn unpause(env: Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
+        env.events().publish((symbol_short!("unpaused"),), ());
+    }
+
+    /// Emergency pause with a maximum duration in seconds. Admin only.
+    /// The contract auto-unpauses once `duration_secs` have elapsed.
+    pub fn emergency_pause(env: Env, duration_secs: u64) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        if duration_secs == 0 {
+            panic!("duration must be > 0");
+        }
+        let expiry = env.ledger().timestamp() + duration_secs;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &expiry);
+        env.events().publish((symbol_short!("emrg_paus"),), expiry);
+    }
+
+    /// Returns true if the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if !paused {
+            return false;
+        }
+        let expiry: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyPauseExpiry)
+            .unwrap_or(0);
+        expiry == 0 || env.ledger().timestamp() < expiry
     }
 
     /// Sets the XLM SAC token address and DEX router address.
@@ -133,6 +294,25 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::Router, &router);
     }
 
+    /// Sets the daily claim limit. Admin only.
+    /// Emits a daily_limit_updated event.
+    pub fn set_daily_limit(env: Env, limit: i128) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        if limit < 0 {
+            panic!("daily limit must be non-negative");
+        }
+        env.storage().instance().set(&DataKey::DailyLimit, &limit);
+        env.events().publish(
+            (symbol_short!("daily_lim"), symbol_short!("updated")),
+            limit,
+        );
+    }
+
     // -----------------------------------------------------------------------
     // Cross-asset swap (Issue #200)
     // -----------------------------------------------------------------------
@@ -146,6 +326,7 @@ impl NovaRewardsContract {
         min_xlm_out: i128,
         path: Vec<Address>,
     ) -> i128 {
+        Self::require_not_paused(&env);
         user.require_auth();
 
         if nova_amount <= 0 {
@@ -181,10 +362,10 @@ impl NovaRewardsContract {
             &soroban_sdk::Symbol::new(&env, "swap_exact_in"),
             soroban_sdk::vec![
                 &env,
-                user.clone().into(),
-                nova_amount.into(),
-                min_xlm_out.into(),
-                path.clone().into(),
+                user.clone().to_val(),
+                nova_amount.into_val(&env),
+                min_xlm_out.into_val(&env),
+                path.clone().to_val(),
             ],
         );
 
@@ -296,12 +477,14 @@ impl NovaRewardsContract {
     // State helpers (used by tests to verify state survives upgrade)
     // -----------------------------------------------------------------------
 
+    /// Test helper that writes a balance directly into contract storage.
     pub fn set_balance(env: Env, user: Address, amount: i128) {
         env.storage()
             .instance()
             .set(&DataKey::Balance(user), &amount);
     }
 
+    /// Returns the raw Nova balance recorded for a user.
     pub fn get_balance(env: Env, user: Address) -> i128 {
         env.storage()
             .instance()
@@ -332,8 +515,7 @@ impl NovaRewardsContract {
     // Staking functionality
     // -----------------------------------------------------------------------
 
-    /// Set the annual staking rate in basis points (10000 = 100%).
-    /// Admin only.
+    /// Updates the annual staking rate in basis points.
     pub fn set_annual_rate(env: Env, rate: i128) {
         let admin: Address = env
             .storage()
@@ -349,7 +531,7 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::AnnualRate, &rate);
     }
 
-    /// Get the current annual staking rate.
+    /// Returns the configured annual staking rate in basis points.
     pub fn get_annual_rate(env: Env) -> i128 {
         env.storage()
             .instance()
@@ -366,6 +548,7 @@ impl NovaRewardsContract {
     /// # Events
     /// Emits `(Symbol("staked"), staker)` with data `(amount, timestamp)`.
     pub fn stake(env: Env, staker: Address, amount: i128) {
+        Self::require_not_paused(&env);
         staker.require_auth();
         
         if amount <= 0 {
@@ -421,6 +604,7 @@ impl NovaRewardsContract {
     /// # Events
     /// Emits `(Symbol("unstaked"), staker)` with data `(principal, yield, timestamp)`.
     pub fn unstake(env: Env, staker: Address) -> i128 {
+        Self::require_not_paused(&env);
         staker.require_auth();
         
         // Get stake record
@@ -489,19 +673,23 @@ impl NovaRewardsContract {
         total_return
     }
 
-    /// Get stake information for a user.
+    /// Returns the active stake record for a staker, if one exists.
     pub fn get_stake(env: Env, staker: Address) -> Option<StakeRecord> {
         env.storage()
             .instance()
             .get(&DataKey::Stake(staker))
     }
 
-    /// Calculate expected yield for a stake without unstaking.
+    /// Computes accrued staking yield without removing the stake.
     pub fn calculate_yield(env: Env, staker: Address) -> i128 {
-        let stake_record: StakeRecord = env
+        let stake_record: StakeRecord = match env
             .storage()
             .instance()
-            .get(&DataKey::Stake(staker.clone()))?;
+            .get(&DataKey::Stake(staker.clone()))
+        {
+            Some(r) => r,
+            None => return 0,
+        };
         
         let annual_rate: i128 = env
             .storage()

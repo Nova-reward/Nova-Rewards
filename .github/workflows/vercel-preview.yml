@@ -10,6 +10,8 @@ jobs:
     permissions:
       pull-requests: write
       statuses: write
+    # Only run if Vercel secrets are configured
+    if: ${{ secrets.VERCEL_TOKEN != '' }}
 
     steps:
       - name: Checkout code
@@ -18,25 +20,30 @@ jobs:
       - name: Deploy to Vercel Preview
         uses: vercel/vercel-action@v23
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: novaRewards/frontend
-          scope: ${{ secrets.VERCEL_ORG_ID }}
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel Preview
+        id: deploy
+        working-directory: novaRewards/frontend
+        run: |
+          DEPLOYMENT_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --scope=${{ secrets.VERCEL_ORG_ID }} --yes 2>&1 | tail -1)
+          echo "preview-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Comment PR with deployment URL
-        if: always()
+        if: success()
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const deploymentUrl = process.env.DEPLOYMENT_URL;
-            
+            const deploymentUrl = '${{ steps.deploy.outputs.preview-url }}';
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `🚀 Preview deployment ready!\n\n[View Preview](${deploymentUrl})`
             });
-        env:
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.preview-url }}

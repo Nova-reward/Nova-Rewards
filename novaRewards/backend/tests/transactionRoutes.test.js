@@ -30,8 +30,6 @@ jest.mock('../db/userRepository', () => ({
   isAdmin: jest.fn(),
   findById: jest.fn(),
   findByWalletAddress: jest.fn(),
-  getPublicProfile: jest.fn(),
-  getPrivateProfile: jest.fn(),
   getReferredUsers: jest.fn(),
   getReferralPointsEarned: jest.fn(),
   hasReferralBonusBeenClaimed: jest.fn(),
