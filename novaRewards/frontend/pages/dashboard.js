@@ -9,6 +9,7 @@ import ReferralLink from "../components/ReferralLink";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 import StellarDropModal from "../components/StellarDropModal";
+import WalletConnect from "../components/WalletConnect";
 import { truncateAddress } from "../lib/truncateAddress";
 
 /**
@@ -25,6 +26,7 @@ function DashboardContent() {
     refreshBalance,
     freighterInstalled,
     loading,
+    error: walletError,
   } = useWallet();
   const router = useRouter();
   const dropModalRef = useRef(null);
@@ -68,6 +70,24 @@ function DashboardContent() {
   return (
     <DashboardLayout>
       <div className="dashboard-content">
+        {/* Wallet connection section */}
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h2 style={{ marginBottom: '0.25rem' }}>Wallet</h2>
+              {publicKey && (
+                <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                  {publicKey}
+                </p>
+              )}
+            </div>
+            <WalletConnect />
+          </div>
+          {walletError && (
+            <p className="error" style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>{walletError}</p>
+          )}
+        </div>
+
         {loading ? (
           <LoadingSkeleton />
         ) : (

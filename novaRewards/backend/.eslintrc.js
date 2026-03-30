@@ -1,3 +1,5 @@
+'use strict';
+
 module.exports = {
   env: {
     node: true,
@@ -7,4 +9,13 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 'latest',
   },
+  rules: {
+    'no-unused-vars': 'warn',
+  },
+  overrides: [
+    {
+      files: ['tests/**/*.js', 'jest.setup.js'],
+      env: { jest: true },
+    },
+  ],
 };
