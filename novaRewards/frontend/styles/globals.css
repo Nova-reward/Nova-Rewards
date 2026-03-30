@@ -958,3 +958,139 @@ td {
     display: none;
   }
 }
+
+/* ============================================================
+   Modal & Dialog System — Issue #332
+   ============================================================ */
+
+/* ── Overlay ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Fade-in backdrop */
+.modal-overlay-animated {
+  animation: modal-backdrop-in 180ms ease forwards;
+}
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Content panel ── */
+.modal-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Slide-up + scale-in */
+.modal-content-animated {
+  animation: modal-content-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes modal-content-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+/* Size variants */
+.modal-sm { max-width: 400px; }
+.modal-md { max-width: 560px; }
+.modal-lg { max-width: 760px; }
+
+/* ── Header ── */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 0;
+  gap: 0.75rem;
+}
+.modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.modal-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.modal-close-btn:hover { background: var(--surface-2); color: var(--text); }
+.modal-close-btn:focus-visible { outline: 2px solid var(--accent); }
+
+/* ── Body ── */
+.modal-body {
+  padding: 1.25rem 1.5rem;
+  flex: 1;
+}
+
+/* ── Footer ── */
+.modal-footer {
+  padding: 0 1.5rem 1.25rem;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  margin-top: 0.25rem;
+}
+.modal-footer .btn { min-width: 80px; }
+
+/* Legacy selectors — keep existing components working */
+.confirmation-details {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+.confirmation-details p {
+  margin-bottom: 0.5rem;
+  word-break: break-all;
+}
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+.modal-actions .btn { min-width: 80px; }
+
+/* ── Mobile: bottom sheet ── */
+@media (max-width: 600px) {
+  .modal-overlay {
+    align-items: flex-end;
+  }
+  .modal-content {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 92vh;
+  }
+  .modal-content-animated {
+    animation: modal-sheet-in 260ms cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+  }
+  @keyframes modal-sheet-in {
+    from { opacity: 0; transform: translateY(100%); }
+    to   { opacity: 1; transform: translateY(0);    }
+  }
+}
