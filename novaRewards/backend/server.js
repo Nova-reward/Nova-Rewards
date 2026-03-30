@@ -58,6 +58,7 @@ app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {
