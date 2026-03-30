@@ -9,18 +9,13 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 'latest',
   },
-  // Per-directory overrides — test files get Jest globals injected
+  rules: {
+    'no-unused-vars': 'warn',
+  },
   overrides: [
     {
-      files: ['tests/**/*.test.js', '**/*.test.js'],
-      env: {
-        jest: true, // injects describe, test, it, expect, beforeAll, etc.
-      },
-      rules: {
-        // Test files commonly use require() inside describe blocks for
-        // jest.resetModules() patterns — allow it.
-        'global-require': 'off',
-      },
+      files: ['tests/**/*.js', 'jest.setup.js'],
+      env: { jest: true },
     },
   ],
 };

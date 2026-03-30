@@ -3,9 +3,40 @@ const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { verifyTrustline, buildTrustlineXDR } = require('../../blockchain/trustline');
 
 /**
- * POST /api/trustline/verify
- * Checks whether a wallet has an active NOVA trustline.
- * Requirements: 2.3, 2.4
+ * @openapi
+ * /trustline/verify:
+ *   post:
+ *     tags: [Trustline]
+ *     summary: Check whether a wallet has an active NOVA trustline
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [walletAddress]
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+ *     responses:
+ *       200:
+ *         description: Trustline status.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     exists: { type: boolean, example: true }
+ *       400:
+ *         description: Invalid wallet address.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/verify', async (req, res, next) => {
   try {
@@ -27,9 +58,41 @@ router.post('/verify', async (req, res, next) => {
 });
 
 /**
- * POST /api/trustline/build-xdr
- * Builds an unsigned changeTrust XDR for the customer to sign with Freighter.
- * Requirements: 2.1
+ * @openapi
+ * /trustline/build-xdr:
+ *   post:
+ *     tags: [Trustline]
+ *     summary: Build an unsigned changeTrust XDR for the user to sign with Freighter
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [walletAddress]
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+ *     responses:
+ *       200:
+ *         description: XDR envelope or already_exists status.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status: { type: string, enum: [pending_signature, already_exists], example: pending_signature }
+ *                     xdr: { type: string, nullable: true, example: "AAAAAgAAAAA..." }
+ *       400:
+ *         description: Invalid wallet address.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/build-xdr', async (req, res, next) => {
   try {

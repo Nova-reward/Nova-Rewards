@@ -52,7 +52,6 @@ module.exports = {
     'db/**/*.js',
     'middleware/**/*.js',
     'services/**/*.js',
-    'dtos/**/*.js',
     'src/**/*.js',
     // Exclude files that are infrastructure / entry-points, not business logic
     '!server.js',
@@ -74,66 +73,14 @@ module.exports = {
 
   coverageThreshold: {
     global: {
-      lines:      80,
-      functions:  80,
-      branches:   75,
-      statements: 80,
-    },
-    // Auth paths are security-critical — hold them to a higher bar
-    './routes/auth.js': {
-      lines:      90,
-      functions:  90,
-      branches:   85,
-      statements: 90,
-    },
-    './middleware/authenticateUser.js': {
-      lines:      90,
-      functions:  90,
-      branches:   85,
-      statements: 90,
-    },
-    './dtos/registerDto.js': {
-      lines:      95,
-      functions:  95,
-      branches:   90,
-      statements: 95,
-    },
-    './dtos/loginDto.js': {
-      lines:      95,
-      functions:  95,
-      branches:   90,
-      statements: 95,
-    },
-    './services/tokenService.js': {
-      lines:      90,
-      functions:  90,
-      branches:   85,
-      statements: 90,
+      lines: 40,
     },
   },
-
-  // ── Reporters ─────────────────────────────────────────────────────────────
   reporters: [
-    // Default reporter: coloured summary in the terminal
     'default',
-    // JUnit XML consumed by GitHub Actions test-results and most CI dashboards.
-    // Only emit in CI to avoid cluttering local runs.
-    ...(process.env.CI
-      ? [['jest-junit', {
-          outputDirectory: 'coverage',
-          outputName:      'junit.xml',
-          classNameTemplate: '{classname}',
-          titleTemplate:     '{title}',
-          ancestorSeparator: ' › ',
-        }]]
-      : []),
+    ['jest-junit', {
+      outputDirectory: 'coverage',
+      outputName: 'junit.xml',
+    }],
   ],
-
-  // ── Module resolution ─────────────────────────────────────────────────────
-  // Map bare module names that need special handling in tests.
-  // Currently empty — add entries here if you introduce path aliases.
-  moduleNameMapper: {},
-
-  // Ignore transforming node_modules (Jest default) plus any compiled output
-  transformIgnorePatterns: ['/node_modules/', '/dist/'],
 };

@@ -96,7 +96,7 @@ describe('POST /api/rewards/distribute — campaign not found', () => {
     const response = await postDistribute(
       server,
       {
-        customerWallet: Keypair.random().publicKey(),
+        walletAddress: Keypair.random().publicKey(),
         amount: 10,
         campaignId: 999,
       },

@@ -2,22 +2,18 @@
 
 import DashboardLayout from '../components/DashboardLayout';
 import ErrorBoundary from '../components/ErrorBoundary';
+import RewardsHistory from '../components/RewardsHistory';
 import { withAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
-/**
- * History page - displays transaction history
- * Requirements: 164.2
- */
 function HistoryContent() {
+  const { user } = useAuth();
+
   return (
     <DashboardLayout>
       <div className="dashboard-content">
-        <div className="card">
-          <h2 style={{ marginBottom: '1rem' }}>📜 Transaction History</h2>
-          <p style={{ color: 'var(--muted)' }}>
-            View your complete transaction history. This feature is coming soon!
-          </p>
-        </div>
+        <h2 style={{ marginBottom: '1.5rem', fontSize: '1.4rem', fontWeight: 700 }}>📜 Reward History</h2>
+        <RewardsHistory userId={user?.id} />
       </div>
     </DashboardLayout>
   );

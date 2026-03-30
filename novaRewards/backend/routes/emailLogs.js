@@ -3,9 +3,54 @@ const { getEmailLogs, getEmailLogById } = require('../db/emailLogRepository');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
 /**
- * GET /api/admin/email-logs
- * Returns paginated email logs for admin debugging.
- * Requirements: #184
+ * @openapi
+ * /admin/email-logs:
+ *   get:
+ *     tags: [Admin]
+ *     summary: List paginated email logs
+ *     security:
+ *       - merchantApiKey: []
+ *     parameters:
+ *       - in: query
+ *         name: recipientEmail
+ *         schema: { type: string, format: email, example: alice@example.com }
+ *       - in: query
+ *         name: type
+ *         schema: { type: string, enum: [redemption_confirmation, milestone_achieved, welcome, password_reset] }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [queued, sent, delivered, failed] }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1, example: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100, example: 20 }
+ *     responses:
+ *       200:
+ *         description: Paginated email logs.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/EmailLog' }
+ *                 total: { type: integer, example: 120 }
+ *                 page: { type: integer, example: 1 }
+ *                 limit: { type: integer, example: 20 }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Missing or invalid API key.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
@@ -73,9 +118,38 @@ router.get('/', authenticateMerchant, async (req, res, next) => {
 });
 
 /**
- * GET /api/admin/email-logs/:id
- * Returns a specific email log by ID.
- * Requirements: #184
+ * @openapi
+ * /admin/email-logs/{id}:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Get a specific email log by ID
+ *     security:
+ *       - merchantApiKey: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 300 }
+ *     responses:
+ *       200:
+ *         description: Email log entry.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/EmailLog' }
+ *       400:
+ *         description: Invalid id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: Log not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id', authenticateMerchant, async (req, res, next) => {
   try {

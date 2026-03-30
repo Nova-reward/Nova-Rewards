@@ -1,15 +1,7 @@
-'use strict';
+// Expose shared backend test utilities for Jest-based tests.
+global.testUtils = require('./tests/utils');
 
-/**
- * Jest setupFilesAfterEnv — runs inside each worker after the Jest framework
- * is installed. Safe to use jest.spyOn / jest.fn / expect.extend here.
- *
- * This file runs before every test file, so keep it lean.
- */
-
-// ── Silence expected noise ────────────────────────────────────────────────
-// console.error is spied on globally so validation-error logs don't pollute
-// test output. Individual tests can restore it with jest.restoreAllMocks().
+// Suppress console.error during tests to reduce noise from expected validation errors
 jest.spyOn(console, 'error').mockImplementation(() => {});
 
 // ── Global test timeout ───────────────────────────────────────────────────
