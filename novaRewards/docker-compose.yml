@@ -42,6 +42,24 @@ services:
     volumes:
       - redis_data:/data
 
+  # One-shot service: runs all pending migrations then exits.
+  # backend depends on this completing successfully before it starts.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["node", "/migrations/migrate.js"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nova}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nova_rewards}
+    volumes:
+      - ./database:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
   backend:
     build:
       context: ./backend
