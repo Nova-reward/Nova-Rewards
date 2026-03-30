@@ -1,2 +1,1 @@
-// Suppress console.error during tests to reduce noise from expected validation errors
-jest.spyOn(console, 'error').mockImplementation(() => {});
+// Suppress console.error during tests to reduce noise from expected validation errors\njest.spyOn(console, 'error').mockImplementation(() => {});\n\n// Global test DB setup\nconst { truncateTables } = require('./tests/fixtures/db');\n\nbeforeEach(async () => {\n  await truncateTables();\n});\n\nafterAll(async () => {\n  await knex.destroy();\n});
