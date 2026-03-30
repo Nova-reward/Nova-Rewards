@@ -7,6 +7,7 @@ const {
   BASE_FEE,
 } = require('stellar-sdk');
 const { server, NOVA } = require('./stellarService');
+const { verifyTrustline } = require('./trustline');
 
 const NETWORK_PASSPHRASE =
   process.env.STELLAR_NETWORK === 'mainnet'
@@ -18,22 +19,23 @@ const INITIAL_SUPPLY = '1000000'; // 1,000,000 NOVA
 
 /**
  * Funds a Testnet account using Friendbot.
- * Safe to call on already-funded accounts — Friendbot returns an error
- * which we silently ignore.
+ * Only calls Friendbot if the account does not yet exist on the network.
  *
  * @param {string} publicKey
  */
 async function fundWithFriendbot(publicKey) {
   try {
+    await server.loadAccount(publicKey);
+    console.log(`  ${publicKey} already exists — Friendbot skipped`);
+  } catch {
+    // Account not found on network — safe to fund
     const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
     if (res.ok) {
       console.log(`  Funded ${publicKey} via Friendbot`);
     } else {
-      // Already funded — not an error
-      console.log(`  ${publicKey} already funded (Friendbot skipped)`);
+      const body = await res.text();
+      throw new Error(`Friendbot failed for ${publicKey}: ${body}`);
     }
-  } catch {
-    console.log(`  ${publicKey} already funded (Friendbot skipped)`);
   }
 }
 
@@ -49,8 +51,8 @@ async function hasTrustline(distributionPublic) {
     return account.balances.some(
       (b) =>
         b.asset_type !== 'native' &&
-        b.asset_code === 'NOVA' &&
-        b.asset_issuer === process.env.ISSUER_PUBLIC
+        b.asset_code === NOVA.code &&
+        b.asset_issuer === NOVA.issuer
     );
   } catch {
     return false;
@@ -80,7 +82,7 @@ async function issueAsset() {
 
   // Step 2: Establish trustline on Distribution Account (idempotent check)
   console.log('\n[2] Checking Distribution Account trustline...');
-  const trustlineExists = await hasTrustline(distributionKeypair.publicKey());
+  const { exists: trustlineExists } = await verifyTrustline(distributionKeypair.publicKey());
 
   if (trustlineExists) {
     console.log('  Trustline already exists — skipping.');
@@ -97,8 +99,15 @@ async function issueAsset() {
       .build();
 
     trustlineTx.sign(distributionKeypair);
-    const trustlineResult = await server.submitTransaction(trustlineTx);
-    console.log(`  Trustline created. Tx hash: ${trustlineResult.hash}`);
+    try {
+      const trustlineResult = await server.submitTransaction(trustlineTx);
+      console.log(`  Trustline created. Tx hash: ${trustlineResult.hash}`);
+    } catch (error) {
+      if (error.response?.data?.extras?.result_codes?.operations?.includes('op_underfunded')) {
+        throw new Error('Insufficient XLM balance in Distribution Account to cover transaction fees. Please fund the account with more XLM.');
+      }
+      throw error;
+    }
   }
 
   // Step 3: Send initial NOVA supply from Issuer to Distribution Account
@@ -108,8 +117,8 @@ async function issueAsset() {
   const existingBalance = distAccountCheck.balances.find(
     (b) =>
       b.asset_type !== 'native' &&
-      b.asset_code === 'NOVA' &&
-      b.asset_issuer === issuerKeypair.publicKey()
+      b.asset_code === NOVA.code &&
+      b.asset_issuer === NOVA.issuer
   );
 
   if (existingBalance && parseFloat(existingBalance.balance) > 0) {
@@ -135,8 +144,15 @@ async function issueAsset() {
       .build();
 
     paymentTx.sign(issuerKeypair);
-    const paymentResult = await server.submitTransaction(paymentTx);
-    console.log(`  Initial supply sent. Tx hash: ${paymentResult.hash}`);
+    try {
+      const paymentResult = await server.submitTransaction(paymentTx);
+      console.log(`  Initial supply sent. Tx hash: ${paymentResult.hash}`);
+    } catch (error) {
+      if (error.response?.data?.extras?.result_codes?.operations?.includes('op_underfunded')) {
+        throw new Error('Insufficient XLM balance in Issuer Account to cover transaction fees. Please fund the account with more XLM.');
+      }
+      throw error;
+    }
   }
 
   console.log('\n=== Asset issuance complete ===');

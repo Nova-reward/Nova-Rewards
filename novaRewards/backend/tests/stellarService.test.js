@@ -44,11 +44,13 @@ describe('isValidStellarAddress', () => {
   // Property 6: valid keypairs should always be accepted
   test('accepts valid Stellar public keys generated from keypairs', () => {
     fc.assert(
-      fc.property(fc.constant(null), () => {
-        const keypair = Keypair.random();
-        expect(isValidStellarAddress(keypair.publicKey())).toBe(true);
-        return true;
-      }),
+      fc.property(
+        fc.uint8Array({ minLength: 32, maxLength: 32 }),
+        (seed) => {
+          const keypair = Keypair.fromRawEd25519Seed(Buffer.from(seed));
+          expect(isValidStellarAddress(keypair.publicKey())).toBe(true);
+        }
+      ),
       { numRuns: 100 }
     );
   });

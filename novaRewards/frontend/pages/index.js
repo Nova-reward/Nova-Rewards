@@ -3,12 +3,17 @@ import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 
 export default function Home() {
-  const { publicKey, connect, isLoading, error, freighterInstalled } = useWalletStore();
+  const { publicKey, connect, loading, error, freighterInstalled, disconnect } = useWallet();
   const router = useRouter();
 
   useEffect(() => {
     if (publicKey) router.push('/dashboard');
   }, [publicKey, router]);
+
+  const handleDisconnect = () => {
+    disconnect();
+    router.push('/');
+  };
 
   return (
     <>
@@ -16,6 +21,17 @@ export default function Home() {
         <span className="nav-brand">⭐ NovaRewards</span>
         <div className="nav-links">
           <a href="/merchant">Merchant Portal</a>
+          <a href="/auth/register">Email Sign Up</a>
+          <a href="/auth/login">Email Login</a>
+          {publicKey && (
+            <button
+              className="btn btn-secondary"
+              onClick={handleDisconnect}
+              style={{ padding: "0.4rem 1rem" }}
+            >
+              Disconnect
+            </button>
+          )}
         </div>
       </nav>
 

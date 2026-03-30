@@ -10,6 +10,8 @@ const REQUIRED_ENV_VARS = [
   'STELLAR_NETWORK',
   'HORIZON_URL',
   'DATABASE_URL',
+  'REDIS_URL',
+  'JWT_SECRET',
 ];
 
 /**
@@ -21,6 +23,11 @@ const REQUIRED_ENV_VARS = [
  */
 function validateEnv() {
   const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
+
+  // In production, ALLOWED_ORIGIN is also required for CORS security
+  if (process.env.NODE_ENV === 'production' && !process.env.ALLOWED_ORIGIN) {
+    missing.push('ALLOWED_ORIGIN');
+  }
 
   if (missing.length > 0) {
     missing.forEach((key) => {

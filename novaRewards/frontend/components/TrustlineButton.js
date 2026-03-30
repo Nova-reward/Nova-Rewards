@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
-import { useWalletStore } from '../store/walletStore';
+import TransactionLink from './TransactionLink';
 
 /**
  * Button that creates a NOVA trustline for the connected wallet.
@@ -13,21 +13,17 @@ export default function TrustlineButton({ onSuccess }) {
   const { publicKey: walletAddress } = useWalletStore();
   const [status, setStatus] = useState('idle'); // idle | loading | done | error
   const [message, setMessage] = useState('');
+  const [txHash, setTxHash] = useState('');
 
   async function handleCreateTrustline() {
     setStatus('loading');
     setMessage('');
+    setTxHash('');
     try {
-      const { data } = await api.post('/api/trustline/build-xdr', { walletAddress });
+      const { data } = await api.post('/api/trustline/build', { walletAddress });
 
-      if (data.data.status === 'already_exists') {
-        setStatus('done');
-        setMessage('Trustline already exists.');
-        onSuccess?.();
-        return;
-      }
-
-      await signAndSubmit(data.data.xdr);
+      const result = await signAndSubmit(data.xdr);
+      setTxHash(result.txHash);
       setStatus('done');
       setMessage('Trustline created successfully.');
       onSuccess?.();
@@ -47,7 +43,12 @@ export default function TrustlineButton({ onSuccess }) {
         {status === 'loading' ? 'Creating trustline…' : status === 'done' ? '✓ Trustline active' : 'Create NOVA Trustline'}
       </button>
       {message && (
-        <p className={status === 'error' ? 'error' : 'success'}>{message}</p>
+        <p className={status === 'error' ? 'error' : 'success'}>
+          {message}
+          {txHash && (
+            <span> Transaction: <TransactionLink txHash={txHash} /></span>
+          )}
+        </p>
       )}
     </div>
   );
