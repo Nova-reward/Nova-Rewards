@@ -14,9 +14,33 @@ const { runBackupCycle } = require('../jobs/backupJob');
 router.use(authenticateUser, requireAdmin);
 
 /**
- * GET /api/admin/stats
- * Aggregate platform counts: users, points issued, redemptions, active rewards.
- * Requirements: #186
+ * @openapi
+ * /admin/stats:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Get aggregate platform statistics
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Platform stats.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/AdminStats' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Admin role required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/stats', async (req, res, next) => {
   try {
@@ -28,9 +52,46 @@ router.get('/stats', async (req, res, next) => {
 });
 
 /**
- * GET /api/admin/users?search=&page=1&limit=20
- * Paginated user list, searchable by email or name.
- * Requirements: #186
+ * @openapi
+ * /admin/users:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Paginated user list, searchable by email or name
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema: { type: string, example: alice }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1, example: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100, example: 20 }
+ *     responses:
+ *       200:
+ *         description: Paginated user list.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     users:
+ *                       type: array
+ *                       items: { $ref: '#/components/schemas/User' }
+ *                     total: { type: integer, example: 1500 }
+ *                     page: { type: integer, example: 1 }
+ *                     limit: { type: integer, example: 20 }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/users', async (req, res, next) => {
   try {
@@ -44,56 +105,45 @@ router.get('/users', async (req, res, next) => {
 });
 
 /**
- * GET /api/admin/backups
- * Lists encrypted base backups available for recovery planning.
- */
-router.get('/backups', async (req, res, next) => {
-  try {
-    const backups = await listBackups();
-    res.json({ success: true, data: backups });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * POST /api/admin/backups
- * Triggers an immediate encrypted base backup.
- */
-router.post('/backups', async (req, res, next) => {
-  try {
-    const result = await runBackupCycle(new Date(), 'manual');
-    res.status(201).json({ success: true, data: result });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * POST /api/admin/backups/recovery-plan
- * Builds a point-in-time recovery plan from the nearest base backup plus WAL.
- */
-router.post('/backups/recovery-plan', async (req, res, next) => {
-  try {
-    if (!req.body?.targetTime) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'targetTime is required',
-      });
-    }
-
-    const plan = await buildRecoveryPlan({ targetTime: req.body.targetTime });
-    res.json({ success: true, data: plan });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * POST /api/admin/rewards
- * Create a new reward entry.
- * Requirements: #186
+ * @openapi
+ * /admin/rewards:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Create a new reward
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, cost]
+ *             properties:
+ *               name: { type: string, example: "10% Off Voucher" }
+ *               cost: { type: integer, example: 500 }
+ *               stock: { type: integer, example: 100 }
+ *               isActive: { type: boolean, example: true }
+ *     responses:
+ *       201:
+ *         description: Reward created.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/Reward' }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/rewards', async (req, res, next) => {
   try {
@@ -109,9 +159,43 @@ router.post('/rewards', async (req, res, next) => {
 });
 
 /**
- * PATCH /api/admin/rewards/:id
- * Update reward details (name, cost, stock, isActive).
- * Requirements: #186
+ * @openapi
+ * /admin/rewards/{id}:
+ *   patch:
+ *     tags: [Admin]
+ *     summary: Update a reward
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 12 }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string, example: "15% Off Voucher" }
+ *               cost: { type: integer, example: 600 }
+ *               stock: { type: integer, example: 80 }
+ *               isActive: { type: boolean, example: false }
+ *     responses:
+ *       200:
+ *         description: Updated reward.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/Reward' }
+ *       404:
+ *         description: Reward not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.patch('/rewards/:id', async (req, res, next) => {
   try {
@@ -127,9 +211,33 @@ router.patch('/rewards/:id', async (req, res, next) => {
 });
 
 /**
- * DELETE /api/admin/rewards/:id
- * Soft-delete a reward.
- * Requirements: #186
+ * @openapi
+ * /admin/rewards/{id}:
+ *   delete:
+ *     tags: [Admin]
+ *     summary: Soft-delete a reward
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 12 }
+ *     responses:
+ *       200:
+ *         description: Reward deleted.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Reward deleted" }
+ *       404:
+ *         description: Reward not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.delete('/rewards/:id', async (req, res, next) => {
   try {
