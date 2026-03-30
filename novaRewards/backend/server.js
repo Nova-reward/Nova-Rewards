@@ -43,7 +43,7 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// Rate limiting — global default, stricter on auth endpoints
+// Rate limiting — fixed-window global baseline
 app.use(globalLimiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/forgot-password", authLimiter);

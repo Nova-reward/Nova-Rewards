@@ -209,6 +209,9 @@ export default function DashboardLayout({ children }) {
           {children}
         </main>
       </div>
+
+      {/* Bottom navigation — mobile only */}
+      <BottomNav />
     </div>
   );
 }
