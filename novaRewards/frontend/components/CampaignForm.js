@@ -1,13 +1,16 @@
 'use client';
 import { useState } from 'react';
 import api from '../lib/api';
+import { useAuthStore } from '../store/authStore';
 
 /**
  * Form for creating a new reward campaign.
  * Client-side validation mirrors backend validateCampaign rules.
  * Requirements: 7.2, 7.3, 10.3
  */
-export default function CampaignForm({ merchantId, apiKey, onSuccess }) {
+export default function CampaignForm({ onSuccess }) {
+  const { user: merchant, token: apiKey } = useAuthStore();
+  const merchantId = merchant?.id;
   const [form, setForm] = useState({
     name: '',
     rewardRate: '',

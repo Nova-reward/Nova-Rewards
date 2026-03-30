@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StrKey, Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
+import { useWalletStore } from '../store/walletStore';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -13,7 +14,8 @@ const NETWORK_PASSPHRASE =
  * Form for sending NOVA tokens to another wallet (peer-to-peer).
  * Requirements: 5.1, 5.2, 5.3, 5.6
  */
-export default function TransferForm({ senderPublicKey, senderBalance, onSuccess }) {
+export default function TransferForm({ onSuccess }) {
+  const { publicKey: senderPublicKey, balance: senderBalance } = useWalletStore();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');
