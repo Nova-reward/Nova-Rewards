@@ -29,6 +29,7 @@ const corsOptions =
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(tracingMiddleware);
 app.use(metricsMiddleware);
 
 // Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
@@ -64,6 +65,20 @@ app.get("/metrics", async (req, res) => {
 });
 
 // Routes (wired in as they are implemented)
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/merchants', require('./routes/merchants'));
+app.use('/api/campaigns', require('./routes/campaigns'));
+app.use('/api/rewards', require('./routes/rewards'));
+app.use('/api/redemptions', require('./routes/redemptions'));
+app.use('/api/transactions', require('./routes/transactions'));
+app.use('/api/trustline', require('./routes/trustline'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/contract-events', require('./routes/contractEvents'));
+app.use('/api/admin/email-logs', require('./routes/emailLogs'));
+app.use('/api/leaderboard', require('./routes/leaderboard'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/drops', require('./routes/drops'));
+app.use('/api/analytics', require('./routes/analytics'));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/merchants", require("./routes/merchants"));
 app.use("/api/campaigns", require("./routes/campaigns"));
