@@ -7,9 +7,11 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  backend-tests:
     runs-on: ubuntu-latest
     name: Backend Tests
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -20,19 +22,94 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: novaRewards/backend/package-lock.json
+          cache-dependency-path: novaRewards/package-lock.json
 
       - name: Install dependencies
-        working-directory: novaRewards/backend
-        run: npm install
+        working-directory: novaRewards
+        run: npm ci
 
-      - name: Run tests
+      - name: Run backend tests with coverage
+        working-directory: novaRewards
+        run: npm run test:ci -w backend
+
+      - name: Publish backend summary
+        if: always()
         working-directory: novaRewards/backend
-        run: npx jest --runInBand --ci
+        run: |
+          node -e "const fs=require('fs'); const summaryPath='coverage/coverage-summary.json'; const resultsPath='test-results/results.json'; if (!fs.existsSync(resultsPath)) process.exit(0); const results=JSON.parse(fs.readFileSync(resultsPath,'utf8')); const lines=[]; lines.push('## Backend test results'); lines.push(''); lines.push(`- Suites: ${results.numPassedTestSuites}/${results.numTotalTestSuites} passed`); lines.push(`- Tests: ${results.numPassedTests}/${results.numTotalTests} passed`); if (fs.existsSync(summaryPath)) { const coverage=JSON.parse(fs.readFileSync(summaryPath,'utf8')).total; lines.push(`- Coverage: statements ${coverage.statements.pct}%, branches ${coverage.branches.pct}%, functions ${coverage.functions.pct}%, lines ${coverage.lines.pct}%`); } lines.push(''); fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');"
+
+      - name: Upload backend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            novaRewards/backend/test-results/results.json
+            novaRewards/backend/test-results/junit.xml
+
+      - name: Upload backend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: |
+            novaRewards/backend/coverage
+            !novaRewards/backend/coverage/tmp
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    name: Frontend Tests
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: novaRewards/package-lock.json
+
+      - name: Install dependencies
+        working-directory: novaRewards
+        run: npm ci
+
+      - name: Run frontend unit tests with coverage
+        working-directory: novaRewards
+        run: npm run test:ci -w frontend
+
+      - name: Publish frontend summary
+        if: always()
+        working-directory: novaRewards/frontend
+        run: |
+          node -e "const fs=require('fs'); const summaryPath='coverage/coverage-summary.json'; const resultsPath='test-results/results.json'; if (!fs.existsSync(resultsPath)) process.exit(0); const results=JSON.parse(fs.readFileSync(resultsPath,'utf8')); const lines=[]; lines.push('## Frontend test results'); lines.push(''); lines.push(`- Suites: ${results.numPassedTestSuites}/${results.numTotalTestSuites} passed`); lines.push(`- Tests: ${results.numPassedTests}/${results.numTotalTests} passed`); if (fs.existsSync(summaryPath)) { const coverage=JSON.parse(fs.readFileSync(summaryPath,'utf8')).total; lines.push(`- Coverage: statements ${coverage.statements.pct}%, branches ${coverage.branches.pct}%, functions ${coverage.functions.pct}%, lines ${coverage.lines.pct}%`); } lines.push(''); fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');"
+
+      - name: Upload frontend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: |
+            novaRewards/frontend/test-results/results.json
+            novaRewards/frontend/test-results/junit.xml
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: |
+            novaRewards/frontend/coverage
 
   frontend-build:
     runs-on: ubuntu-latest
     name: Frontend Build Check
+    permissions:
+      contents: read
+    needs: frontend-tests
     
     steps:
       - name: Checkout code
@@ -45,12 +122,12 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        working-directory: novaRewards/frontend
-        run: npm install
+        working-directory: novaRewards
+        run: npm ci
 
       - name: Build frontend
-        working-directory: novaRewards/frontend
-        run: npm run build
+        working-directory: novaRewards
+        run: npm run build -w frontend
         env:
           NEXT_PUBLIC_API_URL: https://api.nova-rewards.xyz
           NEXT_PUBLIC_HORIZON_URL: https://horizon.stellar.org
