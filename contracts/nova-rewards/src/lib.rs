@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    token, Address, BytesN, Env, Vec,
+    Address, BytesN, Env, IntoVal, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -199,10 +199,10 @@ impl NovaRewardsContract {
             &soroban_sdk::Symbol::new(&env, "swap_exact_in"),
             soroban_sdk::vec![
                 &env,
-                user.clone().into(),
-                nova_amount.into(),
-                min_xlm_out.into(),
-                path.clone().into(),
+                user.clone().into_val(&env),
+                nova_amount.into_val(&env),
+                min_xlm_out.into_val(&env),
+                path.clone().into_val(&env),
             ],
         );
 
@@ -479,10 +479,13 @@ impl NovaRewardsContract {
 
     /// Calculate expected yield for a stake without unstaking.
     pub fn calculate_yield(env: Env, staker: Address) -> i128 {
-        let stake_record: StakeRecord = env
+        let Some(stake_record) = env
             .storage()
             .instance()
-            .get(&DataKey::Stake(staker.clone()))?;
+            .get::<_, StakeRecord>(&DataKey::Stake(staker.clone()))
+        else {
+            return 0;
+        };
         
         let annual_rate: i128 = env
             .storage()

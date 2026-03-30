@@ -7,6 +7,25 @@ on:
     branches: [main]
 
 jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    name: Soroban Contracts
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Run contract tests
+        run: cargo test --manifest-path contracts/Cargo.toml --workspace
+
+      - name: Build contracts
+        run: cargo build --manifest-path contracts/Cargo.toml --workspace --target wasm32v1-none --release
+
   test:
     runs-on: ubuntu-latest
     name: Backend Tests

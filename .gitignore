@@ -6,3 +6,7 @@ novaRewards/backend/coverage/
 dist/
 build/
 .DS_Store
+contracts/target/
+target/
+.env.testnet
+.env.mainnet
