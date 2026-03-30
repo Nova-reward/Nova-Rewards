@@ -13,6 +13,7 @@
     "generate:openapi": "node -e \"const fs=require('fs'); const swagger=require('./swagger'); fs.mkdirSync('../..//docs', { recursive: true}); fs.writeFileSync('../../docs/openapi.json', JSON.stringify(swagger, null, 2)); console.log('docs/openapi.json generated');\""  
   },
   "dependencies": {
+    "@elastic/elasticsearch": "^8.13.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -33,6 +34,7 @@
     "eslint": "^8.57.0",
     "fast-check": "^3.23.2",
     "jest": "^29.7.0",
+    "jest-junit": "^16.0.0",
     "nodemon": "^3.1.14",
     "supertest": "^6.3.3"
   }

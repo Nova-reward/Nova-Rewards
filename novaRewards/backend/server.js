@@ -10,6 +10,7 @@ const cors = require('cors');
 const { connectRedis } = require('./lib/redis');
 const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
+const { startWebhookRetryJob } = require('./jobs/webhookRetry');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
 
@@ -70,7 +71,8 @@ app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
-app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/search', require('./routes/search'));
+app.use('/api/webhooks', require('./routes/webhooks'));
 
 // Swagger/OpenAPI docs
 const swaggerUi = require('swagger-ui-express');
@@ -96,6 +98,7 @@ if (require.main === module) {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
+    startWebhookRetryJob();
     // Register event listeners
     require('./services/redemptionEventListener').registerRedemptionEventListener();
     console.log(`NovaRewards backend running on port ${PORT}`);
