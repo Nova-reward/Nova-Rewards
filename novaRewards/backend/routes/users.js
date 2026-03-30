@@ -11,9 +11,45 @@ const { isValidStellarAddress, getNOVABalance } = require('../../blockchain/stel
 const { client: redisClient } = require('../lib/redis');
 
 /**
- * POST /api/users
- * Creates a new user with optional referral tracking.
- * Requirements: #181
+ * @openapi
+ * /users:
+ *   post:
+ *     tags: [Users]
+ *     summary: Create a new user with optional referral tracking
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [walletAddress]
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+ *               referralCode:
+ *                 type: string
+ *                 example: GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN
+ *     responses:
+ *       201:
+ *         description: User created.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: Wallet address already registered.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -54,8 +90,35 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * GET /api/users/:walletAddress/points
- * Returns the current point balance for a wallet address.
+ * @openapi
+ * /users/{walletAddress}/points:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get current point balance for a wallet address
+ *     parameters:
+ *       - in: path
+ *         name: walletAddress
+ *         required: true
+ *         schema: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *     responses:
+ *       200:
+ *         description: Point balance.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     walletAddress: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *                     balance: { type: number, example: 1250.5 }
+ *       400:
+ *         description: Invalid wallet address.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:walletAddress/points', async (req, res, next) => {
   try {
@@ -182,9 +245,43 @@ router.get('/:id/token-balance', async (req, res, next) => {
 });
 
 /**
- * GET /api/users/:id
- * Returns public profile for non-owners, private profile for owners/admins.
- * Requirements: 183.1
+ * @openapi
+ * /users/{id}:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get user profile (public or private depending on ownership)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: User profile.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       400:
+ *         description: Invalid id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id', authenticateUser, requireOwnershipOrAdmin, async (req, res, next) => {
   try {
@@ -217,9 +314,40 @@ router.get('/:id', authenticateUser, requireOwnershipOrAdmin, async (req, res, n
 });
 
 /**
- * GET /api/users/:id/referrals
- * Returns referral statistics for a user.
- * Requirements: #181
+ * @openapi
+ * /users/{id}/referrals:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get referral statistics for a user
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: Referral stats.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     total_referrals: { type: integer, example: 5 }
+ *                     total_bonus_earned: { type: number, example: 250 }
+ *       400:
+ *         description: Invalid id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id/referrals', async (req, res, next) => {
   try {
@@ -246,9 +374,53 @@ router.get('/:id/referrals', async (req, res, next) => {
 });
 
 /**
- * PATCH /api/users/:id
- * Partial profile update.
- * Requirements: 183.2, 183.4
+ * @openapi
+ * /users/{id}:
+ *   patch:
+ *     tags: [Users]
+ *     summary: Partial profile update
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName: { type: string, example: Alice }
+ *               lastName: { type: string, example: Smith }
+ *               bio: { type: string, example: "Stellar enthusiast" }
+ *               stellarPublicKey: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *     responses:
+ *       200:
+ *         description: Updated user profile.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Forbidden — not owner or admin.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.patch('/:id', authenticateUser, validateUpdateUserDto, async (req, res, next) => {
   try {
@@ -280,9 +452,43 @@ router.patch('/:id', authenticateUser, validateUpdateUserDto, async (req, res, n
 });
 
 /**
- * DELETE /api/users/:id
- * Soft-delete and anonymise PII.
- * Requirements: 183.3
+ * @openapi
+ * /users/{id}:
+ *   delete:
+ *     tags: [Users]
+ *     summary: Soft-delete and anonymise a user account
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: Account deleted.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "User account deleted successfully" }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Forbidden.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.delete('/:id', authenticateUser, async (req, res, next) => {
   try {
@@ -308,9 +514,44 @@ router.delete('/:id', authenticateUser, async (req, res, next) => {
 });
 
 /**
- * POST /api/users/:id/referrals/process
- * Manually processes a referral bonus.
- * Requirements: #181
+ * @openapi
+ * /users/{id}/referrals/process:
+ *   post:
+ *     tags: [Users]
+ *     summary: Manually process a referral bonus
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *         description: Referrer user ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [referredUserId]
+ *             properties:
+ *               referredUserId: { type: integer, example: 99 }
+ *     responses:
+ *       200:
+ *         description: Referral bonus processed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     bonus: { type: number, example: 50 }
+ *       400:
+ *         description: Validation or referral error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/:id/referrals/process', async (req, res, next) => {
   try {
