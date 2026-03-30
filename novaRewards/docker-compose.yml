@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
       - .env.example
@@ -11,6 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database:/docker-entrypoint-initdb.d:ro
+      - ./backups/wal:/var/lib/postgresql/wal-archive
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nova} -d ${POSTGRES_DB:-nova_rewards}"]
       interval: 5s
@@ -18,6 +21,18 @@ services:
       retries: 10
     ports:
       - "5432:5432"
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=60s
+      - -c
+      - max_wal_senders=3
+      - -c
+      - archive_command=/usr/local/bin/archive-wal.sh %p %f
 
   redis:
     image: redis:7-alpine
@@ -26,6 +41,24 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+
+  # One-shot service: runs all pending migrations then exits.
+  # backend depends on this completing successfully before it starts.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["node", "/migrations/migrate.js"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nova}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nova_rewards}
+    volumes:
+      - ./database:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
 
   backend:
     build:

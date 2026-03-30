@@ -1,0 +1,27 @@
+# Environment variables
+.env
+
+# Grafana data
+grafana_data/
+
+# Prometheus data
+prometheus_data/
+
+# Alertmanager data
+alertmanager_data/
+
+# Backups
+backups/
+*.tar.gz
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

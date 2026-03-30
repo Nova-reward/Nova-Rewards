@@ -8,7 +8,7 @@ import api from '../lib/api';
 
 const NotificationContext = createContext(null);
 
-const MAX_NOTIFICATIONS = 10;
+const MAX_NOTIFICATIONS = 50;
 
 const TYPE_ICONS = {
   reward: '🎁',
@@ -22,7 +22,6 @@ export function getTypeIcon(type) {
   return TYPE_ICONS[type] || '🔔';
 }
 
-/** Returns a relative time string like "2m ago", "1h ago", "3d ago" */
 export function relativeTime(isoString) {
   const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
   if (diff < 60) return `${diff}s ago`;
@@ -31,7 +30,6 @@ export function relativeTime(isoString) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-/** Plays a subtle notification sound via the Web Audio API (no asset needed). */
 function playNotificationSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -45,7 +43,7 @@ function playNotificationSound() {
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.3);
   } catch {
-    // AudioContext not available (SSR / restricted env) — silently ignore
+    // AudioContext not available — silently ignore
   }
 }
 
@@ -54,15 +52,14 @@ export function NotificationProvider({ children }) {
   const { addToast } = useToast();
 
   const [notifications, setNotifications] = useState([]);
+  const [archived, setArchived] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const socketRef = useRef(null);
-  // Keep a ref so the socket event handler always sees the latest value
   const dropdownOpenRef = useRef(dropdownOpen);
   useEffect(() => { dropdownOpenRef.current = dropdownOpen; }, [dropdownOpen]);
 
-  // ── Socket lifecycle ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated || !token) return;
 
@@ -74,13 +71,11 @@ export function NotificationProvider({ children }) {
     socketRef.current = socket;
 
     socket.on('notification', (notification) => {
-      // Prepend and cap at MAX_NOTIFICATIONS
       setNotifications((prev) => [notification, ...prev].slice(0, MAX_NOTIFICATIONS));
-
       if (!dropdownOpenRef.current) {
         setUnreadCount((c) => c + 1);
         playNotificationSound();
-        addToast(notification.message, 'info');
+        addToast(notification.message, notification.type || 'info');
       }
     });
 
@@ -90,7 +85,6 @@ export function NotificationProvider({ children }) {
     };
   }, [isAuthenticated, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Actions ───────────────────────────────────────────────────────────────
   const addNotification = useCallback((notification) => {
     setNotifications((prev) => [notification, ...prev].slice(0, MAX_NOTIFICATIONS));
     setUnreadCount((c) => c + 1);
@@ -100,13 +94,32 @@ export function NotificationProvider({ children }) {
     setNotifications(list.slice(0, MAX_NOTIFICATIONS));
   }, []);
 
+  const dismiss = useCallback((id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    setArchived((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  const archive = useCallback((id) => {
+    setNotifications((prev) => {
+      const target = prev.find((n) => n.id === id);
+      if (target) setArchived((a) => [target, ...a]);
+      return prev.filter((n) => n.id !== id);
+    });
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setNotifications([]);
+    setArchived([]);
+    setUnreadCount(0);
+  }, []);
+
   const openDropdown = useCallback(async () => {
     setDropdownOpen(true);
     setUnreadCount(0);
     try {
       await api.patch('/api/notifications/read-all');
     } catch {
-      // Non-critical — badge is already cleared client-side
+      // Non-critical
     }
   }, []);
 
@@ -116,10 +129,14 @@ export function NotificationProvider({ children }) {
     <NotificationContext.Provider
       value={{
         notifications,
+        archived,
         unreadCount,
         dropdownOpen,
         addNotification,
         setNotifications: setNotificationsList,
+        dismiss,
+        archive,
+        clearAll,
         openDropdown,
         closeDropdown,
       }}
