@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    token, Address, BytesN, Env, Vec,
+    Address, BytesN, Env, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -24,6 +24,9 @@ pub struct StakeRecord {
 pub enum DataKey {
     Admin,
     Balance(Address),
+    /// Target migration version — incremented by upgrade().
+    MigrationVersion,
+    /// Last completed migration — incremented by migrate().
     MigratedVersion,
     /// Address of the XLM SAC token contract
     XlmToken,
@@ -35,16 +38,11 @@ pub enum DataKey {
     Stake(Address),
 }
 
-// Current code version — bump this with every upgrade that needs a migration.
-const CONTRACT_VERSION: u32 = 1;
-
 // ---------------------------------------------------------------------------
 // Fixed-point arithmetic (Issue #205)
 // ---------------------------------------------------------------------------
 
 /// Scale factor for 6 decimal places of precision.
-/// All rate arguments are expressed as integers scaled by this factor.
-/// e.g. a 3.3333% rate is passed as 33_333 (= 0.033333 × 1_000_000).
 pub const SCALE_FACTOR: i128 = 1_000_000;
 
 /// Seconds per year for yield calculations
@@ -118,6 +116,7 @@ impl NovaRewardsContract {
             panic!("already initialized");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::MigrationVersion, &0u32);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
     }
 
@@ -139,18 +138,7 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     /// Burns `nova_amount` Nova points for the caller and exchanges them for
-    /// XLM (or another output asset) via the configured DEX router.
-    ///
-    /// # Parameters
-    /// - `user`         – the account authorising and receiving the swap
-    /// - `nova_amount`  – Nova points to burn (must be > 0)
-    /// - `min_xlm_out`  – minimum acceptable output; reverts if not met (slippage guard)
-    /// - `path`         – intermediate asset addresses for multi-hop routing
-    ///                    (max 5 hops per Stellar protocol limits; may be empty
-    ///                    for a direct NOVA→XLM swap)
-    ///
-    /// # Events
-    /// Emits `(Symbol("swap"), user)` with data `(nova_amount, xlm_received, path)`.
+    /// XLM via the configured DEX router.
     pub fn swap_for_xlm(
         env: Env,
         user: Address,
@@ -160,19 +148,16 @@ impl NovaRewardsContract {
     ) -> i128 {
         user.require_auth();
 
-        // Validate inputs
         if nova_amount <= 0 {
             panic!("nova_amount must be positive");
         }
         if min_xlm_out < 0 {
             panic!("min_xlm_out must be non-negative");
         }
-        // Stellar protocol: path_payment allows at most 5 intermediate hops
         if path.len() > 5 {
             panic!("path exceeds maximum of 5 hops");
         }
 
-        // --- Burn Nova points ---
         let balance: i128 = env
             .storage()
             .instance()
@@ -185,9 +170,6 @@ impl NovaRewardsContract {
             .instance()
             .set(&DataKey::Balance(user.clone()), &(balance - nova_amount));
 
-        // --- Execute swap via router ---
-        // The router contract must implement swap_exact_in(sender, nova_amount,
-        // min_out, path) -> i128 (returns actual XLM received).
         let router: Address = env
             .storage()
             .instance()
@@ -206,12 +188,10 @@ impl NovaRewardsContract {
             ],
         );
 
-        // Slippage guard — revert if router returned less than minimum
         if xlm_received < min_xlm_out {
             panic!("slippage: received {} < min {}", xlm_received, min_xlm_out);
         }
 
-        // --- Emit event ---
         env.events().publish(
             (symbol_short!("swap"), user),
             (nova_amount, xlm_received, path),
@@ -224,9 +204,14 @@ impl NovaRewardsContract {
     // Upgrade (Issue #206)
     // -----------------------------------------------------------------------
 
-    /// Replaces the contract WASM with `new_wasm_hash`.
-    /// Only the admin may call this.
-    /// Emits: topics=(upgrade, old_hash, new_hash), data=migration_version
+    /// Replaces the contract WASM with `new_wasm_hash`. Admin only.
+    ///
+    /// - Increments `migration_version` in instance storage.
+    /// - Stores `new_wasm_hash` so `migrate()` can include it in the event.
+    /// - Calls `env.deployer().update_current_contract_wasm(new_wasm_hash)`.
+    ///
+    /// After this call the caller must invoke `migrate()` to apply any
+    /// data transformations for the new version.
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
         let admin: Address = env
             .storage()
@@ -235,24 +220,31 @@ impl NovaRewardsContract {
             .expect("not initialized");
         admin.require_auth();
 
-        let old_wasm_hash = env.current_contract_address();
+        // Bump the target migration version.
         let migration_version: u32 = env
             .storage()
             .instance()
-            .get(&DataKey::MigratedVersion)
-            .unwrap_or(0);
+            .get(&DataKey::MigrationVersion)
+            .unwrap_or(0)
+            + 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::MigrationVersion, &migration_version);
 
+        // Persist the hash so migrate() can emit it.
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingWasmHash, &new_wasm_hash.clone());
+
+        // Swap the WASM — execution continues in the new code after this line.
         env.deployer()
-            .update_current_contract_wasm(new_wasm_hash.clone());
-
-        env.events().publish(
-            (symbol_short!("upgrade"), old_wasm_hash, new_wasm_hash),
-            migration_version,
-        );
+            .update_current_contract_wasm(new_wasm_hash);
     }
 
-    /// Runs data migrations for the current code version.
-    /// Safe to call multiple times — only executes once per version bump.
+    /// Runs data migrations for the pending version. Admin only.
+    ///
+    /// Gated: panics if `migrated_version >= migration_version` (already done).
+    /// Emits `upgraded` event with the new WASM hash and migration version.
     pub fn migrate(env: Env) {
         let admin: Address = env
             .storage()
@@ -261,22 +253,43 @@ impl NovaRewardsContract {
             .expect("not initialized");
         admin.require_auth();
 
-        let stored_version: u32 = env
+        let migration_version: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MigrationVersion)
+            .unwrap_or(0);
+        let migrated_version: u32 = env
             .storage()
             .instance()
             .get(&DataKey::MigratedVersion)
             .unwrap_or(0);
 
-        if CONTRACT_VERSION <= stored_version {
+        if migrated_version >= migration_version {
             panic!("migration already applied");
         }
 
-        // --- place version-specific migration logic here ---
-        // e.g. backfill new fields, rename keys, etc.
+        // ---------------------------------------------------------------
+        // Version-specific migration logic goes here.
+        // Add `if migration_version == N { ... }` blocks as needed.
+        // ---------------------------------------------------------------
 
+        // Mark this version as migrated.
         env.storage()
             .instance()
-            .set(&DataKey::MigratedVersion, &CONTRACT_VERSION);
+            .set(&DataKey::MigratedVersion, &migration_version);
+
+        // Retrieve the WASM hash stored by upgrade().
+        let wasm_hash: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingWasmHash)
+            .expect("no pending wasm hash");
+
+        // Emit the upgraded event.
+        env.events().publish(
+            (symbol_short!("upgraded"),),
+            (wasm_hash, migration_version),
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -296,6 +309,13 @@ impl NovaRewardsContract {
             .unwrap_or(0)
     }
 
+    pub fn get_migration_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MigrationVersion)
+            .unwrap_or(0)
+    }
+
     pub fn get_migrated_version(env: Env) -> u32 {
         env.storage()
             .instance()
@@ -303,8 +323,7 @@ impl NovaRewardsContract {
             .unwrap_or(0)
     }
 
-    /// Thin contract entry-point that delegates to the free `calculate_payout`
-    /// function. Exposed so off-chain callers can verify payout amounts.
+    /// Exposed so off-chain callers can verify payout amounts.
     pub fn calc_payout(_env: Env, balance: i128, rate: i128) -> i128 {
         calculate_payout(balance, rate)
     }
