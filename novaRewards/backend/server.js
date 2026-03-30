@@ -73,6 +73,7 @@ app.use('/api/contract-events', require('./routes/contractEvents'));
 app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin/batch', require('./routes/batch'));
 app.use('/api/drops', require('./routes/drops'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/webhooks', require('./routes/webhooks'));
@@ -130,6 +131,8 @@ if (require.main === module) {
     startWebhookRetryJob();
     // Register event listeners
     require('./services/redemptionEventListener').registerRedemptionEventListener();
+    // Start batch processing workers
+    require('./services/batchQueue');
     console.log(`NovaRewards backend running on port ${PORT}`);
   });
 }
