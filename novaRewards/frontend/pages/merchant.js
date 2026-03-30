@@ -1,21 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import CampaignForm from '../components/CampaignForm';
-import IssueRewardForm from '../components/IssueRewardForm';
-import api from '../lib/api';
-import { useAuthStore } from '../store/authStore';
-import { useCampaignStore } from '../store/campaignStore';
-import DashboardLayout from '../components/layout/DashboardLayout';
-import { 
-  PlusCircle, 
-  Users, 
-  BarChart3, 
-  Key, 
-  Briefcase, 
-  ArrowUpRight, 
-  ArrowDownLeft,
-  Store,
-  FileText
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from "react";
+import CampaignForm from "../components/CampaignForm";
+import IssueRewardForm from "../components/IssueRewardForm";
+import api from "../lib/api";
 
 /**
  * Merchant dashboard — registration, campaigns, reward issuance, totals.
@@ -26,25 +12,52 @@ export default function MerchantDashboard() {
   const { campaigns, setCampaigns } = useCampaignStore();
 
   // Registration state
-  const [regForm, setRegForm] = useState({ name: '', walletAddress: '', businessCategory: '' });
-  const [regStatus, setRegStatus] = useState('idle');
-  const [regMessage, setRegMessage] = useState('');
+  const [regForm, setRegForm] = useState({
+    name: "",
+    walletAddress: "",
+    businessCategory: "",
+  });
+  const [merchant, setMerchant] = useState(null);
+  const [apiKey, setApiKey] = useState("");
+  const [regStatus, setRegStatus] = useState("idle");
+  const [regMessage, setRegMessage] = useState("");
 
   // Dashboard state
-  const [totals, setTotals] = useState({ totalDistributed: 0, totalRedeemed: 0 });
+  const [campaigns, setCampaigns] = useState([]);
+  const [totals, setTotals] = useState({
+    totalDistributed: 0,
+    totalRedeemed: 0,
+  });
+  const [totalsLoading, setTotalsLoading] = useState(false);
 
-  const loadDashboard = useCallback(async (mid) => {
+  const getMerchantTotals = useCallback(async (mid) => {
+    setTotalsLoading(true);
     try {
-      const [campRes, totalsRes] = await Promise.all([
-        api.get(`/api/campaigns/${mid}`),
-        api.get(`/api/transactions/merchant-totals/${mid}`).catch(() => ({ data: { data: { totalDistributed: 0, totalRedeemed: 0 } } })),
-      ]);
-      setCampaigns(campRes.data.data || []);
-      setTotals(totalsRes.data.data || { totalDistributed: 0, totalRedeemed: 0 });
+      const totalsRes = await api.get(
+        `/api/transactions/merchant-totals/${mid}`,
+      );
+      setTotals(
+        totalsRes.data.data || { totalDistributed: 0, totalRedeemed: 0 },
+      );
     } catch {
-      // silently ignore on first load
+      setTotals({ totalDistributed: 0, totalRedeemed: 0 });
+    } finally {
+      setTotalsLoading(false);
     }
   }, [setCampaigns]);
+
+  const loadDashboard = useCallback(
+    async (mid) => {
+      try {
+        const [campRes] = await Promise.all([api.get(`/api/campaigns/${mid}`)]);
+        setCampaigns(campRes.data.data || []);
+        await getMerchantTotals(mid);
+      } catch {
+        // silently ignore on first load
+      }
+    },
+    [getMerchantTotals],
+  );
 
   useEffect(() => {
     if (merchant?.id) loadDashboard(merchant.id);
@@ -52,19 +65,21 @@ export default function MerchantDashboard() {
 
   async function handleRegister(e) {
     e.preventDefault();
-    setRegMessage('');
-    setRegStatus('loading');
+    setRegMessage("");
+    setRegStatus("loading");
     try {
-      const { data } = await api.post('/api/merchants/register', regForm);
-      login(data.data, data.data.api_key);
-      setRegStatus('done');
+      const { data } = await api.post("/api/merchants/register", regForm);
+      setMerchant(data.data);
+      setApiKey(data.data.api_key);
+      setRegStatus("done");
     } catch (err) {
-      setRegStatus('error');
+      setRegStatus("error");
       setRegMessage(err.response?.data?.message || err.message);
     }
   }
 
-  const setReg = (field) => (e) => setRegForm((f) => ({ ...f, [field]: e.target.value }));
+  const setReg = (field) => (e) =>
+    setRegForm((f) => ({ ...f, [field]: e.target.value }));
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
@@ -74,141 +89,173 @@ export default function MerchantDashboard() {
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Merchant Portal</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your loyalty campaigns and reward distributions.</p>
         </div>
-        {!merchant && (
-           <div className="flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full border border-amber-100 dark:border-amber-900/30">
-              <PlusCircle className="w-3.5 h-3.5" />
-              Account Registration Required
-           </div>
-        )}
-      </div>
+      </nav>
 
-      {!merchant ? (
-        <div className="card max-w-xl mx-auto shadow-xl border-violet-100 dark:border-brand-purple/20">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2.5 bg-violet-50 dark:bg-brand-purple/10 rounded-xl">
-              <Store className="w-5 h-5 text-violet-600" />
-            </div>
-            <h2 className="text-xl font-bold dark:text-white">Register Business</h2>
-          </div>
-          
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div>
+      <div className="container">
+        <h1
+          style={{
+            marginBottom: "1.5rem",
+            fontSize: "1.8rem",
+            fontWeight: 700,
+          }}
+        >
+          Merchant Portal
+        </h1>
+
+        {/* Registration */}
+        {!merchant ? (
+          <div className="card">
+            <h2 style={{ marginBottom: "1rem" }}>Register as a Merchant</h2>
+            <form onSubmit={handleRegister}>
               <label className="label">Business Name</label>
-              <input className="input" value={regForm.name} onChange={setReg('name')} placeholder="Acme Coffee" disabled={regStatus === 'loading'} required />
-            </div>
+              <input
+                className="input"
+                value={regForm.name}
+                onChange={setReg("name")}
+                placeholder="Acme Coffee"
+                disabled={regStatus === "loading"}
+              />
 
             <div>
               <label className="label">Stellar Wallet Address</label>
-              <input className="input" value={regForm.walletAddress} onChange={setReg('walletAddress')} placeholder="G..." disabled={regStatus === 'loading'} required />
-            </div>
+              <input
+                className="input"
+                value={regForm.walletAddress}
+                onChange={setReg("walletAddress")}
+                placeholder="G..."
+                disabled={regStatus === "loading"}
+              />
 
             <div>
               <label className="label">Business Category (optional)</label>
-              <input className="input" value={regForm.businessCategory} onChange={setReg('businessCategory')} placeholder="Food & Beverage" disabled={regStatus === 'loading'} />
+              <input
+                className="input"
+                value={regForm.businessCategory}
+                onChange={setReg("businessCategory")}
+                placeholder="Food & Beverage"
+                disabled={regStatus === "loading"}
+              />
+
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={regStatus === "loading"}
+              >
+                {regStatus === "loading" ? "Registering…" : "Register"}
+              </button>
+              {regMessage && <p className="error">{regMessage}</p>}
+            </form>
+          </div>
+        ) : (
+          <>
+            {/* Merchant info + API key */}
+            <div className="card">
+              <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                Logged in as
+              </p>
+              <p style={{ fontWeight: 700, fontSize: "1.1rem" }}>
+                {merchant.name}
+              </p>
+              <p
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: "0.8rem",
+                  color: "#94a3b8",
+                  marginTop: "0.3rem",
+                }}
+              >
+                API Key: <span style={{ color: "#7c3aed" }}>{apiKey}</span>
+              </p>
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#64748b",
+                  marginTop: "0.3rem",
+                }}
+              >
+                Keep this key secret — it authorises reward distributions.
+              </p>
             </div>
 
-            <button className="btn btn-primary w-full py-3 mt-4 flex items-center justify-center gap-2" type="submit" disabled={regStatus === 'loading'}>
-              {regStatus === 'loading' ? 'Processing...' : 'Complete Registration'}
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-            {regMessage && <p className="error text-center">{regMessage}</p>}
-          </form>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {/* Top Stats & API Key */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 card !mb-0 p-8 bg-gradient-to-br from-slate-900 to-brand-dark text-white border-none shadow-2xl relative overflow-hidden">
-               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-violet-600/20 rounded-full blur-3xl"></div>
-               
-               <div className="relative z-10">
-                 <div className="flex items-center gap-2 mb-4 opacity-70">
-                   <Users className="w-4 h-4" />
-                   <span className="text-xs font-bold uppercase tracking-widest">Business Account</span>
-                 </div>
-                 <h2 className="text-3xl font-bold mb-6 tracking-tight">{merchant.name}</h2>
-                 
-                 <div className="bg-white/5 backdrop-blur-md rounded-xl p-4 border border-white/10 group cursor-pointer hover:bg-white/10 transition-colors">
-                    <div className="flex items-center justify-between mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                       <span className="flex items-center gap-2"><Key className="w-3 h-3" /> API Credentials</span>
-                       <span className="text-emerald-400">Secret</span>
-                    </div>
-                    <code className="text-violet-300 font-mono text-sm break-all">{apiKey}</code>
-                 </div>
-                 <p className="mt-4 text-[10px] text-slate-500 font-medium leading-relaxed italic">
-                    Note: Authorises reward distributions and campaign management.
-                 </p>
-               </div>
-            </div>
-
-            <div className="flex flex-col gap-6">
-              <div className="card !mb-0 flex-1 flex flex-col justify-between p-6 bg-violet-50 dark:bg-brand-purple/5 border-violet-100 dark:border-brand-purple/20">
-                 <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total Distributed</p>
-                 <div className="mt-2">
-                   <div className="flex items-baseline gap-2">
-                     <span className="text-3xl font-extrabold text-violet-600">{parseFloat(totals.totalDistributed).toFixed(0)}</span>
-                     <span className="text-sm font-semibold text-slate-400">NOVA</span>
-                   </div>
-                 </div>
-              </div>
-              <div className="card !mb-0 flex-1 flex flex-col justify-between p-6 bg-emerald-50 dark:bg-emerald-900/5 border-emerald-100 dark:border-emerald-900/20">
-                 <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total Redeemed</p>
-                 <div className="mt-2">
-                   <div className="flex items-baseline gap-2">
-                     <span className="text-3xl font-extrabold text-emerald-600">{parseFloat(totals.totalRedeemed).toFixed(0)}</span>
-                     <span className="text-sm font-semibold text-slate-400">NOVA</span>
-                   </div>
-                 </div>
+            {/* Totals summary — Requirements 10.2 */}
+            <div className="card">
+              {totalsLoading && (
+                <p
+                  style={{
+                    color: "#94a3b8",
+                    fontSize: "0.8rem",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  Refreshing totals…
+                </p>
+              )}
+              <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
+                <div>
+                  <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                    Total Distributed
+                  </p>
+                  <p
+                    style={{
+                      fontSize: "1.8rem",
+                      fontWeight: 700,
+                      color: "#7c3aed",
+                    }}
+                  >
+                    {parseFloat(totals.totalDistributed).toFixed(2)}
+                  </p>
+                  <p style={{ color: "#94a3b8", fontSize: "0.8rem" }}>NOVA</p>
+                </div>
+                <div>
+                  <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                    Total Redeemed
+                  </p>
+                  <p
+                    style={{
+                      fontSize: "1.8rem",
+                      fontWeight: 700,
+                      color: "#34d399",
+                    }}
+                  >
+                    {parseFloat(totals.totalRedeemed).toFixed(2)}
+                  </p>
+                  <p style={{ color: "#94a3b8", fontSize: "0.8rem" }}>NOVA</p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Issue Rewards Form */}
-            <div className="card hover:shadow-lg transition-all border-orange-100 dark:border-orange-900/20">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 bg-orange-50 dark:bg-orange-900/20 rounded-xl">
-                  <Gift className="w-5 h-5 text-orange-600" />
-                </div>
-                <h2 className="text-xl font-bold dark:text-white">Issue Rewards</h2>
-              </div>
-              <IssueRewardForm onSuccess={() => loadDashboard(merchant.id)} />
+            {/* Issue rewards — Requirements 10.4 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Issue Rewards</h2>
+              <IssueRewardForm
+                merchantId={merchant.id}
+                apiKey={apiKey}
+                campaigns={campaigns}
+                onSuccess={() => getMerchantTotals(merchant.id)}
+              />
             </div>
 
-            {/* Create Campaign Form */}
-            <div className="card hover:shadow-lg transition-all">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 bg-violet-50 dark:bg-brand-purple/10 rounded-xl">
-                  <PlusCircle className="w-5 h-5 text-violet-600" />
-                </div>
-                <h2 className="text-xl font-bold dark:text-white">New Campaign</h2>
-              </div>
-              <CampaignForm onSuccess={() => loadDashboard(merchant.id)} />
+            {/* Create campaign — Requirements 10.3 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Create Campaign</h2>
+              <CampaignForm
+                merchantId={merchant.id}
+                apiKey={apiKey}
+                onSuccess={() => loadDashboard(merchant.id)}
+              />
             </div>
           </div>
 
-          {/* Campaign list */}
-          <div className="card !mb-12 overflow-hidden px-0 shadow-xl">
-            <div className="px-6 flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-slate-100 dark:bg-brand-border rounded-xl">
-                  <BarChart3 className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-                </div>
-                <h2 className="text-xl font-bold dark:text-white">Active Campaigns</h2>
-              </div>
-              <button className="text-sm font-semibold text-violet-600 hover:scale-105 transition-transform">Download Report</button>
-            </div>
-            
-            {campaigns.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 px-6">
-                <div className="w-16 h-16 bg-slate-50 dark:bg-brand-border/30 rounded-full flex items-center justify-center mb-4">
-                  <Briefcase className="w-6 h-6 text-slate-200" />
-                </div>
-                <p className="text-slate-400">No campaigns yet. Design your first one above.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+            {/* Campaign list — Requirements 10.1 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Campaigns</h2>
+              {campaigns.length === 0 ? (
+                <p style={{ color: "#94a3b8" }}>
+                  No campaigns yet. Create one above.
+                </p>
+              ) : (
+                <table>
                   <thead>
                     <tr className="bg-slate-50 dark:bg-brand-border/30">
                       <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-slate-400 font-bold border-none">Name</th>
@@ -222,18 +269,16 @@ export default function MerchantDashboard() {
                       const expired = new Date(c.end_date) < new Date();
                       const isActive = c.is_active && !expired;
                       return (
-                        <tr key={c.id} className="group hover:bg-slate-50 dark:hover:bg-brand-border/20 transition-colors">
-                          <td className="px-6 py-4">
-                             <div className="flex items-center gap-3">
-                               <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-brand-purple/10 flex items-center justify-center">
-                                  <FileText className="w-4 h-4 text-violet-600" />
-                               </div>
-                               <span className="text-sm font-bold dark:text-slate-100">{c.name}</span>
-                             </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                              {c.reward_rate} <span className="text-[10px] opacity-60">NOVA / unit</span>
+                        <tr key={c.id}>
+                          <td>{c.name}</td>
+                          <td>{c.reward_rate} NOVA/unit</td>
+                          <td>{c.start_date?.slice(0, 10)}</td>
+                          <td>{c.end_date?.slice(0, 10)}</td>
+                          <td>
+                            <span
+                              className={`badge ${c.is_active && !expired ? "badge-green" : "badge-gray"}`}
+                            >
+                              {c.is_active && !expired ? "Active" : "Inactive"}
                             </span>
                           </td>
                           <td className="px-6 py-4">

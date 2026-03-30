@@ -6,7 +6,7 @@ import { Rocket, Shield, Zap, ArrowRight, Wallet } from 'lucide-react';
 import ThemeToggle from '../components/layout/ThemeToggle';
 
 export default function Home() {
-  const { publicKey, connect, isLoading, error, freighterInstalled } = useWalletStore();
+  const { publicKey, connect, loading, error, freighterInstalled, disconnect } = useWallet();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -15,21 +15,28 @@ export default function Home() {
     if (publicKey) router.push('/dashboard');
   }, [publicKey, router]);
 
-  if (!mounted) return null;
+  const handleDisconnect = () => {
+    disconnect();
+    router.push('/');
+  };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-brand-dark transition-colors duration-500 overflow-hidden">
-      {/* Header */}
-      <nav className="flex items-center justify-between px-6 py-4 md:px-12 border-b dark:border-brand-border/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">⭐</span>
-          <span className="font-bold text-xl text-slate-800 dark:text-white">NovaRewards</span>
-        </div>
-        <div className="flex items-center gap-6">
-          <Link href="/merchant" className="text-sm font-semibold text-slate-500 hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400 transition-colors">
-            Merchant Portal
-          </Link>
-          <ThemeToggle />
+    <>
+      <nav className="nav">
+        <span className="nav-brand">⭐ NovaRewards</span>
+        <div className="nav-links">
+          <a href="/merchant">Merchant Portal</a>
+          <a href="/auth/register">Email Sign Up</a>
+          <a href="/auth/login">Email Login</a>
+          {publicKey && (
+            <button
+              className="btn btn-secondary"
+              onClick={handleDisconnect}
+              style={{ padding: "0.4rem 1rem" }}
+            >
+              Disconnect
+            </button>
+          )}
         </div>
       </nav>
 

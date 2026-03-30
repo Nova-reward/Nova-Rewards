@@ -1,0 +1,10 @@
+[Unit]
+Description=Certbot Renewal Failure Notification for %i
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/notify-renewal-failure.sh
+Environment="FAILED_SERVICE=%i"
+StandardOutput=journal
+StandardError=journal

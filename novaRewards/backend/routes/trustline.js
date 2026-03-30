@@ -9,7 +9,7 @@ const { verifyTrustline, buildTrustlineXDR } = require('../../blockchain/trustli
  */
 router.post('/verify', async (req, res, next) => {
   try {
-    const { walletAddress } = req.body;
+    const { walletAddress } = req.body || {};
 
     if (!walletAddress || !isValidStellarAddress(walletAddress)) {
       return res.status(400).json({
@@ -57,6 +57,37 @@ router.post('/build-xdr', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+router.post('/build', async (req, res, next) => {
+  try {
+    const { walletAddress } = req.body;
+
+    if (!walletAddress || !isValidStellarAddress(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'walletAddress must be a valid Stellar public key',
+      });
+    }
+
+    const xdr = await buildTrustlineXDR(walletAddress);
+    res.json({ xdr });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Handle JSON parse errors for this router
+router.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed' || err instanceof SyntaxError) {
+    return res.status(400).json({
+      success: false,
+      error: 'validation_error',
+      message: 'Invalid JSON in request body',
+    });
+  }
+  next(err);
 });
 
 module.exports = router;

@@ -72,6 +72,20 @@ async function getCampaignsByMerchant(merchantId) {
 }
 
 /**
+ * Returns a campaign by id regardless of active/expired state.
+ *
+ * @param {number} campaignId
+ * @returns {Promise<object|null>}
+ */
+async function getCampaignById(campaignId) {
+  const result = await query(
+    'SELECT * FROM campaigns WHERE id = $1',
+    [campaignId]
+  );
+  return result.rows[0] || null;
+}
+
+/**
  * Returns a campaign only if it is active and not expired.
  * Requirements: 7.4, 7.5
  *
@@ -93,5 +107,6 @@ module.exports = {
   validateCampaign,
   createCampaign,
   getCampaignsByMerchant,
+  getCampaignById,
   getActiveCampaign,
 };
