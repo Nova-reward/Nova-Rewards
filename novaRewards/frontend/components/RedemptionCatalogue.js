@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from './Toast';
 import RewardCard from './RewardCard';
 import RedemptionModal from './RedemptionModal';
+import ConfettiBurst from './ConfettiBurst';
 
 /**
  * Redemption catalogue screen.
@@ -30,6 +31,7 @@ export default function RedemptionCatalogue() {
   const [selectedReward, setSelectedReward] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Fetch rewards catalogue
   useEffect(() => {
@@ -143,6 +145,7 @@ export default function RedemptionCatalogue() {
       );
 
       addToast(`Successfully redeemed ${selectedReward.name}!`, 'success');
+      setShowConfetti(true);
       setIsModalOpen(false);
       setSelectedReward(null);
     } catch (err) {
@@ -178,7 +181,8 @@ export default function RedemptionCatalogue() {
   }
 
   return (
-    <div className="redemption-container">
+    <div className="redemption-container" style={{ position: 'relative' }}>
+      <ConfettiBurst active={showConfetti} onComplete={() => setShowConfetti(false)} />
       <div className="redemption-header">
         <div>
           <h1>Redeem Rewards</h1>

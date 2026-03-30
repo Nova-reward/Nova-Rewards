@@ -74,6 +74,30 @@ For detailed product vision, roadmap, and feature specifications, see the [Produ
 
 ---
 
+## Security
+
+### Security Audits
+
+All smart contracts undergo comprehensive security audits before production deployment. 
+
+📋 **View Audit Reports:** [Security Audit Documentation](docs/audits/)
+
+### Audit Process
+
+- **Independent Auditors:** Third-party security firms review all contract code
+- **Comprehensive Testing:** Static analysis, dynamic testing, and manual review
+- **Findings Tracking:** All issues documented and remediated
+- **Public Reports:** Full transparency with published audit findings
+
+### Security Best Practices
+
+- Regular security updates and patching
+- Multi-signature controls for admin functions
+- Gradual rollout with testing phases
+- Bug bounty program for responsible disclosure
+
+---
+
 ## Getting Started
 
 ### Prerequisites
