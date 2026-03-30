@@ -12,12 +12,18 @@ const { connectRedis } = require('./lib/redis');
 const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
 const { startWebhookRetryJob } = require('./jobs/webhookRetry');
-const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
+const {
+  globalLimiter, authLimiter,
+  slidingGlobal, slidingAuth, slidingUser,
+  slidingSearch, slidingWebhook, slidingRewards, slidingAdmin,
+} = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
 const { initSocketIO } = require('./services/socketService');
 
 const app = express();
 const httpServer = http.createServer(app);
+
+app.use(securityHeaders);
 
 // Configure CORS based on environment
 const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
@@ -42,9 +48,21 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// Rate limiting — global default, stricter on auth endpoints
+// Rate limiting — fixed-window global baseline
 app.use(globalLimiter);
-app.use('/api/auth/login', authLimiter);
+
+// Sliding-window per-endpoint limits
+app.use('/api/auth/login',           slidingAuth);
+app.use('/api/auth/forgot-password', slidingAuth);
+app.use('/api/auth',                 slidingUser);
+app.use('/api/search',               slidingSearch);
+app.use('/api/webhooks',             slidingWebhook);
+app.use('/api/rewards/distribute',   slidingRewards);
+app.use('/api/admin',                slidingAdmin);
+app.use('/api',                      slidingGlobal);
+
+// Legacy fixed-window auth limiter (belt-and-suspenders)
+app.use('/api/auth/login',           authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
 
 // Health check routes
@@ -73,6 +91,7 @@ app.use('/api/contract-events', require('./routes/contractEvents'));
 app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin/batch', require('./routes/batch'));
 app.use('/api/drops', require('./routes/drops'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/webhooks', require('./routes/webhooks'));
@@ -130,6 +149,8 @@ if (require.main === module) {
     startWebhookRetryJob();
     // Register event listeners
     require('./services/redemptionEventListener').registerRedemptionEventListener();
+    // Start batch processing workers
+    require('./services/batchQueue');
     console.log(`NovaRewards backend running on port ${PORT}`);
   });
 }

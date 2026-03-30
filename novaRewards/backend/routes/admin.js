@@ -4,6 +4,11 @@ const {
   getStats, listUsers,
   createReward, updateReward, deleteReward, getRewardById,
 } = require('../db/adminRepository');
+const {
+  buildRecoveryPlan,
+  listBackups,
+} = require('../services/backupService');
+const { runBackupCycle } = require('../jobs/backupJob');
 
 // All admin routes require a valid user token AND admin role
 router.use(authenticateUser, requireAdmin);
