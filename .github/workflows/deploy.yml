@@ -1,0 +1,84 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main      # → production
+      - develop   # → staging
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+      url: ${{ github.ref_name == 'main' && secrets.PROD_BACKEND_URL || secrets.STAGING_BACKEND_URL }}
+
+    defaults:
+      run:
+        working-directory: novaRewards/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ github.ref_name == 'main' && secrets.PROD_DEPLOY_HOST || secrets.STAGING_DEPLOY_HOST }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          echo "$DEPLOY_KEY" | base64 -d > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          rsync -az --delete \
+            -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            ./ $DEPLOY_USER@$DEPLOY_HOST:/app/nova-backend/
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no \
+            $DEPLOY_USER@$DEPLOY_HOST \
+            "cd /app/nova-backend && npm run start"
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+      url: ${{ github.ref_name == 'main' && secrets.PROD_FRONTEND_URL || secrets.STAGING_FRONTEND_URL }}
+
+    defaults:
+      run:
+        working-directory: novaRewards/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ github.ref_name == 'main' && secrets.PROD_API_URL || secrets.STAGING_API_URL }}
+          NEXT_PUBLIC_STELLAR_NETWORK: ${{ github.ref_name == 'main' && 'PUBLIC' || 'TESTNET' }}
+        run: npm run build
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ github.ref_name == 'main' && secrets.PROD_DEPLOY_HOST || secrets.STAGING_DEPLOY_HOST }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          echo "$DEPLOY_KEY" | base64 -d > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          rsync -az --delete \
+            -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            .next/ $DEPLOY_USER@$DEPLOY_HOST:/app/nova-frontend/.next/
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no \
+            $DEPLOY_USER@$DEPLOY_HOST \
+            "cd /app/nova-frontend && npm run start"
