@@ -1,6 +1,6 @@
 # Nova Rewards Contract — Upgrade Guide
 
-## Overview
+This guide covers the upgrade path for the standalone `contracts/nova-rewards` Soroban contract. The contract exposes two admin-only entrypoints for this process:
 
 The `nova-rewards` Soroban contract supports in-place WASM upgrades via
 `env.deployer().update_current_contract_wasm()`. All instance storage
@@ -16,9 +16,14 @@ Two storage keys track upgrade state:
 `migrate()` is gated: it only runs when `migrated_version < migration_version`,
 so it is safe to call exactly once per upgrade and will panic if called again.
 
----
+Because the contract stores its operational state in instance storage, balances, staking records, swap configuration, and the saved migration version remain available after a successful code swap.
 
 ## Prerequisites
+
+1. Install Rust and the `wasm32-unknown-unknown` target.
+2. Install the Stellar CLI used by the repository deployment workflow.
+3. Have the admin secret, or another signer authorized to act for the current admin.
+4. Know the deployed contract ID for the `nova-rewards` instance you are updating.
 
 ```bash
 # Rust + wasm32 target
@@ -29,7 +34,7 @@ rustup target add wasm32-unknown-unknown
 cargo install --locked soroban-cli
 ```
 
----
+## Build the New Artifact
 
 ## Step 1 — Add migration logic for the new version
 
@@ -53,20 +58,23 @@ cargo build --release --target wasm32-unknown-unknown
 # Output: ../../target/wasm32-unknown-unknown/release/nova_rewards.wasm
 ```
 
----
+Use the optimized artifact if `wasm-opt` is available; otherwise use the raw release WASM.
 
-## Step 3 — Install the WASM and get its hash
+## Upload the WASM
+
+Upload the artifact to the target network and capture the returned hash:
 
 ```bash
-soroban contract install \
-  --network testnet \
-  --source <ADMIN_SECRET_KEY> \
-  --wasm target/wasm32-unknown-unknown/release/nova_rewards.wasm
+stellar contract upload \
+  --wasm contracts/nova-rewards/target/wasm32-unknown-unknown/release/nova_rewards.optimized.wasm \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --source <ADMIN_SECRET>
 ```
 
 This prints the 64-character hex WASM hash, e.g. `abc123...def456`.
 
----
+## Execute the Upgrade
 
 ## Step 4 — Call upgrade()
 
@@ -84,7 +92,7 @@ What happens internally:
 - The new WASM hash is stored under `PendingWasmHash`.
 - `env.deployer().update_current_contract_wasm(new_wasm_hash)` swaps the bytecode.
 
----
+## Run the Migration
 
 ## Step 5 — Call migrate()
 
@@ -114,9 +122,12 @@ soroban contract invoke --network testnet --id <CONTRACT_ID> -- get_migrated_ver
 
 Confirm the `upgraded` event appears in the transaction record on the Stellar explorer.
 
----
+1. Invoke `get_migrated_version` and confirm it matches `CONTRACT_VERSION` in [`contracts/nova-rewards/src/lib.rs`](../contracts/nova-rewards/src/lib.rs).
+2. Query representative balances with `get_balance` to confirm state survived the code swap.
+3. Re-run [`contracts/nova-rewards/tests/upgrade.rs`](../contracts/nova-rewards/tests/upgrade.rs).
+4. If the release touched swaps or staking, also run the swap and staking test suites.
 
-## Security
+## Security Notes
 
 - Only the `admin` address set during `initialize` may call `upgrade` or `migrate`.
 - `migrate()` panics with `"migration already applied"` if called more than once per version.

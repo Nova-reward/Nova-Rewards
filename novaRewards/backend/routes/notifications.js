@@ -1,89 +1,57 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateUser } = require('../middleware/authenticateUser');
+const { query } = require('../db');
 
-// In-memory storage for subscriptions (use database in production)
-const subscriptions = new Map();
+/**
+ * PATCH /api/notifications/read-all
+ * Stateless acknowledgement — client resets unreadCount on 200.
+ */
+router.patch('/read-all', authenticateUser, (req, res) => {
+  res.json({ success: true });
+});
 
-// Subscribe to push notifications
-router.post('/subscribe', async (req, res) => {
+/**
+ * GET /api/notifications/preferences
+ * Returns the user's email notification preferences.
+ */
+router.get('/preferences', authenticateUser, async (req, res) => {
   try {
-    const { subscription, userId } = req.body;
-
-    if (!subscription || !userId) {
-      return res.status(400).json({ error: 'Subscription and userId required' });
-    }
-
-    subscriptions.set(userId, subscription);
-
-    res.status(201).json({ 
-      success: true, 
-      message: 'Subscription saved successfully' 
-    });
-  } catch (error) {
-    console.error('Subscription error:', error);
-    res.status(500).json({ error: 'Failed to save subscription' });
+    const result = await query(
+      'SELECT notification_preferences FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const prefs = result.rows[0]?.notification_preferences ?? {
+      rewards: true,
+      redemptions: true,
+      campaigns: false,
+      referrals: true,
+      system: false,
+    };
+    res.json(prefs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch preferences' });
   }
 });
 
-// Unsubscribe from push notifications
-router.post('/unsubscribe', async (req, res) => {
-  try {
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId required' });
-    }
-
-    subscriptions.delete(userId);
-
-    res.json({ 
-      success: true, 
-      message: 'Unsubscribed successfully' 
-    });
-  } catch (error) {
-    console.error('Unsubscribe error:', error);
-    res.status(500).json({ error: 'Failed to unsubscribe' });
+/**
+ * PUT /api/notifications/preferences
+ * Saves the user's email notification preferences.
+ */
+router.put('/preferences', authenticateUser, async (req, res) => {
+  const allowed = ['rewards', 'redemptions', 'campaigns', 'referrals', 'system'];
+  const prefs = {};
+  for (const key of allowed) {
+    if (typeof req.body[key] === 'boolean') prefs[key] = req.body[key];
   }
-});
-
-// Send push notification (admin only)
-router.post('/send', async (req, res) => {
   try {
-    const { userId, title, body, url } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId required' });
-    }
-
-    const subscription = subscriptions.get(userId);
-
-    if (!subscription) {
-      return res.status(404).json({ error: 'No subscription found for user' });
-    }
-
-    const webpush = require('web-push');
-    
-    // Configure VAPID keys (set these in environment variables)
-    if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-      webpush.setVapidDetails(
-        'mailto:' + (process.env.VAPID_EMAIL || 'admin@novarewards.com'),
-        process.env.VAPID_PUBLIC_KEY,
-        process.env.VAPID_PRIVATE_KEY
-      );
-
-      const payload = JSON.stringify({ title, body, url });
-      await webpush.sendNotification(subscription, payload);
-
-      res.json({ 
-        success: true, 
-        message: 'Notification sent successfully' 
-      });
-    } else {
-      res.status(500).json({ error: 'VAPID keys not configured' });
-    }
-  } catch (error) {
-    console.error('Send notification error:', error);
-    res.status(500).json({ error: 'Failed to send notification' });
+    await query(
+      'UPDATE users SET notification_preferences = $1 WHERE id = $2',
+      [JSON.stringify(prefs), req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save preferences' });
   }
 });
 

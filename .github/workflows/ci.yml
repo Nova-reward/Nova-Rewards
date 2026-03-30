@@ -2,58 +2,102 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
-  test:
+  backend:
+    name: Backend – Lint & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: novaRewards/backend
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: nova
+          POSTGRES_DB: nova_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://nova:nova@localhost:5432/nova_test
+      NODE_ENV: test
+  backend-tests:
     runs-on: ubuntu-latest
     name: Backend Tests
+    permissions:
+      contents: read
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/backend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: novaRewards/backend
-        run: npm install
-
-      - name: Run tests
-        working-directory: novaRewards/backend
-        run: npx jest --runInBand --ci
-
-  frontend-build:
-    runs-on: ubuntu-latest
-    name: Frontend Build Check
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        working-directory: novaRewards/frontend
-        run: npm install
-
-      - name: Build frontend
-        working-directory: novaRewards/frontend
-        run: npm run build
+    services:
+      postgres:
+        image: postgres:16-alpine
         env:
-          NEXT_PUBLIC_API_URL: https://api.nova-rewards.xyz
-          NEXT_PUBLIC_HORIZON_URL: https://horizon.stellar.org
-          NEXT_PUBLIC_ISSUER_PUBLIC: GBRPYHIL2CI3WHZDTOOQFC6EB4KJJGUJGU3XYQVVXN7XNXQVVVVVVVV
-          NEXT_PUBLIC_STELLAR_NETWORK: public
-          NEXT_PUBLIC_MULTISIG_CONTRACT_ID: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4
+          POSTGRES_DB: nova_rewards_test
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Install from workspace root so shared deps (eslint, etc.) resolve correctly
+      - run: npm install
+        working-directory: novaRewards
+
+      - run: npm run lint
+      - run: npm test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: novaRewards/backend/coverage
+
+  frontend:
+    name: Frontend – Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: novaRewards/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Install from workspace root
+      - run: npm install
+        working-directory: novaRewards
+
+      - run: npm run build

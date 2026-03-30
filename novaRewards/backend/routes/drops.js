@@ -12,8 +12,30 @@ dropEvents.on('drop.claimed', ({ drop, user, claim }) => {
 });
 
 /**
- * GET /api/drops/eligible
- * Returns all active drops the authenticated user qualifies for.
+ * @openapi
+ * /drops/eligible:
+ *   get:
+ *     tags: [Drops]
+ *     summary: List active drops the authenticated user qualifies for
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Eligible drops.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/Drop' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/eligible', authenticateUser, async (req, res, next) => {
   try {
@@ -25,9 +47,54 @@ router.get('/eligible', authenticateUser, async (req, res, next) => {
 });
 
 /**
- * POST /api/drops/:id/claim
- * Claims a drop for the authenticated user.
- * Body: { proof: string[] }  — Merkle proof (required when drop has a merkle_root)
+ * @openapi
+ * /drops/{id}/claim:
+ *   post:
+ *     tags: [Drops]
+ *     summary: Claim a drop for the authenticated user
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 1 }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               proof:
+ *                 type: array
+ *                 items: { type: string }
+ *                 example: ["0xabc...", "0xdef..."]
+ *                 description: Merkle proof (required when drop has a merkle_root)
+ *     responses:
+ *       201:
+ *         description: Drop claimed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { type: object }
+ *       400:
+ *         description: Ineligible or invalid drop id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: Drop not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/:id/claim', authenticateUser, async (req, res, next) => {
   try {

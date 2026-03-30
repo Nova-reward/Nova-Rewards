@@ -5,9 +5,54 @@ const { query } = require('../db/index');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 
 /**
- * POST /api/merchants/register
- * Registers a new merchant and returns their record with a generated API key.
- * Requirements: 7.1
+ * @openapi
+ * /merchants/register:
+ *   post:
+ *     tags: [Merchants]
+ *     summary: Register a new merchant
+ *     description: Returns the merchant record plus a one-time plain-text API key. Store it securely — it is never shown again.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, walletAddress]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Stellar Coffee Co.
+ *               walletAddress:
+ *                 type: string
+ *                 example: GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN
+ *               businessCategory:
+ *                 type: string
+ *                 example: Food & Beverage
+ *     responses:
+ *       201:
+ *         description: Merchant registered.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   allOf:
+ *                     - $ref: '#/components/schemas/Merchant'
+ *                     - type: object
+ *                       properties:
+ *                         api_key: { type: string, example: "a1b2c3d4e5f6..." }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: Wallet address already registered.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/register', async (req, res, next) => {
   try {
