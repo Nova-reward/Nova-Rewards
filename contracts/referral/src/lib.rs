@@ -1,7 +1,5 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 #[contracttype]
@@ -21,6 +19,7 @@ pub struct ReferralContract;
 
 #[contractimpl]
 impl ReferralContract {
+    /// Initializes the referral contract and resets the reward pool to zero.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
@@ -29,19 +28,26 @@ impl ReferralContract {
         env.storage().instance().set(&DataKey::PoolBalance, &0_i128);
     }
 
+    /// Returns the admin address stored in instance storage.
     fn admin(env: &Env) -> Address {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
-    /// Fund the referral reward pool (admin-gated).
+    /// Adds tokens to the referral reward pool.
     pub fn fund_pool(env: Env, amount: i128) {
         Self::admin(&env).require_auth();
         assert!(amount > 0, "amount must be positive");
-        let bal: i128 = env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0);
-        env.storage().instance().set(&DataKey::PoolBalance, &(bal + amount));
+        let bal: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::PoolBalance, &(bal + amount));
     }
 
-    /// Register a referral. Each wallet can only be referred once.
+    /// Registers a one-time referral relationship for a wallet.
     pub fn register_referral(env: Env, referrer: Address, referred: Address) {
         // referred wallet authorises the registration
         referred.require_auth();
@@ -65,14 +71,12 @@ impl ReferralContract {
         );
     }
 
-    /// Look up who referred a given wallet.
+    /// Returns the referrer associated with the provided wallet, if any.
     pub fn get_referrer(env: Env, referred: Address) -> Option<Address> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Referral(referred))
+        env.storage().persistent().get(&DataKey::Referral(referred))
     }
 
-    /// Credit the referrer of `referred` with `reward_amount` Nova tokens (admin-gated).
+    /// Pays a referral reward from the pool to the stored referrer relationship.
     pub fn credit_referrer(env: Env, referred: Address, reward_amount: i128) {
         Self::admin(&env).require_auth();
         assert!(reward_amount > 0, "reward_amount must be positive");
@@ -83,7 +87,11 @@ impl ReferralContract {
             .get(&DataKey::Referral(referred.clone()))
             .expect("no referrer found");
 
-        let pool_bal: i128 = env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0);
+        let pool_bal: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0);
         assert!(pool_bal >= reward_amount, "insufficient pool balance");
         env.storage()
             .instance()
@@ -97,7 +105,7 @@ impl ReferralContract {
         );
     }
 
-    /// Total referrals made by a referrer (leaderboard).
+    /// Returns how many successful referrals a referrer has registered.
     pub fn total_referrals(env: Env, referrer: Address) -> u32 {
         env.storage()
             .persistent()
@@ -105,8 +113,12 @@ impl ReferralContract {
             .unwrap_or(0)
     }
 
+    /// Returns the remaining reward balance held by the contract.
     pub fn pool_balance(env: Env) -> i128 {
-        env.storage().instance().get(&DataKey::PoolBalance).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::PoolBalance)
+            .unwrap_or(0)
     }
 }
 
@@ -114,7 +126,10 @@ impl ReferralContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Events}, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Env,
+    };
 
     fn setup() -> (Env, Address, ReferralContractClient<'static>) {
         let env = Env::default();

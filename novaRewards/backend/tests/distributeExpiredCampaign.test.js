@@ -95,7 +95,7 @@ describe('POST /api/rewards/distribute — expired campaign (Property 7)', () =>
           });
           getActiveCampaign.mockResolvedValue(null);
 
-          const customerWallet = Keypair.random().publicKey();
+          const walletAddress = Keypair.random().publicKey();
 
           const http = require('http');
           const server = http.createServer(app);

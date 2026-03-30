@@ -31,6 +31,36 @@ jobs:
     env:
       DATABASE_URL: postgresql://nova:nova@localhost:5432/nova_test
       NODE_ENV: test
+  backend-tests:
+    runs-on: ubuntu-latest
+    name: Backend Tests
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nova_rewards_test
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
 
     steps:
       - uses: actions/checkout@v4
