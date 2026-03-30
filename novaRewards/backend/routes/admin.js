@@ -4,6 +4,11 @@ const {
   getStats, listUsers,
   createReward, updateReward, deleteReward, getRewardById,
 } = require('../db/adminRepository');
+const {
+  buildRecoveryPlan,
+  listBackups,
+} = require('../services/backupService');
+const { runBackupCycle } = require('../jobs/backupJob');
 
 // All admin routes require a valid user token AND admin role
 router.use(authenticateUser, requireAdmin);
@@ -33,6 +38,53 @@ router.get('/users', async (req, res, next) => {
     const limit = Math.min(100, parseInt(req.query.limit) || 20);
     const { users, total } = await listUsers({ search: req.query.search, page, limit });
     res.json({ success: true, data: { users, total, page, limit } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/admin/backups
+ * Lists encrypted base backups available for recovery planning.
+ */
+router.get('/backups', async (req, res, next) => {
+  try {
+    const backups = await listBackups();
+    res.json({ success: true, data: backups });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/backups
+ * Triggers an immediate encrypted base backup.
+ */
+router.post('/backups', async (req, res, next) => {
+  try {
+    const result = await runBackupCycle(new Date(), 'manual');
+    res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/backups/recovery-plan
+ * Builds a point-in-time recovery plan from the nearest base backup plus WAL.
+ */
+router.post('/backups/recovery-plan', async (req, res, next) => {
+  try {
+    if (!req.body?.targetTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'targetTime is required',
+      });
+    }
+
+    const plan = await buildRecoveryPlan({ targetTime: req.body.targetTime });
+    res.json({ success: true, data: plan });
   } catch (err) {
     next(err);
   }

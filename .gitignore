@@ -6,3 +6,4 @@ novaRewards/backend/coverage/
 dist/
 build/
 .DS_Store
+novaRewards/backups/

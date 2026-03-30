@@ -3,6 +3,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+RUN apk add --no-cache openssl postgresql16-client
+
 # Copy package files and install production dependencies only
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev

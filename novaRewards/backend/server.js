@@ -10,6 +10,7 @@ const cors = require('cors');
 const { connectRedis } = require('./lib/redis');
 const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
+const { startBackupJob } = require('./jobs/backupJob');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
 
@@ -95,6 +96,7 @@ if (require.main === module) {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
+    startBackupJob();
     // Register event listeners
     require('./services/redemptionEventListener').registerRedemptionEventListener();
     console.log(`NovaRewards backend running on port ${PORT}`);

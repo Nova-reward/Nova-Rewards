@@ -14,6 +14,10 @@ const REQUIRED_ENV_VARS = [
   'JWT_SECRET',
 ];
 
+const BACKUP_ENV_VARS = [
+  'BACKUP_PASSPHRASE',
+];
+
 /**
  * Validates that all required environment variables are set.
  * Logs each missing key and throws an error to halt server initialization.
@@ -29,6 +33,12 @@ function validateEnv() {
     missing.push('ALLOWED_ORIGIN');
   }
 
+  if (process.env.BACKUP_ENABLED === 'true') {
+    BACKUP_ENV_VARS.forEach((key) => {
+      if (!process.env[key]) missing.push(key);
+    });
+  }
+
   if (missing.length > 0) {
     missing.forEach((key) => {
       console.error(`[validateEnv] Missing required environment variable: ${key}`);
@@ -39,4 +49,4 @@ function validateEnv() {
   }
 }
 
-module.exports = { validateEnv, REQUIRED_ENV_VARS };
+module.exports = { validateEnv, REQUIRED_ENV_VARS, BACKUP_ENV_VARS };

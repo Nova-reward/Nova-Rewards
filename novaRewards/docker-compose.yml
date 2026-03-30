@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
       - .env
@@ -10,9 +12,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-nova_rewards}
       POSTGRES_USER: ${POSTGRES_USER:-nova}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_WAL_ARCHIVE_DIR: ${BACKUP_WAL_ARCHIVE_DIR:-/var/lib/postgresql/wal-archive}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database:/docker-entrypoint-initdb.d:ro
+      - ./backups/wal:/var/lib/postgresql/wal-archive
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nova} -d ${POSTGRES_DB:-nova_rewards}"]
       interval: 5s
@@ -20,6 +25,18 @@ services:
       retries: 10
     ports:
       - "5432:5432"
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=60s
+      - -c
+      - max_wal_senders=3
+      - -c
+      - archive_command=/usr/local/bin/archive-wal.sh %p %f
 
   backend:
     build:
@@ -32,8 +49,13 @@ services:
       PORT: 4000
       NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: postgresql://${POSTGRES_USER:-nova}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nova_rewards}
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-true}
+      BACKUP_DIR: /app/../backups/base
+      BACKUP_WAL_ARCHIVE_DIR: /app/../backups/wal
     ports:
       - "4000:4000"
+    volumes:
+      - ./backups:/app/../backups
     depends_on:
       postgres:
         condition: service_healthy
