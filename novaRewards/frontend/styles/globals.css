@@ -959,149 +959,107 @@ td {
   }
 }
 
-/* ── Help Center / FAQ ───────────────────────────────────────────────────── */
-.faq-container {
-  max-width: 760px;
+/* ── Notification Centre ─────────────────────────────────────────────────── */
+.notification-center {
+  position: relative;
 }
 
-.faq-header {
-  margin-bottom: 2rem;
-}
-
-.faq-title {
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: var(--text);
-  margin-bottom: 0.4rem;
-}
-
-.faq-subtitle {
-  color: var(--muted);
-  margin-bottom: 1.25rem;
-}
-
-.faq-search {
-  width: 100%;
-  padding: 0.6rem 1rem;
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
-  background: var(--card-bg, #fff);
-  color: var(--text);
-  font-size: 0.9375rem;
-  outline: none;
-}
-
-.faq-search:focus {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
-}
-
-.faq-no-results {
-  color: var(--muted);
-  padding: 2rem 0;
-  text-align: center;
-}
-
-.faq-section {
-  margin-bottom: 2rem;
-}
-
-.faq-section-title {
-  font-size: 1.1rem;
+.notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--error);
+  color: #fff;
+  font-size: 0.65rem;
   font-weight: 700;
-  color: #7c3aed;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 2px solid rgba(124, 58, 237, 0.15);
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
 }
 
-.faq-item {
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
-  margin-bottom: 0.5rem;
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 200;
   overflow: hidden;
-  background: var(--card-bg, #fff);
 }
 
-.faq-question {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.9rem 1.1rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.9375rem;
+.notification-dropdown-header {
+  padding: 0.75rem 1rem;
   font-weight: 600;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
   color: var(--text);
-  text-align: left;
-  gap: 1rem;
 }
 
-.faq-question:hover {
-  background: rgba(124, 58, 237, 0.04);
+.notification-list {
+  list-style: none;
+  max-height: 360px;
+  overflow-y: auto;
 }
 
-.faq-chevron {
-  font-size: 0.7rem;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
-.faq-answer {
-  padding: 0 1.1rem 1rem;
-  border-top: 1px solid var(--border, #e2e8f0);
-}
-
-.faq-answer p {
-  color: var(--muted);
-  font-size: 0.9375rem;
-  line-height: 1.65;
-  margin: 0.75rem 0 1rem;
-}
-
-.faq-feedback {
+.notification-item {
   display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item:hover {
+  background: var(--surface-2);
+}
+
+.notification-type-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.notification-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-message {
+  font-size: 0.875rem;
+  color: var(--text);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.notification-time {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.notification-empty {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.faq-feedback-label {
-  font-size: 0.8125rem;
+  padding: 2rem 1rem;
   color: var(--muted);
+  font-size: 0.875rem;
 }
 
-.faq-feedback-btn {
-  padding: 0.25rem 0.75rem;
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 20px;
-  background: none;
-  cursor: pointer;
-  font-size: 0.8125rem;
-  color: var(--text);
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.faq-feedback-btn:hover:not(:disabled) {
-  border-color: #7c3aed;
-  background: rgba(124, 58, 237, 0.06);
-}
-
-.faq-feedback-btn--active {
-  border-color: #7c3aed;
-  background: rgba(124, 58, 237, 0.1);
-  color: #7c3aed;
-  font-weight: 600;
-}
-
-.faq-feedback-btn:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-
-.faq-feedback-thanks {
-  font-size: 0.8125rem;
-  color: #16a34a;
+.notification-empty span {
+  font-size: 1.75rem;
 }

@@ -5,20 +5,26 @@ validateEnv();
 
 require('./db/index');
 
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const { connectRedis } = require('./lib/redis');
 const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
+const { startWebhookRetryJob } = require('./jobs/webhookRetry');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
+const { initSocketIO } = require('./services/socketService');
 
 const app = express();
+const httpServer = http.createServer(app);
 
 // Configure CORS based on environment
 const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
   ? { origin: process.env.ALLOWED_ORIGIN }
   : {}; // Open CORS for development
+
+initSocketIO(httpServer, corsOptions);
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -41,10 +47,8 @@ app.use(globalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ success: true, data: { status: 'ok' } });
-});
+// Health check routes
+app.use('/api/health', require('./routes/health'));
 
 // Prometheus metrics scrape endpoint
 app.get('/metrics', async (req, res) => {
@@ -70,6 +74,8 @@ app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
+app.use('/api/search', require('./routes/search'));
+app.use('/api/webhooks', require('./routes/webhooks'));
 
 // Swagger/OpenAPI docs
 const swaggerUi = require('swagger-ui-express');
@@ -91,10 +97,11 @@ const PORT = process.env.PORT || 3001;
 
 // Only start the server when this file is run directly (not when required by tests)
 if (require.main === module) {
-  app.listen(PORT, async () => {
+  httpServer.listen(PORT, async () => {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
+    startWebhookRetryJob();
     // Register event listeners
     require('./services/redemptionEventListener').registerRedemptionEventListener();
     console.log(`NovaRewards backend running on port ${PORT}`);
