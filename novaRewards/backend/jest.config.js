@@ -3,6 +3,9 @@ module.exports = {
   testMatch: ['**/*.test.js'],
   verbose: true,
   forceExit: true,
+  testEnvironmentOptions: {
+    env: { NODE_ENV: 'test' },
+  },
   setupFilesAfterEnv: ['./jest.setup.js'],
   collectCoverageFrom: [
     'routes/**/*.js',
