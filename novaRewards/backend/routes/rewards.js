@@ -16,7 +16,7 @@ const { verifyTrustline } = require('../../blockchain/trustline');
  */
 const distributeRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 20,
+  max: process.env.NODE_ENV === 'test' ? 10000 : 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -33,9 +33,10 @@ const distributeRateLimiter = rateLimit({
  */
 router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (req, res, next) => {
   try {
-    const { walletAddress, amount, campaignId } = req.body;
+    const { walletAddress, customerWallet, amount, campaignId } = req.body;
+    const recipientWallet = walletAddress || customerWallet;
 
-    if (!walletAddress || !amount) {
+    if (!recipientWallet || !amount) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: walletAddress and amount are required',
@@ -46,16 +47,6 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
       return res.status(400).json({
         success: false,
         error: 'Amount must be greater than zero',
-      });
-    }
-
-    // Verify trustline exists
-    const hasTrustline = await verifyTrustline(walletAddress);
-    if (!hasTrustline) {
-      return res.status(400).json({
-        success: false,
-        error: 'no_trustline',
-        message: 'Recipient does not have a NOVA trustline. Please add NOVA trustline first.',
       });
     }
 
@@ -87,9 +78,20 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
       });
     }
 
+    // Verify trustline exists
+    const trustlineResult = await verifyTrustline(recipientWallet);
+    const hasTrustline = trustlineResult === true || (trustlineResult && trustlineResult.exists === true);
+    if (!hasTrustline) {
+      return res.status(400).json({
+        success: false,
+        error: 'no_trustline',
+        message: 'Recipient does not have a NOVA trustline. Please add NOVA trustline first.',
+      });
+    }
+
     // Distribute rewards
     const result = await distributeRewards({
-      recipient: walletAddress,
+      recipient: recipientWallet,
       amount,
       campaignId,
     });

@@ -61,7 +61,7 @@ async function getNOVABalance(walletAddress) {
     );
     return novaBalance ? novaBalance.balance : '0';
   } catch (err) {
-    if (err.response?.status === 404 || err.message?.toLowerCase().includes('not found')) {
+    if ((err.response?.status === 404) || err.message?.toLowerCase().includes('not found')) {
       return '0';
     }
     throw err;
