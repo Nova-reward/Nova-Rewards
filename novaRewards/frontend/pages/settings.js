@@ -1,61 +1,109 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { withAuth } from '../context/AuthContext';
-import { useTour } from '../context/TourContext';
-import { useTheme } from '../context/ThemeContext';
+import GeneralSettings from '../components/settings/GeneralSettings';
+import NotificationSettings from '../components/settings/NotificationSettings';
+import PrivacySettings from '../components/settings/PrivacySettings';
+import SecuritySettings from '../components/settings/SecuritySettings';
+import DataManagement from '../components/settings/DataManagement';
 
 /**
- * Settings page - user account settings
- * Requirements: 164.2
+ * Settings page — tabbed layout for user preferences, security, and data.
+ * Issue #330
  */
+
+const TABS = [
+  { id: 'general', label: '⚙️ General' },
+  { id: 'notifications', label: '🔔 Notifications' },
+  { id: 'privacy', label: '🔒 Privacy' },
+  { id: 'security', label: '🛡️ Security' },
+  { id: 'data', label: '📦 Data' },
+];
+
+const DEFAULT_PREFS = {
+  language: 'en',
+  notifications: { email: true, push: false, sms: false },
+  privacy: { profileVisibility: 'public', dataSharing: true, activityTracking: true },
+  security: { twoFactor: false },
+};
+
 function SettingsContent() {
-  const { startTour } = useTour();
-  const { theme, toggleTheme } = useTheme();
+  const [activeTab, setActiveTab] = useState('general');
+  const [prefs, setPrefs] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_PREFS;
+    try {
+      const stored = localStorage.getItem('userPrefs');
+      return stored ? { ...DEFAULT_PREFS, ...JSON.parse(stored) } : DEFAULT_PREFS;
+    } catch {
+      return DEFAULT_PREFS;
+    }
+  });
+  const [saved, setSaved] = useState(false);
+
+  const handleChange = useCallback((key, value) => {
+    setPrefs((prev) => ({ ...prev, [key]: value }));
+    setSaved(false);
+  }, []);
+
+  const handleSave = () => {
+    // TODO: wire to API — PATCH /users/preferences
+    localStorage.setItem('userPrefs', JSON.stringify(prefs));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const renderTab = () => {
+    switch (activeTab) {
+      case 'general':      return <GeneralSettings prefs={prefs} onChange={handleChange} />;
+      case 'notifications': return <NotificationSettings prefs={prefs} onChange={handleChange} />;
+      case 'privacy':      return <PrivacySettings prefs={prefs} onChange={handleChange} />;
+      case 'security':     return <SecuritySettings prefs={prefs} onChange={handleChange} />;
+      case 'data':         return <DataManagement />;
+      default:             return null;
+    }
+  };
 
   return (
     <DashboardLayout>
       <div className="dashboard-content">
-        <div className="card">
-          <h2 style={{ marginBottom: '1rem' }}>⚙️ Settings</h2>
-          <p style={{ color: 'var(--muted)' }}>
-            Manage your account settings and preferences.
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <h2>⚙️ Settings</h2>
+          <p style={{ color: 'var(--muted)', marginTop: '0.25rem' }}>
+            Manage your preferences, security, and account data.
           </p>
         </div>
 
-        <div className="card" style={{ marginTop: '1.5rem' }}>
-          <h3 style={{ marginBottom: '0.5rem' }}>Appearance</h3>
-          <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.9375rem' }}>
-            Choose your preferred theme. Your selection will be saved automatically.
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span style={{ fontSize: '0.9375rem' }}>Theme:</span>
-            <button
-              className="btn btn-secondary"
-              onClick={toggleTheme}
-              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-            >
-              {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
-            </button>
-            <span style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
-              Current: {theme === 'light' ? 'Light' : 'Dark'}
-            </span>
+        <div className="settings-layout">
+          {/* Sidebar nav */}
+          <nav className="settings-nav" aria-label="Settings sections">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                className={`settings-nav-item ${activeTab === tab.id ? 'settings-nav-item-active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+                aria-current={activeTab === tab.id ? 'page' : undefined}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Content panel */}
+          <div className="settings-panel card">
+            {renderTab()}
+
+            {activeTab !== 'data' && activeTab !== 'security' && (
+              <div className="settings-save-row">
+                <button className="btn btn-primary" onClick={handleSave}>
+                  Save Changes
+                </button>
+                {saved && <span className="success">✓ Saved successfully</span>}
+              </div>
+            )}
           </div>
-        </div>
-
-        <div className="card" style={{ marginTop: '1.5rem' }}>
-          <h3 style={{ marginBottom: '0.5rem' }}>Platform Tour</h3>
-          <p style={{ color: 'var(--muted)', marginBottom: '1rem', fontSize: '0.9375rem' }}>
-            Replay the onboarding walkthrough to revisit key platform features.
-          </p>
-          <button
-            className="btn btn-secondary"
-            onClick={startTour}
-            aria-label="Restart platform onboarding tour"
-          >
-            🗺️ Restart Tour
-          </button>
         </div>
       </div>
     </DashboardLayout>
