@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    token, Address, BytesN, Env, Vec,
+    Address, BytesN, Env, Symbol, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -16,6 +16,33 @@ pub struct StakeRecord {
     pub staked_at: u64,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AccountSnapshot {
+    pub balance: i128,
+    pub stake: Option<StakeRecord>,
+    pub captured_at: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecoveryOperation {
+    pub kind: RecoveryKind,
+    pub account: Address,
+    pub counterparty: Option<Address>,
+    pub amount: i128,
+    pub executed_at: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RecoveryKind {
+    StateSnapshot,
+    StateRestore,
+    Transaction,
+    Fund,
+}
+
 // ---------------------------------------------------------------------------
 // Storage keys
 // ---------------------------------------------------------------------------
@@ -23,8 +50,11 @@ pub struct StakeRecord {
 #[contracttype]
 pub enum DataKey {
     Admin,
+    RecoveryAdmin,
     Balance(Address),
     MigratedVersion,
+    Paused,
+    EmergencyProcedure,
     /// Address of the XLM SAC token contract
     XlmToken,
     /// Address of the DEX router contract used for multi-hop swaps
@@ -33,6 +63,8 @@ pub enum DataKey {
     AnnualRate,
     /// Individual stake records
     Stake(Address),
+    Snapshot(Address),
+    RecoveryOperation(BytesN<32>),
 }
 
 // Current code version — bump this with every upgrade that needs a migration.
@@ -106,6 +138,113 @@ pub fn calculate_payout(balance: i128, rate: i128) -> i128 {
 #[contract]
 pub struct NovaRewardsContract;
 
+impl NovaRewardsContract {
+    fn admin(env: &Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized")
+    }
+
+    fn recovery_admin(env: &Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&DataKey::RecoveryAdmin)
+            .unwrap_or_else(|| Self::admin(env))
+    }
+
+    fn require_admin(env: &Env) {
+        Self::admin(env).require_auth();
+    }
+
+    fn require_recovery_admin(env: &Env) {
+        Self::recovery_admin(env).require_auth();
+    }
+
+    fn require_paused(env: &Env) {
+        if !Self::is_paused(env.clone()) {
+            panic!("contract must be paused");
+        }
+    }
+
+    fn assert_active(env: &Env) {
+        if Self::is_paused(env.clone()) {
+            panic!("contract is paused");
+        }
+    }
+
+    fn read_balance(env: &Env, user: &Address) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::Balance(user.clone()))
+            .unwrap_or(0)
+    }
+
+    fn write_balance(env: &Env, user: &Address, amount: i128) {
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance(user.clone()), &amount);
+    }
+
+    fn read_stake(env: &Env, staker: &Address) -> Option<StakeRecord> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Stake(staker.clone()))
+    }
+
+    fn write_stake(env: &Env, staker: &Address, stake: &StakeRecord) {
+        env.storage()
+            .instance()
+            .set(&DataKey::Stake(staker.clone()), stake);
+    }
+
+    fn clear_stake(env: &Env, staker: &Address) {
+        env.storage()
+            .instance()
+            .remove(&DataKey::Stake(staker.clone()));
+    }
+
+    fn record_recovery_operation(
+        env: &Env,
+        operation_id: &BytesN<32>,
+        kind: RecoveryKind,
+        account: Address,
+        counterparty: Option<Address>,
+        amount: i128,
+    ) -> RecoveryOperation {
+        if let Some(existing) = env
+            .storage()
+            .instance()
+            .get::<_, RecoveryOperation>(&DataKey::RecoveryOperation(operation_id.clone()))
+        {
+            return existing;
+        }
+
+        let operation = RecoveryOperation {
+            kind,
+            account,
+            counterparty,
+            amount,
+            executed_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::RecoveryOperation(operation_id.clone()), &operation);
+
+        operation
+    }
+
+    fn get_recorded_recovery_operation(
+        env: &Env,
+        operation_id: &BytesN<32>,
+    ) -> Option<RecoveryOperation> {
+        env.storage()
+            .instance()
+            .get(&DataKey::RecoveryOperation(operation_id.clone()))
+    }
+}
+
 #[contractimpl]
 impl NovaRewardsContract {
     // -----------------------------------------------------------------------
@@ -118,20 +257,71 @@ impl NovaRewardsContract {
             panic!("already initialized");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::RecoveryAdmin, &admin);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
+        env.storage().instance().set(&DataKey::Paused, &false);
     }
 
     /// Sets the XLM SAC token address and DEX router address.
     /// Admin only. Must be called before swap_for_xlm is usable.
     pub fn set_swap_config(env: Env, xlm_token: Address, router: Address) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
-        admin.require_auth();
+        Self::require_admin(&env);
         env.storage().instance().set(&DataKey::XlmToken, &xlm_token);
         env.storage().instance().set(&DataKey::Router, &router);
+    }
+
+    /// Assigns a dedicated recovery operator for emergency procedures.
+    /// Admin only.
+    pub fn set_recovery_admin(env: Env, recovery_admin: Address) {
+        Self::require_admin(&env);
+        env.storage()
+            .instance()
+            .set(&DataKey::RecoveryAdmin, &recovery_admin);
+
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("operator")),
+            recovery_admin,
+        );
+    }
+
+    /// Pauses state-changing user operations and records the active procedure.
+    pub fn pause(env: Env, procedure: Symbol) {
+        Self::require_admin(&env);
+
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyProcedure, &procedure);
+
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("paused")),
+            (procedure, env.ledger().timestamp()),
+        );
+    }
+
+    /// Resumes normal contract operations after a recovery workflow.
+    pub fn resume(env: Env) {
+        Self::require_admin(&env);
+
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().remove(&DataKey::EmergencyProcedure);
+
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("resumed")),
+            env.ledger().timestamp(),
+        );
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    pub fn get_recovery_admin(env: Env) -> Address {
+        Self::recovery_admin(&env)
+    }
+
+    pub fn get_emergency_procedure(env: Env) -> Option<Symbol> {
+        env.storage().instance().get(&DataKey::EmergencyProcedure)
     }
 
     // -----------------------------------------------------------------------
@@ -158,6 +348,7 @@ impl NovaRewardsContract {
         min_xlm_out: i128,
         path: Vec<Address>,
     ) -> i128 {
+        Self::assert_active(&env);
         user.require_auth();
 
         // Validate inputs
@@ -173,17 +364,11 @@ impl NovaRewardsContract {
         }
 
         // --- Burn Nova points ---
-        let balance: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::Balance(user.clone()))
-            .unwrap_or(0);
+        let balance = Self::read_balance(&env, &user);
         if balance < nova_amount {
             panic!("insufficient Nova balance");
         }
-        env.storage()
-            .instance()
-            .set(&DataKey::Balance(user.clone()), &(balance - nova_amount));
+        Self::write_balance(&env, &user, balance - nova_amount);
 
         // --- Execute swap via router ---
         // The router contract must implement swap_exact_in(sender, nova_amount,
@@ -228,12 +413,7 @@ impl NovaRewardsContract {
     /// Only the admin may call this.
     /// Emits: topics=(upgrade, old_hash, new_hash), data=migration_version
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
-        admin.require_auth();
+        Self::require_admin(&env);
 
         let old_wasm_hash = env.current_contract_address();
         let migration_version: u32 = env
@@ -254,12 +434,7 @@ impl NovaRewardsContract {
     /// Runs data migrations for the current code version.
     /// Safe to call multiple times — only executes once per version bump.
     pub fn migrate(env: Env) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
-        admin.require_auth();
+        Self::require_admin(&env);
 
         let stored_version: u32 = env
             .storage()
@@ -284,16 +459,11 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     pub fn set_balance(env: Env, user: Address, amount: i128) {
-        env.storage()
-            .instance()
-            .set(&DataKey::Balance(user), &amount);
+        Self::write_balance(&env, &user, amount);
     }
 
     pub fn get_balance(env: Env, user: Address) -> i128 {
-        env.storage()
-            .instance()
-            .get(&DataKey::Balance(user))
-            .unwrap_or(0)
+        Self::read_balance(&env, &user)
     }
 
     pub fn get_migrated_version(env: Env) -> u32 {
@@ -316,12 +486,7 @@ impl NovaRewardsContract {
     /// Set the annual staking rate in basis points (10000 = 100%).
     /// Admin only.
     pub fn set_annual_rate(env: Env, rate: i128) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("not initialized");
-        admin.require_auth();
+        Self::require_admin(&env);
         
         if rate < 0 || rate > 10000 {
             panic!("rate must be between 0 and 10000 basis points");
@@ -347,6 +512,7 @@ impl NovaRewardsContract {
     /// # Events
     /// Emits `(Symbol("staked"), staker)` with data `(amount, timestamp)`.
     pub fn stake(env: Env, staker: Address, amount: i128) {
+        Self::assert_active(&env);
         staker.require_auth();
         
         if amount <= 0 {
@@ -359,19 +525,13 @@ impl NovaRewardsContract {
         }
         
         // Check user balance
-        let balance: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::Balance(staker.clone()))
-            .unwrap_or(0);
+        let balance = Self::read_balance(&env, &staker);
         if balance < amount {
             panic!("insufficient balance for staking");
         }
         
         // Deduct from balance
-        env.storage()
-            .instance()
-            .set(&DataKey::Balance(staker.clone()), &(balance - amount));
+        Self::write_balance(&env, &staker, balance - amount);
         
         // Create stake record
         let stake_record = StakeRecord {
@@ -380,9 +540,7 @@ impl NovaRewardsContract {
         };
         
         // Store stake record
-        env.storage()
-            .instance()
-            .set(&DataKey::Stake(staker.clone()), &stake_record);
+        Self::write_stake(&env, &staker, &stake_record);
         
         // Emit event
         env.events().publish(
@@ -402,13 +560,11 @@ impl NovaRewardsContract {
     /// # Events
     /// Emits `(Symbol("unstaked"), staker)` with data `(principal, yield, timestamp)`.
     pub fn unstake(env: Env, staker: Address) -> i128 {
+        Self::assert_active(&env);
         staker.require_auth();
         
         // Get stake record
-        let stake_record: StakeRecord = env
-            .storage()
-            .instance()
-            .get(&DataKey::Stake(staker.clone()))
+        let stake_record: StakeRecord = Self::read_stake(&env, &staker)
             .expect("no active stake found");
         
         // Get current annual rate
@@ -447,19 +603,11 @@ impl NovaRewardsContract {
         let total_return = stake_record.amount + yield_amount;
         
         // Add total return back to user balance
-        let current_balance: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::Balance(staker.clone()))
-            .unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&DataKey::Balance(staker.clone()), &(current_balance + total_return));
+        let current_balance = Self::read_balance(&env, &staker);
+        Self::write_balance(&env, &staker, current_balance + total_return);
         
         // Remove stake record
-        env.storage()
-            .instance()
-            .remove(&DataKey::Stake(staker.clone()));
+        Self::clear_stake(&env, &staker);
         
         // Emit event
         env.events().publish(
@@ -472,17 +620,14 @@ impl NovaRewardsContract {
 
     /// Get stake information for a user.
     pub fn get_stake(env: Env, staker: Address) -> Option<StakeRecord> {
-        env.storage()
-            .instance()
-            .get(&DataKey::Stake(staker))
+        Self::read_stake(&env, &staker)
     }
 
     /// Calculate expected yield for a stake without unstaking.
     pub fn calculate_yield(env: Env, staker: Address) -> i128 {
-        let stake_record: StakeRecord = env
-            .storage()
-            .instance()
-            .get(&DataKey::Stake(staker.clone()))?;
+        let Some(stake_record) = Self::read_stake(&env, &staker) else {
+            return 0;
+        };
         
         let annual_rate: i128 = env
             .storage()
@@ -509,5 +654,179 @@ impl NovaRewardsContract {
         } else {
             0
         }
+    }
+
+    /// Captures a restorable snapshot of a user's contract state.
+    pub fn snapshot_account(env: Env, user: Address, operation_id: BytesN<32>) -> AccountSnapshot {
+        Self::require_recovery_admin(&env);
+
+        if Self::get_recorded_recovery_operation(&env, &operation_id).is_some() {
+            return env
+                .storage()
+                .instance()
+                .get(&DataKey::Snapshot(user))
+                .expect("snapshot not found");
+        }
+
+        let snapshot = AccountSnapshot {
+            balance: Self::read_balance(&env, &user),
+            stake: Self::read_stake(&env, &user),
+            captured_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Snapshot(user.clone()), &snapshot);
+
+        Self::record_recovery_operation(
+            &env,
+            &operation_id,
+            RecoveryKind::StateSnapshot,
+            user.clone(),
+            None,
+            snapshot.balance,
+        );
+
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("snapshot")),
+            (user, snapshot.balance, snapshot.captured_at),
+        );
+
+        snapshot
+    }
+
+    pub fn get_account_snapshot(env: Env, user: Address) -> Option<AccountSnapshot> {
+        env.storage().instance().get(&DataKey::Snapshot(user))
+    }
+
+    /// Restores a previously captured account snapshot while the contract is paused.
+    pub fn restore_account(env: Env, user: Address, operation_id: BytesN<32>) -> AccountSnapshot {
+        Self::require_recovery_admin(&env);
+        Self::require_paused(&env);
+
+        if Self::get_recorded_recovery_operation(&env, &operation_id).is_some() {
+            return env
+                .storage()
+                .instance()
+                .get(&DataKey::Snapshot(user))
+                .expect("snapshot not found");
+        }
+
+        let snapshot: AccountSnapshot = env
+            .storage()
+            .instance()
+            .get(&DataKey::Snapshot(user.clone()))
+            .expect("snapshot not found");
+
+        Self::write_balance(&env, &user, snapshot.balance);
+        if let Some(stake) = snapshot.stake.clone() {
+            Self::write_stake(&env, &user, &stake);
+        } else {
+            Self::clear_stake(&env, &user);
+        }
+
+        Self::record_recovery_operation(
+            &env,
+            &operation_id,
+            RecoveryKind::StateRestore,
+            user.clone(),
+            None,
+            snapshot.balance,
+        );
+
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("restore")),
+            (user, snapshot.balance, env.ledger().timestamp()),
+        );
+
+        snapshot
+    }
+
+    /// Applies a compensating balance delta while the contract is paused.
+    /// Positive amounts replay a missing credit; negative amounts reverse an invalid credit.
+    pub fn recover_transaction(
+        env: Env,
+        user: Address,
+        amount_delta: i128,
+        operation_id: BytesN<32>,
+    ) -> i128 {
+        Self::require_recovery_admin(&env);
+        Self::require_paused(&env);
+
+        if Self::get_recorded_recovery_operation(&env, &operation_id).is_some() {
+            return Self::read_balance(&env, &user);
+        }
+
+        let balance = Self::read_balance(&env, &user);
+        let new_balance = balance + amount_delta;
+        if new_balance < 0 {
+            panic!("recovery would overdraw balance");
+        }
+
+        Self::write_balance(&env, &user, new_balance);
+        Self::record_recovery_operation(
+            &env,
+            &operation_id,
+            RecoveryKind::Transaction,
+            user.clone(),
+            None,
+            amount_delta,
+        );
+
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("tx")),
+            (user, amount_delta, new_balance),
+        );
+
+        new_balance
+    }
+
+    /// Moves internal funds from one user balance to another while paused.
+    pub fn recover_funds(
+        env: Env,
+        from: Address,
+        to: Address,
+        amount: i128,
+        operation_id: BytesN<32>,
+    ) {
+        Self::require_recovery_admin(&env);
+        Self::require_paused(&env);
+
+        if Self::get_recorded_recovery_operation(&env, &operation_id).is_some() {
+            return;
+        }
+
+        if amount <= 0 {
+            panic!("amount must be positive");
+        }
+
+        let from_balance = Self::read_balance(&env, &from);
+        if from_balance < amount {
+            panic!("insufficient balance for fund recovery");
+        }
+
+        let to_balance = Self::read_balance(&env, &to);
+        Self::write_balance(&env, &from, from_balance - amount);
+        Self::write_balance(&env, &to, to_balance + amount);
+
+        Self::record_recovery_operation(
+            &env,
+            &operation_id,
+            RecoveryKind::Fund,
+            from.clone(),
+            Some(to.clone()),
+            amount,
+        );
+
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("funds")),
+            (from, to, amount),
+        );
+    }
+
+    pub fn get_recovery_operation(env: Env, operation_id: BytesN<32>) -> Option<RecoveryOperation> {
+        env.storage()
+            .instance()
+            .get(&DataKey::RecoveryOperation(operation_id))
     }
 }
