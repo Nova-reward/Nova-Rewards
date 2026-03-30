@@ -89,7 +89,7 @@ describe('POST /api/rewards/distribute — expired campaign (Property 7)', () =>
           let body;
 
           await new Promise((resolve, reject) => {
-            const payload = JSON.stringify({ customerWallet, amount: 10, campaignId });
+            const payload = JSON.stringify({ walletAddress: customerWallet, amount: 10, campaignId });
             const req = http.request(
               {
                 hostname: '127.0.0.1',

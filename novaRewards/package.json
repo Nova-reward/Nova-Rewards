@@ -8,6 +8,10 @@
     "frontend",
     "blockchain"
   ],
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^10.1.0",
+    "eslint": "^8.57.0"
+  },
   "scripts": {
     "test": "npm test -w backend && npm test -w frontend",
     "test:backend": "npm test -w backend",

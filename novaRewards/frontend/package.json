@@ -23,7 +23,6 @@
     "next": "^14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-hook-form": "^7.72.0",
     "react-joyride": "^2.9.3",
     "stellar-sdk": "^12.3.0",
     "zod": "^4.3.6"
