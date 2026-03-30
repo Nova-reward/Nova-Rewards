@@ -8,6 +8,11 @@ spec:
   selector:
     matchLabels:
       app: {{ .Release.Name }}-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     metadata:
       labels:
@@ -21,18 +26,24 @@ spec:
             - containerPort: 3000
           envFrom:
             - configMapRef:
-                name: nova-rewards-config
+                name: {{ .Release.Name }}-config
+          startupProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            failureThreshold: 12
+            periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /api/healthz
               port: 3000
-            initialDelaySeconds: 30
             periodSeconds: 10
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /api/healthz
               port: 3000
-            initialDelaySeconds: 10
             periodSeconds: 5
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}

@@ -42,18 +42,29 @@ jobs:
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
 
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+
       - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
 
-      - name: Apply base manifests
-        run: kubectl apply -f k8s/
+      # Only apply bootstrap resources — Helm owns everything else
+      - name: Apply bootstrap resources
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/configmap.yaml
 
       - name: Helm upgrade
         run: |
           helm upgrade --install nova-rewards helm/nova-rewards \
             --namespace nova-rewards \
+            --create-namespace \
+            -f helm/nova-rewards/values-production.yaml \
+            --set backend.image.repository=${{ secrets.REGISTRY }}/nova-rewards-backend \
             --set backend.image.tag=${{ github.sha }} \
+            --set frontend.image.repository=${{ secrets.REGISTRY }}/nova-rewards-frontend \
             --set frontend.image.tag=${{ github.sha }} \
-            --wait
+            --wait \
+            --timeout 5m

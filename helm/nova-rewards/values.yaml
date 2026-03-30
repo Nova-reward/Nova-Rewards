@@ -1,3 +1,8 @@
+config:
+  nodeEnv: production
+  port: "4000"
+  apiUrl: https://api.nova-rewards.io
+
 backend:
   replicaCount: 2
   image:
@@ -15,6 +20,7 @@ backend:
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
 
 frontend:
   replicaCount: 2
@@ -33,6 +39,7 @@ frontend:
     minReplicas: 2
     maxReplicas: 8
     targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
 
 ingress:
   enabled: true
