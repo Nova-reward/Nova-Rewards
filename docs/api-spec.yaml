@@ -1,0 +1,269 @@
+openapi: 3.0.0
+info:
+  title: NovaRewards API
+  version: 1.0.0
+  description: API documentation for NovaRewards backend
+servers:
+  - url: http://localhost:3001/api
+    description: Local development server
+  - url: https://api.novarewards.com/api
+    description: Production server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: validation_error
+        message:
+          type: string
+          example: Validation failed
+        details:
+          type: object
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        txHash:
+          type: string
+        txType:
+          type: string
+          enum: [distribution, redemption, transfer]
+        amount:
+          type: string
+        fromWallet:
+          type: string
+        toWallet:
+          type: string
+        merchantId:
+          type: integer
+        campaignId:
+          type: integer
+        stellarLedger:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      description: Creates a new user account with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - firstName
+                - lastName
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: password123
+                firstName:
+                  type: string
+                  example: John
+                lastName:
+                  type: string
+                  example: Doe
+      responses:
+        201:
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        400:
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        409:
+          description: Duplicate email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/login:
+    post:
+      summary: Login user
+      description: Authenticates user and returns JWT tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+                      user:
+                        $ref: '#/components/schemas/User'
+        400:
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /transactions/record:
+    post:
+      summary: Record a transaction
+      description: Verifies a Stellar transaction on Horizon then records it in the database
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - txHash
+                - txType
+                - amount
+              properties:
+                txHash:
+                  type: string
+                  example: abc123
+                txType:
+                  type: string
+                  enum: [distribution, redemption, transfer]
+                  example: redemption
+                amount:
+                  type: string
+                  example: "100.0000000"
+                fromWallet:
+                  type: string
+                  example: GB...
+                toWallet:
+                  type: string
+                  example: GB...
+                merchantId:
+                  type: integer
+                campaignId:
+                  type: integer
+      responses:
+        201:
+          description: Transaction recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Transaction'
+        400:
+          description: Validation error or transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        409:
+          description: Duplicate transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /transactions/merchant-totals:
+    get:
+      summary: Get merchant transaction totals
+      description: Returns total NOVA distributed and redeemed for the authenticated merchant
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Totals retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      totalDistributed:
+                        type: string
+                      totalRedeemed:
+                        type: string
+        401:
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+# Note: This is a sample of the full API spec. In a real implementation, all endpoints from all route files would be documented here with full details, examples, and error codes.</content>
+<parameter name="filePath">/workspaces/Nova-Rewards/docs/api-spec.yaml

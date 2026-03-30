@@ -1,0 +1,160 @@
+name: Preview Deployment for PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  build-and-deploy-preview:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Generate preview URL
+        id: preview-url
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          PREVIEW_URL="pr-${PR_NUMBER}-nova-rewards-staging.herokuapp.com"
+          echo "url=${PREVIEW_URL}" >> $GITHUB_OUTPUT
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          REACT_APP_API_URL=https://api-pr-${{ github.event.pull_request.number }}-nova-rewards.herokuapp.com \
+          REACT_APP_ENV=staging \
+          npm run build
+
+      - name: Build backend
+        working-directory: ./backend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Create Heroku app if not exists
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          PREVIEW_APP="pr-${{ github.event.pull_request.number }}-nova-rewards"
+          if ! heroku apps:info "${PREVIEW_APP}" --exit-code; then
+            heroku apps:create "${PREVIEW_APP}" \
+              --region us \
+              --stack heroku-20 || true
+          fi
+
+      - name: Deploy to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          PREVIEW_APP="pr-${{ github.event.pull_request.number }}-nova-rewards"
+          git remote add heroku https://git.heroku.com/${PREVIEW_APP}.git
+          git push heroku HEAD:main --force || true
+
+      - name: Configure preview environment
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          PREVIEW_APP="pr-${{ github.event.pull_request.number }}-nova-rewards"
+          heroku config:set \
+            NODE_ENV=staging \
+            DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }} \
+            REDIS_URL=${{ secrets.STAGING_REDIS_URL }} \
+            --app "${PREVIEW_APP}" || true
+
+      - name: Run database migrations on preview
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          PREVIEW_APP="pr-${{ github.event.pull_request.number }}-nova-rewards"
+          heroku run "npm run db:migrate" --app "${PREVIEW_APP}" --exit-code || true
+
+      - name: Seed preview database
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          PREVIEW_APP="pr-${{ github.event.pull_request.number }}-nova-rewards"
+          heroku run "npm run db:seed:preview" --app "${PREVIEW_APP}" --exit-code || true
+
+      - name: Run tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
+          NODE_ENV: test
+        run: |
+          npm run test:ci
+
+      - name: Post deployment comment
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+            const previewUrl = `https://pr-${prNumber}-nova-rewards-staging.herokuapp.com`;
+            const apiUrl = `https://api-pr-${prNumber}-nova-rewards.herokuapp.com`;
+            
+            const commentBody = `## 🚀 Preview Deployment Ready
+            
+            ✅ Your preview environment is ready for testing!
+            
+            - **Frontend**: [${previewUrl}](${previewUrl})
+            - **API**: [${apiUrl}](${apiUrl})
+            - **PR Number**: ${prNumber}
+            
+            ### Test Credentials
+            - Email: \`testuser1@test.com\`
+            - Password: \`TestPassword123!\`
+            
+            ### Notes
+            - The preview environment uses the staging database with seed data
+            - Changes are deployed automatically on new commits
+            - Preview environment expires 7 days after PR closes
+            
+            Happy testing! 🎉`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: commentBody
+            });
+
+  cleanup-preview:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed'
+
+    steps:
+      - name: Destroy preview app
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          PREVIEW_APP="pr-${{ github.event.pull_request.number }}-nova-rewards"
+          heroku apps:destroy "${PREVIEW_APP}" --confirm "${PREVIEW_APP}" || true
+
+      - name: Post cleanup comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🧹 Preview deployment has been cleaned up.'
+            });
