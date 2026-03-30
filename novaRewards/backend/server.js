@@ -12,6 +12,7 @@ const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer')
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
 const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { metricsMiddleware, registry } = require('./middleware/metricsMiddleware');
+const { tracingMiddleware } = require('./middleware/tracingMiddleware');
 
 const app = express();
 
@@ -22,6 +23,7 @@ const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(tracingMiddleware);
 app.use(metricsMiddleware);
 
 // Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
@@ -70,6 +72,7 @@ app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // Swagger/OpenAPI docs
 const swaggerUi = require('swagger-ui-express');
