@@ -211,3 +211,7 @@ export default function Dashboard() {
     </ErrorBoundary>
   );
 }
+
+Dashboard.getLayout = function getLayout(page) {
+  return <DashboardLayout>{page}</DashboardLayout>;
+};

@@ -61,11 +61,12 @@ export default function MerchantDashboard() {
   const setReg = (field) => (e) => setRegForm((f) => ({ ...f, [field]: e.target.value }));
 
   return (
-    <>
-      <nav className="nav">
-        <span className="nav-brand">⭐ NovaRewards</span>
-        <div className="nav-links">
-          <a href="/">Customer Portal</a>
+    <div className="space-y-8 max-w-5xl mx-auto">
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Merchant Portal</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your loyalty campaigns and reward distributions.</p>
         </div>
       </nav>
 
@@ -79,9 +80,11 @@ export default function MerchantDashboard() {
               <label className="label">Business Name</label>
               <input className="input" value={regForm.name} onChange={setReg('name')} placeholder="Acme Coffee" disabled={regStatus === 'loading'} />
 
+            <div>
               <label className="label">Stellar Wallet Address</label>
               <input className="input" value={regForm.walletAddress} onChange={setReg('walletAddress')} placeholder="G…" disabled={regStatus === 'loading'} />
 
+            <div>
               <label className="label">Business Category (optional)</label>
               <input className="input" value={regForm.businessCategory} onChange={setReg('businessCategory')} placeholder="Food & Beverage" disabled={regStatus === 'loading'} />
 
@@ -118,6 +121,7 @@ export default function MerchantDashboard() {
                 </div>
               </div>
             </div>
+          </div>
 
 <<<<<<< main
             {/* Issue rewards — Requirements 10.4 */}
@@ -161,7 +165,73 @@ export default function MerchantDashboard() {
               ))}
 >>>>>>> main
             </div>
+          </div>
 
+            {/* Campaign list — Requirements 10.1 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Campaigns</h2>
+              {campaigns.length === 0 ? (
+                <p style={{ color: "#94a3b8" }}>
+                  No campaigns yet. Create one above.
+                </p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-brand-border/30">
+                      <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-slate-400 font-bold border-none">Name</th>
+                      <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-slate-400 font-bold border-none">Rate</th>
+                      <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-slate-400 font-bold border-none">Duration</th>
+                      <th className="px-6 py-4 text-[10px] uppercase tracking-widest text-slate-400 font-bold border-none text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y dark:divide-brand-border/40">
+                    {campaigns.map((c) => {
+                      const expired = new Date(c.end_date) < new Date();
+                      const isActive = c.is_active && !expired;
+                      return (
+                        <tr key={c.id}>
+                          <td>{c.name}</td>
+                          <td>{c.reward_rate} NOVA/unit</td>
+                          <td>{c.start_date?.slice(0, 10)}</td>
+                          <td>{c.end_date?.slice(0, 10)}</td>
+                          <td>
+                            <span
+                              className={`badge ${c.is_active && !expired ? "badge-green" : "badge-gray"}`}
+                            >
+                              {c.is_active && !expired ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col">
+                               <span className="text-xs font-medium dark:text-slate-200">{c.start_date?.slice(0, 10)}</span>
+                               <span className="text-[10px] text-slate-400">to {c.end_date?.slice(0, 10)}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                               isActive 
+                                 ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' 
+                                 : 'bg-slate-100 dark:bg-brand-border text-slate-500 dark:text-slate-400'
+                             }`}>
+                                {isActive ? (
+                                  <>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    Active
+                                  </>
+                                ) : 'Inactive'}
+                             </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
             {/* Tab content */}
             {activeTab === 'Campaigns' && (
               <div className="card">
@@ -194,3 +264,7 @@ export default function MerchantDashboard() {
     </>
   );
 }
+
+MerchantDashboard.getLayout = function getLayout(page) {
+  return <DashboardLayout>{page}</DashboardLayout>;
+};

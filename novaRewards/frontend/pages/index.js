@@ -8,8 +8,10 @@ export default function Home() {
   const { t } = useTranslation('common');
   const { publicKey, connect, loading, error, freighterInstalled, disconnect } = useWallet();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (publicKey) router.push('/dashboard');
   }, [publicKey, router]);
 
