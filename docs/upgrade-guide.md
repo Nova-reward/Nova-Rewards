@@ -48,7 +48,7 @@ if migration_version == 2 {
 }
 ```
 
----
+The build artifact is:
 
 ## Step 2 — Build the new WASM
 
@@ -79,9 +79,9 @@ This prints the 64-character hex WASM hash, e.g. `abc123...def456`.
 ## Step 4 — Call upgrade()
 
 ```bash
-soroban contract invoke \
+stellar contract invoke \
   --network testnet \
-  --source <ADMIN_SECRET_KEY> \
+  --source-account alice \
   --id <CONTRACT_ID> \
   -- upgrade \
   --new_wasm_hash <WASM_HASH_FROM_STEP_3>
@@ -97,9 +97,9 @@ What happens internally:
 ## Step 5 — Call migrate()
 
 ```bash
-soroban contract invoke \
+stellar contract invoke \
   --network testnet \
-  --source <ADMIN_SECRET_KEY> \
+  --source-account alice \
   --id <CONTRACT_ID> \
   -- migrate
 ```

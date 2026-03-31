@@ -1,0 +1,4 @@
+[alias]
+contracts-build = "build --manifest-path contracts/Cargo.toml --workspace --target wasm32v1-none --release"
+contracts-check = "check --manifest-path contracts/Cargo.toml --workspace"
+contracts-test = "test --manifest-path contracts/Cargo.toml --workspace"

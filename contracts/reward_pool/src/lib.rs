@@ -140,6 +140,45 @@ impl RewardPoolContract {
             .unwrap_or(i128::MAX)
     }
 
+    pub fn get_daily_usage(env: Env, wallet: Address) -> DailyUsage {
+        read_daily_usage(&env, &wallet)
+    }
+}
+
+fn read_admin(env: &Env) -> Address {
+    env.storage()
+        .instance()
+        .get(&DataKey::Admin)
+        .expect("not initialized")
+}
+
+fn read_daily_usage(env: &Env, wallet: &Address) -> DailyUsage {
+    let key = DataKey::DailyUsage(wallet.clone());
+    if env.storage().persistent().has(&key) {
+        let usage = env.storage().persistent().get(&key).unwrap();
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, DAILY_USAGE_TTL, DAILY_USAGE_TTL);
+        usage
+    } else {
+        DailyUsage {
+            amount: 0,
+            window_started_at: 0,
+        }
+    }
+}
+
+fn write_daily_usage(env: &Env, wallet: &Address, usage: &DailyUsage) {
+    let key = DataKey::DailyUsage(wallet.clone());
+    env.storage().persistent().set(&key, usage);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, DAILY_USAGE_TTL, DAILY_USAGE_TTL);
+}
+
+fn assert_positive_amount(amount: i128) {
+    if amount <= 0 {
+        panic!("amount must be positive");
     /// Returns the tracked 24-hour withdrawal usage for a wallet.
     pub fn get_daily_usage(env: Env, wallet: Address) -> DailyUsage {
         Self::current_usage(&env, &wallet)
