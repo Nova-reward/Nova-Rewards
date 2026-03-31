@@ -67,6 +67,7 @@ export default function DashboardLayout({ children }) {
     { href: '/rewards', label: 'Rewards', icon: '🎁' },
     { href: '/history', label: 'History', icon: '📜' },
     { href: '/referral', label: 'Referral', icon: '👥', tourId: 'referral-link' },
+    { href: '/analytics', label: 'Analytics', icon: '📊' },
     { href: '/settings', label: 'Settings', icon: '⚙️' },
     { href: '/help', label: 'Help Center', icon: '❓' },
   ];
