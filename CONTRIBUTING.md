@@ -2,11 +2,28 @@
 
 Thank you for your interest in contributing to Nova Rewards! This guide outlines how open-source contributors can add features and fix bugs in the Nova Rewards frontend.
 
-## Prerequisites
+---
 
-Before making any changes, please read the following guides:
+## Table of Contents
 
-- **[Stellar & Soroban Integration Tutorial](docs/stellar/integration.md)** — Required reading for any work touching the blockchain layer, transaction submission, or Soroban contracts.
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [Branch Naming Conventions](#branch-naming-conventions)
+- [Commit Style](#commit-style)
+- [Development Workflow](#development-workflow)
+- [Pull Request Process](#pull-request-process)
+- [Reporting Bugs](#reporting-bugs)
+- [Requesting Features](#requesting-features)
+- [Code Style Guide](#code-style-guide)
+- [Required Reading](#required-reading)
+
+---
+
+## Code of Conduct
+
+By participating in this project, you agree to uphold a respectful and inclusive environment. Be kind, constructive, and collaborative.
+
+---
 
 ## Getting Started
 

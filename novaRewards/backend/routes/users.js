@@ -11,6 +11,32 @@ const { authenticateUser, requireAdmin, requireOwnershipOrAdmin } = require('../
 const { validateUpdateUserDto } = require('../middleware/validateDto');
 const { isValidStellarAddress, getNOVABalance } = require('../../blockchain/stellarService');
 const { client: redisClient } = require('../lib/redis');
+const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
+
+const SALT_ROUNDS = 12;
+
+// Store avatars in memory; persist to disk under /public/avatars
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, '../../frontend/public/avatars');
+      require('fs').mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `user-${req.params.id}-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+  },
+});
 
 function parsePositiveInteger(value) {
   const parsed = parseInt(value, 10);
@@ -41,9 +67,45 @@ function ensureSelfOrAdmin(req, res, userId) {
 }
 
 /**
- * POST /api/users
- * Creates a new user with optional referral tracking.
- * Requirements: #181
+ * @openapi
+ * /users:
+ *   post:
+ *     tags: [Users]
+ *     summary: Create a new user with optional referral tracking
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [walletAddress]
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+ *               referralCode:
+ *                 type: string
+ *                 example: GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN
+ *     responses:
+ *       201:
+ *         description: User created.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: Wallet address already registered.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -84,43 +146,35 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * GET /api/users
- * Returns a paginated user list for admins.
- */
-router.get('/', authenticateUser, requireAdmin, async (req, res, next) => {
-  try {
-    const pagination = parsePagination(req.query);
-    if (pagination.error) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: pagination.error,
-      });
-    }
-
-    const { users, total } = await userRepository.listUsers({
-      search: req.query.search,
-      page: pagination.page,
-      limit: pagination.limit,
-    });
-
-    res.json({
-      success: true,
-      data: {
-        users,
-        total,
-        page: pagination.page,
-        limit: pagination.limit,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * GET /api/users/:walletAddress/points
- * Returns the current point balance for a wallet address.
+ * @openapi
+ * /users/{walletAddress}/points:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get current point balance for a wallet address
+ *     parameters:
+ *       - in: path
+ *         name: walletAddress
+ *         required: true
+ *         schema: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *     responses:
+ *       200:
+ *         description: Point balance.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     walletAddress: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *                     balance: { type: number, example: 1250.5 }
+ *       400:
+ *         description: Invalid wallet address.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:walletAddress/points', async (req, res, next) => {
   try {
@@ -247,9 +301,43 @@ router.get('/:id/token-balance', async (req, res, next) => {
 });
 
 /**
- * GET /api/users/:id
- * Returns public profile for non-owners, private profile for owners/admins.
- * Requirements: 183.1
+ * @openapi
+ * /users/{id}:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get user profile (public or private depending on ownership)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: User profile.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       400:
+ *         description: Invalid id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id', authenticateUser, requireOwnershipOrAdmin, async (req, res, next) => {
   try {
@@ -282,144 +370,40 @@ router.get('/:id', authenticateUser, requireOwnershipOrAdmin, async (req, res, n
 });
 
 /**
- * GET /api/users/:id/rewards
- * Returns reward summary and redemption history for a user.
- */
-router.get('/:id/rewards', authenticateUser, async (req, res, next) => {
-  try {
-    const userId = parsePositiveInteger(req.params.id);
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'id must be a positive integer',
-      });
-    }
-
-    const userExists = await userRepository.exists(userId);
-    if (!userExists) {
-      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
-    }
-
-    if (!ensureSelfOrAdmin(req, res, userId)) return;
-
-    const pagination = parsePagination(req.query);
-    if (pagination.error) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: pagination.error,
-      });
-    }
-
-    const [balance, totalPoints, referralPoints, redemptions] = await Promise.all([
-      getUserBalance(userId),
-      getUserTotalPoints(userId),
-      getUserReferralPoints(userId),
-      getUserRedemptions(userId, pagination),
-    ]);
-
-    res.json({
-      success: true,
-      data: {
-        summary: {
-          balance,
-          totalPoints,
-          referralPoints,
-        },
-        rewards: redemptions.data,
-        total: redemptions.total,
-        page: redemptions.page,
-        limit: redemptions.limit,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * GET /api/users/:id/transactions
- * Returns paginated transactions for a user.
- */
-router.get('/:id/transactions', authenticateUser, async (req, res, next) => {
-  try {
-    const userId = parsePositiveInteger(req.params.id);
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'id must be a positive integer',
-      });
-    }
-
-    const userExists = await userRepository.exists(userId);
-    if (!userExists) {
-      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
-    }
-
-    if (!ensureSelfOrAdmin(req, res, userId)) return;
-
-    const pagination = parsePagination(req.query);
-    if (pagination.error) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: pagination.error,
-      });
-    }
-
-    const validTypes = ['distribution', 'redemption', 'transfer'];
-    const { type, startDate, endDate } = req.query;
-
-    if (type && !validTypes.includes(type)) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: `type must be one of: ${validTypes.join(', ')}`,
-      });
-    }
-
-    if (startDate && Number.isNaN(Date.parse(startDate))) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'startDate must be a valid ISO date string',
-      });
-    }
-
-    if (endDate && Number.isNaN(Date.parse(endDate))) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'endDate must be a valid ISO date string',
-      });
-    }
-
-    const result = await getTransactionsByUser(userId, {
-      type,
-      startDate,
-      endDate,
-      page: pagination.page,
-      limit: pagination.limit,
-    });
-
-    res.json({
-      success: true,
-      data: result.data,
-      total: result.total,
-      page: result.page,
-      limit: result.limit,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * GET /api/users/:id/referrals
- * Returns referral statistics for a user.
- * Requirements: #181
+ * @openapi
+ * /users/{id}/referrals:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get referral statistics for a user
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: Referral stats.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     total_referrals: { type: integer, example: 5 }
+ *                     total_bonus_earned: { type: number, example: 250 }
+ *       400:
+ *         description: Invalid id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id/referrals', async (req, res, next) => {
   try {
@@ -446,9 +430,53 @@ router.get('/:id/referrals', async (req, res, next) => {
 });
 
 /**
- * PUT /api/users/:id
- * Partial profile update.
- * Requirements: 183.2, 183.4
+ * @openapi
+ * /users/{id}:
+ *   patch:
+ *     tags: [Users]
+ *     summary: Partial profile update
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName: { type: string, example: Alice }
+ *               lastName: { type: string, example: Smith }
+ *               bio: { type: string, example: "Stellar enthusiast" }
+ *               stellarPublicKey: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *     responses:
+ *       200:
+ *         description: Updated user profile.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Forbidden — not owner or admin.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 async function updateUserProfile(req, res, next) {
   try {
@@ -483,9 +511,43 @@ router.put('/:id', authenticateUser, validateUpdateUserDto, updateUserProfile);
 router.patch('/:id', authenticateUser, validateUpdateUserDto, updateUserProfile);
 
 /**
- * DELETE /api/users/:id
- * Soft-delete and anonymise PII.
- * Requirements: 183.3
+ * @openapi
+ * /users/{id}:
+ *   delete:
+ *     tags: [Users]
+ *     summary: Soft-delete and anonymise a user account
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: Account deleted.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "User account deleted successfully" }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Forbidden.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.delete('/:id', authenticateUser, async (req, res, next) => {
   try {
@@ -511,9 +573,44 @@ router.delete('/:id', authenticateUser, async (req, res, next) => {
 });
 
 /**
- * POST /api/users/:id/referrals/process
- * Manually processes a referral bonus.
- * Requirements: #181
+ * @openapi
+ * /users/{id}/referrals/process:
+ *   post:
+ *     tags: [Users]
+ *     summary: Manually process a referral bonus
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *         description: Referrer user ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [referredUserId]
+ *             properties:
+ *               referredUserId: { type: integer, example: 99 }
+ *     responses:
+ *       200:
+ *         description: Referral bonus processed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     bonus: { type: number, example: 50 }
+ *       400:
+ *         description: Validation or referral error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/:id/referrals/process', async (req, res, next) => {
   try {
@@ -542,6 +639,78 @@ router.post('/:id/referrals/process', async (req, res, next) => {
     }
 
     res.json({ success: true, data: result.bonus, message: result.message });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/users/:id/profile-picture
+ * Upload avatar image (JPEG/PNG/WebP, max 5 MB).
+ * Requirements: #171
+ */
+router.post('/:id/profile-picture', authenticateUser, (req, res, next) => {
+  const userId = parseInt(req.params.id, 10);
+  if (req.user.id !== userId && req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+  }
+  upload.single('avatar')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: 'upload_error', message: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'No file uploaded' });
+    }
+    const avatarUrl = `/avatars/${req.file.filename}`;
+    await query(
+      `UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2`,
+      [avatarUrl, userId]
+    );
+    res.json({ success: true, data: { avatarUrl } });
+  });
+});
+
+/**
+ * PATCH /api/users/:id/password
+ * Change password — requires current password verification.
+ * Requirements: #171
+ */
+router.patch('/:id/password', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (req.user.id !== userId) {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false, error: 'validation_error', message: 'currentPassword and newPassword are required',
+      });
+    }
+    if (newPassword.length < 8 || !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+      return res.status(400).json({
+        success: false, error: 'validation_error',
+        message: 'New password must be at least 8 characters with uppercase, lowercase, and a number',
+      });
+    }
+
+    const result = await query(
+      'SELECT password_hash FROM users WHERE id = $1 AND is_deleted = FALSE',
+      [userId]
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const match = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!match) {
+      return res.status(401).json({ success: false, error: 'invalid_credentials', message: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
+    res.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     next(err);
   }

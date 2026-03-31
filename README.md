@@ -1,5 +1,9 @@
 # Nova Rewards
 
+<p align="center">
+  <img src="repo_avatar.png" width="300" alt="Nova Rewards Logo">
+</p>
+
 **Nova Rewards** is a next-generation, blockchain-powered loyalty platform that enables businesses to reward users with tokenized incentives on the Stellar network.
 
 It transforms traditional reward systems into transparent, secure, and interoperable digital experiences.
