@@ -3,9 +3,11 @@ const { query } = require('../db/index');
 const { getUserByWallet, getUserById, createUser } = require('../db/userRepository');
 const userRepository = require('../db/userRepository');
 const { getUserReferralStats, processReferralBonus } = require('../services/referralService');
-const { getUserTotalPoints, getUserReferralPoints } = require('../db/pointTransactionRepository');
+const { getUserBalance, getUserTotalPoints, getUserReferralPoints } = require('../db/pointTransactionRepository');
+const { getUserRedemptions } = require('../db/redemptionRepository');
+const { getTransactionsByUser } = require('../db/transactionRepository');
 const { sendWelcome } = require('../services/emailService');
-const { authenticateUser, requireOwnershipOrAdmin } = require('../middleware/authenticateUser');
+const { authenticateUser, requireAdmin, requireOwnershipOrAdmin } = require('../middleware/authenticateUser');
 const { validateUpdateUserDto } = require('../middleware/validateDto');
 const { isValidStellarAddress, getNOVABalance } = require('../../blockchain/stellarService');
 const { client: redisClient } = require('../lib/redis');
@@ -35,6 +37,34 @@ const upload = multer({
     else cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
   },
 });
+
+function parsePositiveInteger(value) {
+  const parsed = parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parsePagination(query) {
+  const page = query.page === undefined ? 1 : parseInt(query.page, 10);
+  const limit = query.limit === undefined ? 20 : parseInt(query.limit, 10);
+
+  if (!Number.isInteger(page) || page <= 0) {
+    return { error: 'page must be a positive integer' };
+  }
+
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+    return { error: 'limit must be a positive integer between 1 and 100' };
+  }
+
+  return { page, limit };
+}
+
+function ensureSelfOrAdmin(req, res, userId) {
+  if (req.user.id !== userId && req.user.role !== 'admin') {
+    res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
 
 /**
  * @openapi
@@ -448,7 +478,7 @@ router.get('/:id/referrals', async (req, res, next) => {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.patch('/:id', authenticateUser, validateUpdateUserDto, async (req, res, next) => {
+async function updateUserProfile(req, res, next) {
   try {
     const userId = parseInt(req.params.id, 10);
     const currentUserId = req.user.id;
@@ -475,7 +505,10 @@ router.patch('/:id', authenticateUser, validateUpdateUserDto, async (req, res, n
   } catch (err) {
     next(err);
   }
-});
+}
+
+router.put('/:id', authenticateUser, validateUpdateUserDto, updateUserProfile);
+router.patch('/:id', authenticateUser, validateUpdateUserDto, updateUserProfile);
 
 /**
  * @openapi
