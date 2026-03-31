@@ -1,0 +1,1 @@
+# Task Progress: Resolve conflicts (none found) and remove MD/snapshots\n\n1. [x] Remove snapshot test directories\n2. [ ] Remove non-essential MD files\n3. [ ] Git add/commit/push\n4. [ ] Verify clean status
