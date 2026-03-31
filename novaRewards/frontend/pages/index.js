@@ -1,8 +1,11 @@
+import { useTranslation } from 'next-i18next';
 import { useWallet } from '../context/WalletContext';
 import { useRouter } from 'next/router';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useEffect } from 'react';
 
 export default function Home() {
+  const { t } = useTranslation('common');
   const { publicKey, connect, loading, error, freighterInstalled, disconnect } = useWallet();
   const router = useRouter();
 
@@ -18,7 +21,7 @@ export default function Home() {
   return (
     <>
       <nav className="nav">
-        <span className="nav-brand">⭐ NovaRewards</span>
+        <span className="nav-brand">{t('nav.brand')}</span>
         <div className="nav-links">
           <a href="/merchant">Merchant Portal</a>
           <a href="/auth/register">Email Sign Up</a>
@@ -29,7 +32,7 @@ export default function Home() {
               onClick={handleDisconnect}
               style={{ padding: "0.4rem 1rem" }}
             >
-              Disconnect
+              {t('nav.disconnect')}
             </button>
           )}
         </div>
@@ -37,17 +40,16 @@ export default function Home() {
 
       <div className="container" style={{ textAlign: 'center', paddingTop: '5rem' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '1rem' }}>
-          Own Your Rewards
+          {t('home.title')}
         </h1>
         <p style={{ color: '#94a3b8', fontSize: '1.1rem', marginBottom: '2.5rem', maxWidth: 500, margin: '0 auto 2.5rem' }}>
-          NovaRewards puts loyalty tokens on the Stellar blockchain — earn, transfer,
-          and redeem NOVA tokens across any participating merchant.
+          {t('home.description')}
         </p>
 
         {freighterInstalled === false ? (
           <div className="card" style={{ maxWidth: 420, margin: '0 auto' }}>
             <p style={{ marginBottom: '1rem' }}>
-              Freighter Wallet is required to use NovaRewards.
+              {t('home.freighterRequired')}
             </p>
             <a
               href="https://www.freighter.app/"
@@ -55,7 +57,7 @@ export default function Home() {
               rel="noopener noreferrer"
               className="btn btn-primary"
             >
-              Install Freighter Wallet
+              {t('home.installFreighter')}
             </a>
           </div>
         ) : (
@@ -63,14 +65,17 @@ export default function Home() {
             className="btn btn-primary"
             style={{ fontSize: '1.1rem', padding: '0.8rem 2rem' }}
             onClick={connect}
-            disabled={loading}
+            disabled={isLoading}
           >
-            {loading ? 'Connecting…' : 'Connect Freighter Wallet'}
+            {loading ? t('home.connecting') : t('home.connectWallet')}
           </button>
         )}
 
         {error && <p className="error" style={{ marginTop: '1rem' }}>{error}</p>}
+
+        {/* TODO: link tokenomics doc — add a "Tokenomics" section here pointing to docs/tokenomics.md or the hosted URL */}
       </div>
     </>
   );
 }
+

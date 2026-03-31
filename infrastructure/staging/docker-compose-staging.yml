@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  postgres-staging:
+    image: postgres:15-alpine
+    container_name: postgres-staging
+    environment:
+      POSTGRES_USER: ${DB_USER:-staging_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-staging_password}
+      POSTGRES_DB: ${DB_NAME:-nova_rewards_staging}
+    volumes:
+      - staging-postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-staging-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - staging
+    command:
+      - "postgres"
+      - "-c"
+      - "log_statement=all"
+      - "-c"
+      - "log_duration=on"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-staging_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-staging:
+    image: redis:7-alpine
+    container_name: redis-staging
+    ports:
+      - "6380:6379"
+    volumes:
+      - staging-redis-data:/data
+    networks:
+      - staging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend-staging:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: backend-staging
+    environment:
+      NODE_ENV: staging
+      DATABASE_URL: postgres://${DB_USER:-staging_user}:${DB_PASSWORD:-staging_password}@postgres-staging:5432/${DB_NAME:-nova_rewards_staging}
+      REDIS_URL: redis://redis-staging:6379
+      LOG_LEVEL: debug
+      API_PORT: 3001
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_TOKEN}
+    ports:
+      - "3001:3001"
+    volumes:
+      - ../../backend:/app
+      - /app/node_modules
+    networks:
+      - staging
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+      redis-staging:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend-staging:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://backend-staging:3001
+        REACT_APP_ENV: staging
+    container_name: frontend-staging
+    environment:
+      NODE_ENV: staging
+      REACT_APP_API_URL: http://backend-staging:3001
+      REACT_APP_ENV: staging
+    ports:
+      - "3002:3000"
+    volumes:
+      - ../../frontend:/app
+      - /app/node_modules
+    networks:
+      - staging
+    depends_on:
+      - backend-staging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  nginx-staging:
+    image: nginx:alpine
+    container_name: nginx-staging
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-staging.conf:/etc/nginx/nginx.conf:ro
+      - ../ssl/certs:/etc/nginx/certs:ro
+    networks:
+      - staging
+    depends_on:
+      - backend-staging
+      - frontend-staging
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  staging-postgres-data:
+  staging-redis-data:
+
+networks:
+  staging:
+    driver: bridge

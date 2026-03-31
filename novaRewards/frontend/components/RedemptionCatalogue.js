@@ -2,172 +2,198 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
 import api from '../lib/api';
+import { signAndSubmit } from '../lib/freighter';
 import { useAuth } from '../context/AuthContext';
+import { useWallet } from '../context/WalletContext';
 import { useToast } from './Toast';
 import RewardCard from './RewardCard';
 import RedemptionModal from './RedemptionModal';
+import RedemptionHistory from './RedemptionHistory';
 import ConfettiBurst from './ConfettiBurst';
 
+const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
+const NETWORK_PASSPHRASE =
+  process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
+
 /**
- * Redemption catalogue screen.
- * Fetches rewards, displays as cards with filtering/sorting, handles redemptions.
+ * Full redemption flow:
+ *  1. Browse catalogue with filter/sort
+ *  2. Select reward & amount → modal
+ *  3. Wallet signature via Freighter
+ *  4. Real-time tx status tracking
+ *  5. Toast notifications on success/error
+ *  6. Redemption history panel
  */
 export default function RedemptionCatalogue() {
   const { user } = useAuth();
+  const { publicKey, refreshBalance } = useWallet();
   const { addToast } = useToast();
 
-  // State
   const [rewards, setRewards] = useState([]);
   const [userPoints, setUserPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filter & sort
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('cost-asc');
 
-  // Modal
   const [selectedReward, setSelectedReward] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isRedeeming, setIsRedeeming] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  // Fetch rewards catalogue
+  // Transaction status: 'idle' | 'pending' | 'success' | 'error'
+  const [txStatus, setTxStatus] = useState('idle');
+  const [txHash, setTxHash] = useState(null);
+  const [txError, setTxError] = useState(null);
+
+  // Reload history key to trigger re-fetch after redemption
+  const [historyKey, setHistoryKey] = useState(0);
+
   useEffect(() => {
-    const fetchRewards = async () => {
+    let cancelled = false;
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await api.get('/rewards');
-        setRewards(response.data.data || response.data);
+        const [rewardsRes, userRes] = await Promise.all([
+          api.get('/rewards'),
+          user?.id ? api.get(`/users/${user.id}`) : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        setRewards(rewardsRes.data.data || rewardsRes.data);
+        setUserPoints(userRes?.data?.data?.points || 0);
       } catch (err) {
-        setError(err.response?.data?.message || 'Failed to load rewards');
-        addToast('Failed to load rewards catalogue', 'error');
+        if (!cancelled) {
+          setError(err.response?.data?.message || 'Failed to load rewards');
+          addToast('Failed to load rewards catalogue', 'error');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
+    fetchData();
+    return () => { cancelled = true; };
+  }, [user?.id, addToast]);
 
-    fetchRewards();
-  }, [addToast]);
-
-  // Fetch user points
-  useEffect(() => {
-    const fetchUserPoints = async () => {
-      if (!user?.id) return;
-      try {
-        const response = await api.get(`/users/${user.id}`);
-        setUserPoints(response.data.data?.points || 0);
-      } catch (err) {
-        console.error('Failed to fetch user points:', err);
-      }
-    };
-
-    fetchUserPoints();
-  }, [user?.id]);
-
-  // Extract unique categories
   const categories = useMemo(() => {
     const cats = new Set(rewards.map((r) => r.category).filter(Boolean));
     return ['all', ...Array.from(cats).sort()];
   }, [rewards]);
 
-  // Filter and sort rewards
   const filteredRewards = useMemo(() => {
-    let filtered = rewards;
-
-    // Apply category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter((r) => r.category === selectedCategory);
-    }
-
-    // Apply sorting
-    const sorted = [...filtered];
+    let list = selectedCategory === 'all' ? rewards : rewards.filter((r) => r.category === selectedCategory);
+    const sorted = [...list];
     switch (sortBy) {
-      case 'cost-asc':
-        sorted.sort((a, b) => a.cost - b.cost);
-        break;
-      case 'cost-desc':
-        sorted.sort((a, b) => b.cost - a.cost);
-        break;
-      case 'name-asc':
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'name-desc':
-        sorted.sort((a, b) => b.name.localeCompare(a.name));
-        break;
-      default:
-        break;
+      case 'cost-asc':  sorted.sort((a, b) => a.cost - b.cost); break;
+      case 'cost-desc': sorted.sort((a, b) => b.cost - a.cost); break;
+      case 'name-asc':  sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case 'name-desc': sorted.sort((a, b) => b.name.localeCompare(a.name)); break;
     }
-
     return sorted;
   }, [rewards, selectedCategory, sortBy]);
 
-  // Handle redeem button click
-  const handleRedeemClick = (reward) => {
+  const openModal = (reward) => {
     setSelectedReward(reward);
+    setTxStatus('idle');
+    setTxHash(null);
+    setTxError(null);
     setIsModalOpen(true);
   };
 
-  // Handle redemption confirmation
-  const handleConfirmRedemption = async () => {
+  const closeModal = () => {
+    if (txStatus === 'pending') return; // block close while signing
+    setIsModalOpen(false);
+    setSelectedReward(null);
+    setTxStatus('idle');
+    setTxHash(null);
+    setTxError(null);
+  };
+
+  /**
+   * Full redemption flow:
+   *  1. Build Stellar payment tx
+   *  2. Sign with Freighter (wallet signature)
+   *  3. Submit to Horizon
+   *  4. Record in backend
+   */
+  const handleConfirmRedemption = async (amount) => {
     if (!selectedReward || !user?.id) return;
 
-    setIsRedeeming(true);
-    try {
-      // Optimistically decrement local balance
-      const pointsBefore = userPoints;
-      setUserPoints((prev) => Math.max(0, prev - selectedReward.cost));
+    setTxStatus('pending');
+    setTxHash(null);
+    setTxError(null);
 
-      // Call redemption API
-      const idempotencyKey = uuidv4();
-      const response = await api.post(
+    const totalCost = selectedReward.cost * amount;
+    const idempotencyKey = uuidv4();
+
+    try {
+      let hash = null;
+
+      // ── Stellar on-chain redemption (if wallet connected) ──────────────
+      if (publicKey && ISSUER_PUBLIC) {
+        const server = new Horizon.Server(HORIZON_URL);
+        const account = await server.loadAccount(publicKey);
+        const novaAsset = new Asset('NOVA', ISSUER_PUBLIC);
+
+        const tx = new TransactionBuilder(account, {
+          fee: BASE_FEE,
+          networkPassphrase: NETWORK_PASSPHRASE,
+        })
+          .addOperation(
+            Operation.payment({
+              destination: ISSUER_PUBLIC, // burn back to issuer
+              asset: novaAsset,
+              amount: String(totalCost),
+            })
+          )
+          .setTimeout(180)
+          .build();
+
+        const result = await signAndSubmit(tx.toXDR());
+        hash = result.txHash;
+        setTxHash(hash);
+      }
+
+      // ── Record redemption in backend ───────────────────────────────────
+      await api.post(
         '/redemptions',
-        {
-          userId: user.id,
-          rewardId: selectedReward.id,
-        },
-        {
-          headers: {
-            'X-Idempotency-Key': idempotencyKey,
-          },
-        }
+        { userId: user.id, rewardId: selectedReward.id, quantity: amount, txHash: hash },
+        { headers: { 'X-Idempotency-Key': idempotencyKey } }
       );
 
-      // Update reward stock locally
+      // ── Optimistic local updates ───────────────────────────────────────
+      setUserPoints((prev) => Math.max(0, prev - totalCost));
       setRewards((prev) =>
         prev.map((r) =>
-          r.id === selectedReward.id
-            ? { ...r, stock: Math.max(0, r.stock - 1) }
-            : r
+          r.id === selectedReward.id ? { ...r, stock: Math.max(0, r.stock - amount) } : r
         )
       );
 
-      addToast(`Successfully redeemed ${selectedReward.name}!`, 'success');
+      setTxStatus('success');
       setShowConfetti(true);
-      setIsModalOpen(false);
-      setSelectedReward(null);
+      setHistoryKey((k) => k + 1);
+      addToast(`🎉 Redeemed ${selectedReward.name}!`, 'success');
+      if (publicKey) refreshBalance(publicKey);
     } catch (err) {
-      // Revert optimistic update on error
-      setUserPoints(pointsBefore);
-
-      const errorMessage =
+      const msg =
         err.response?.data?.message ||
         err.response?.data?.error ||
-        'Failed to redeem reward';
-
-      addToast(errorMessage, 'error');
-    } finally {
-      setIsRedeeming(false);
+        err.message ||
+        'Redemption failed';
+      setTxStatus('error');
+      setTxError(msg);
+      addToast(msg, 'error');
     }
   };
 
   if (loading) {
     return (
       <div className="redemption-container">
-        <div className="loading-spinner"></div>
-        <p>Loading rewards...</p>
+        <div className="loading-spinner" />
+        <p>Loading rewards…</p>
       </div>
     );
   }
@@ -183,15 +209,17 @@ export default function RedemptionCatalogue() {
   return (
     <div className="redemption-container" style={{ position: 'relative' }}>
       <ConfettiBurst active={showConfetti} onComplete={() => setShowConfetti(false)} />
+
       <div className="redemption-header">
         <div>
           <h1>Redeem Rewards</h1>
           <p className="redemption-subtitle">
-            You have <strong>{userPoints} points</strong> available
+            You have <strong>{userPoints.toLocaleString()} points</strong> available
           </p>
         </div>
       </div>
 
+      {/* ── Filters ── */}
       <div className="redemption-controls">
         <div className="control-group">
           <label htmlFor="category-filter">Category:</label>
@@ -225,6 +253,7 @@ export default function RedemptionCatalogue() {
         </div>
       </div>
 
+      {/* ── Rewards grid ── */}
       {filteredRewards.length === 0 ? (
         <div className="empty-state">
           <p>No rewards available in this category.</p>
@@ -236,23 +265,28 @@ export default function RedemptionCatalogue() {
               key={reward.id}
               reward={reward}
               userPoints={userPoints}
-              onRedeem={handleRedeemClick}
-              isLoading={isRedeeming}
+              onRedeem={openModal}
             />
           ))}
         </div>
       )}
 
+      {/* ── Redemption history ── */}
+      <div style={{ marginTop: '2rem' }}>
+        <RedemptionHistory key={historyKey} />
+      </div>
+
+      {/* ── Modal ── */}
       <RedemptionModal
         isOpen={isModalOpen}
         reward={selectedReward}
         currentPoints={userPoints}
         onConfirm={handleConfirmRedemption}
-        onCancel={() => {
-          setIsModalOpen(false);
-          setSelectedReward(null);
-        }}
-        isLoading={isRedeeming}
+        onCancel={closeModal}
+        isLoading={txStatus === 'pending'}
+        txStatus={txStatus}
+        txHash={txHash}
+        txError={txError}
       />
     </div>
   );
