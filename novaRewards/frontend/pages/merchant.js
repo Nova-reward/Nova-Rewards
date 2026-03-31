@@ -10,7 +10,19 @@ const TABS = ['Campaigns', 'Analytics', 'Issue Rewards'];
  * Merchant dashboard — registration, campaign management, analytics, reward issuance.
  */
 export default function MerchantDashboard() {
+<<<<<<< main
+  const { user: merchant, token: apiKey, login } = useAuthStore();
+  const { campaigns, setCampaigns } = useCampaignStore();
+
+  // Registration state
+  const [regForm, setRegForm] = useState({
+    name: "",
+    walletAddress: "",
+    businessCategory: "",
+  });
+=======
   const [regForm, setRegForm] = useState({ name: '', walletAddress: '', businessCategory: '' });
+>>>>>>> main
   const [merchant, setMerchant] = useState(null);
   const [apiKey, setApiKey] = useState('');
   const [regStatus, setRegStatus] = useState('idle');
@@ -25,7 +37,7 @@ export default function MerchantDashboard() {
     } catch {
       // ignore
     }
-  }, []);
+  }, [setCampaigns]);
 
   useEffect(() => {
     if (merchant?.id) refreshTotals(merchant.id);
@@ -107,6 +119,25 @@ export default function MerchantDashboard() {
               </div>
             </div>
 
+<<<<<<< main
+            {/* Issue rewards — Requirements 10.4 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Issue Rewards</h2>
+              <IssueRewardForm
+                merchantId={merchant.id}
+                apiKey={apiKey}
+                campaigns={campaigns}
+                onSuccess={() => getMerchantTotals(merchant.id)}
+              />
+            </div>
+
+            {/* Create campaign — Requirements 10.3 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Create Campaign</h2>
+              <CampaignForm
+                onSuccess={() => loadDashboard(merchant.id)}
+              />
+=======
             {/* Tabs */}
             <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
               {TABS.map((tab) => (
@@ -128,6 +159,7 @@ export default function MerchantDashboard() {
                   {tab}
                 </button>
               ))}
+>>>>>>> main
             </div>
 
             {/* Tab content */}

@@ -65,7 +65,7 @@ export default function Home() {
             className="btn btn-primary"
             style={{ fontSize: '1.1rem', padding: '0.8rem 2rem' }}
             onClick={connect}
-            disabled={loading}
+            disabled={isLoading}
           >
             {loading ? t('home.connecting') : t('home.connectWallet')}
           </button>
