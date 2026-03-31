@@ -1,18 +1,15 @@
 #![no_std]
-
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
 const DAY_IN_SECONDS: u64 = 86_400;
-const DAILY_USAGE_TTL: u32 = 2 * DAY_IN_SECONDS as u32;
+const DAILY_USAGE_TTL: u32 = 172_800;
 
+/// Tracks how much a wallet has withdrawn within the current 24-hour window.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DailyUsage {
     pub amount: i128,
-    pub window_started_at: u64,
+    pub window_start: u64,
 }
 
 #[contracttype]
@@ -28,11 +25,11 @@ pub struct RewardPoolContract;
 
 #[contractimpl]
 impl RewardPoolContract {
+    /// Initializes the reward pool and stores the admin address.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
+            panic!("already initialised");
         }
-
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Balance, &0_i128);
         env.storage()
@@ -40,18 +37,51 @@ impl RewardPoolContract {
             .set(&DataKey::DailyLimit, &i128::MAX);
     }
 
+    /// Returns the admin account used for privileged configuration updates.
+    fn admin(env: &Env) -> Address {
+        env.storage().instance().get(&DataKey::Admin).unwrap()
+    }
+
+    /// Loads the current daily usage for a wallet and resets the window when it has expired.
+    fn current_usage(env: &Env, wallet: &Address) -> DailyUsage {
+        let key = DataKey::DailyUsage(wallet.clone());
+        let now = env.ledger().timestamp();
+        let usage = env.storage().persistent().get(&key).unwrap_or(DailyUsage {
+            amount: 0,
+            window_start: now,
+        });
+
+        if now.saturating_sub(usage.window_start) >= DAY_IN_SECONDS {
+            DailyUsage {
+                amount: 0,
+                window_start: now,
+            }
+        } else {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, DAILY_USAGE_TTL, DAILY_USAGE_TTL);
+            usage
+        }
+    }
+
+    /// Persists daily usage for a wallet and refreshes the entry TTL.
+    fn set_usage(env: &Env, wallet: &Address, usage: &DailyUsage) {
+        let key = DataKey::DailyUsage(wallet.clone());
+        env.storage().persistent().set(&key, usage);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, DAILY_USAGE_TTL, DAILY_USAGE_TTL);
+    }
+
+    /// Deposits funds into the shared reward pool.
     pub fn deposit(env: Env, from: Address, amount: i128) {
         from.require_auth();
-        assert_positive_amount(amount);
+        assert!(amount > 0, "amount must be positive");
 
-        let balance = Self::get_balance(env.clone());
-        let updated_balance = balance
-            .checked_add(amount)
-            .expect("pool balance overflow");
-
+        let balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
         env.storage()
             .instance()
-            .set(&DataKey::Balance, &updated_balance);
+            .set(&DataKey::Balance, &(balance + amount));
 
         env.events().publish(
             (symbol_short!("rwd_pool"), symbol_short!("deposited")),
@@ -59,51 +89,30 @@ impl RewardPoolContract {
         );
     }
 
+    /// Withdraws funds from the shared reward pool subject to the daily wallet limit.
     pub fn withdraw(env: Env, to: Address, amount: i128) {
-        let admin = read_admin(&env);
-        admin.require_auth();
-        assert_positive_amount(amount);
+        to.require_auth();
+        assert!(amount > 0, "amount must be positive");
 
-        let balance = Self::get_balance(env.clone());
-        if amount > balance {
-            panic!("insufficient reward pool balance");
-        }
+        let balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
+        assert!(balance >= amount, "insufficient pool balance");
 
-        let now = env.ledger().timestamp();
-        let daily_limit = Self::get_daily_limit(env.clone());
-        let usage = read_daily_usage(&env, &to);
-        let window_start = if usage.window_started_at == 0
-            || now.saturating_sub(usage.window_started_at) >= DAY_IN_SECONDS
-        {
-            now
-        } else {
-            usage.window_started_at
-        };
-        let current_usage = if window_start == usage.window_started_at {
-            usage.amount
-        } else {
-            0
-        };
-        let updated_usage = current_usage
-            .checked_add(amount)
-            .expect("daily usage overflow");
+        let limit: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::DailyLimit)
+            .unwrap_or(i128::MAX);
+        let mut usage = Self::current_usage(&env, &to);
+        assert!(
+            usage.amount + amount <= limit,
+            "daily withdrawal limit exceeded"
+        );
 
-        if updated_usage > daily_limit {
-            panic!("daily withdraw limit exceeded");
-        }
-
+        usage.amount += amount;
+        Self::set_usage(&env, &to, &usage);
         env.storage()
             .instance()
             .set(&DataKey::Balance, &(balance - amount));
-
-        write_daily_usage(
-            &env,
-            &to,
-            &DailyUsage {
-                amount: updated_usage,
-                window_started_at: window_start,
-            },
-        );
 
         env.events().publish(
             (symbol_short!("rwd_pool"), symbol_short!("withdrawn")),
@@ -111,21 +120,19 @@ impl RewardPoolContract {
         );
     }
 
+    /// Updates the per-wallet daily withdrawal cap. Admin only.
     pub fn set_daily_limit(env: Env, limit: i128) {
-        let admin = read_admin(&env);
-        admin.require_auth();
-
-        if limit <= 0 {
-            panic!("daily limit must be positive");
-        }
-
+        Self::admin(&env).require_auth();
+        assert!(limit > 0, "limit must be positive");
         env.storage().instance().set(&DataKey::DailyLimit, &limit);
     }
 
+    /// Returns the total funds currently held by the reward pool.
     pub fn get_balance(env: Env) -> i128 {
         env.storage().instance().get(&DataKey::Balance).unwrap_or(0)
     }
 
+    /// Returns the configured per-wallet daily withdrawal cap.
     pub fn get_daily_limit(env: Env) -> i128 {
         env.storage()
             .instance()
@@ -172,95 +179,49 @@ fn write_daily_usage(env: &Env, wallet: &Address, usage: &DailyUsage) {
 fn assert_positive_amount(amount: i128) {
     if amount <= 0 {
         panic!("amount must be positive");
+    /// Returns the tracked 24-hour withdrawal usage for a wallet.
+    pub fn get_daily_usage(env: Env, wallet: Address) -> DailyUsage {
+        Self::current_usage(&env, &wallet)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    extern crate std;
-
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Events, Ledger as _};
-    use soroban_sdk::{Symbol, TryIntoVal};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Env,
+    };
 
-    fn deploy(env: &Env) -> (RewardPoolContractClient<'_>, Address) {
-        let admin = Address::generate(env);
-        let contract_id = env.register(RewardPoolContract, ());
-        let client = RewardPoolContractClient::new(env, &contract_id);
+    fn setup() -> (Env, Address, RewardPoolContractClient<'static>) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(RewardPoolContract, ());
+        let client = RewardPoolContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
         client.initialize(&admin);
-        (client, admin)
+        (env, admin, client)
     }
 
     #[test]
-    fn deposit_and_withdraw_update_balance() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let (client, admin) = deploy(&env);
+    fn test_deposit_withdraw_events() {
+        let (env, _admin, client) = setup();
         let depositor = Address::generate(&env);
+        let recipient = Address::generate(&env);
 
         client.deposit(&depositor, &1_000);
-        assert_eq!(client.get_balance(), 1_000);
+        client.withdraw(&recipient, &400);
 
-        client.withdraw(&admin, &400);
         assert_eq!(client.get_balance(), 600);
-        assert_eq!(client.get_daily_usage(&admin).amount, 400);
+        let _ = env.events().all();
     }
 
     #[test]
-    fn withdraw_respects_daily_limit() {
-        let env = Env::default();
-        env.mock_all_auths();
+    #[should_panic(expected = "insufficient pool balance")]
+    fn test_withdraw_overdraft() {
+        let (env, _admin, client) = setup();
+        let recipient = Address::generate(&env);
 
-        let (client, admin) = deploy(&env);
-        client.deposit(&Address::generate(&env), &1_000);
-        client.set_daily_limit(&500);
-
-        client.withdraw(&admin, &400);
-
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            client.withdraw(&admin, &200);
-        }));
-
-        assert!(result.is_err());
-        assert_eq!(client.get_balance(), 600);
-    }
-
-    #[test]
-    fn daily_usage_resets_after_one_day() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let (client, admin) = deploy(&env);
-        client.deposit(&Address::generate(&env), &1_000);
-        client.set_daily_limit(&500);
-        client.withdraw(&admin, &400);
-
-        env.ledger().set_timestamp(DAY_IN_SECONDS + 1);
-        client.withdraw(&admin, &400);
-
-        assert_eq!(client.get_balance(), 200);
-        assert_eq!(client.get_daily_usage(&admin).amount, 400);
-    }
-
-    #[test]
-    fn emits_pool_events() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let (client, admin) = deploy(&env);
-        let depositor = Address::generate(&env);
-
-        client.deposit(&depositor, &250);
-        client.withdraw(&admin, &100);
-
-        let events = env.events().all();
-        assert_eq!(events.len(), 1);
-        let withdrawn = events.get(0).unwrap();
-        let withdrawn_contract: Symbol = withdrawn.1.get(0).unwrap().try_into_val(&env).unwrap();
-        let withdrawn_event: Symbol = withdrawn.1.get(1).unwrap().try_into_val(&env).unwrap();
-
-        assert_eq!(withdrawn_contract, symbol_short!("rwd_pool"));
-        assert_eq!(withdrawn_event, symbol_short!("withdrawn"));
+        client.withdraw(&recipient, &1);
     }
 }

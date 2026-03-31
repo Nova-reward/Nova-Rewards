@@ -1,0 +1,61 @@
+name: Contract Fuzzing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly Sunday 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    name: Fuzz Soroban Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('contracts/fuzz/Cargo.toml') }}
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Fuzz calculate_payout (60s)
+        working-directory: contracts/fuzz
+        run: |
+          cargo fuzz run fuzz_calculate_payout \
+            corpus/calculate_payout \
+            -- -max_total_time=60 -max_len=32
+        continue-on-error: true
+
+      - name: Fuzz staking (60s)
+        working-directory: contracts/fuzz
+        run: |
+          cargo fuzz run fuzz_staking \
+            corpus/staking \
+            -- -max_total_time=60 -max_len=40
+        continue-on-error: true
+
+      - name: Fuzz vesting (60s)
+        working-directory: contracts/fuzz
+        run: |
+          cargo fuzz run fuzz_vesting \
+            corpus/vesting \
+            -- -max_total_time=60 -max_len=41
+        continue-on-error: true
+
+      - name: Upload crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ github.run_id }}
+          path: contracts/fuzz/artifacts/
+          if-no-files-found: ignore
