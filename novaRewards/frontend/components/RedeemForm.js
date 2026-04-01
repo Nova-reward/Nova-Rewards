@@ -15,7 +15,8 @@ const NETWORK_PASSPHRASE =
  * Form for redeeming NOVA tokens with a merchant.
  * Requirements: 4.1, 4.2, 4.5
  */
-export default function RedeemForm({ senderPublicKey, senderBalance, onSuccess }) {
+export default function RedeemForm({ onSuccess }) {
+  const { publicKey: senderPublicKey, balance: senderBalance } = useWalletStore();
   const [merchantWallet, setMerchantWallet] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');

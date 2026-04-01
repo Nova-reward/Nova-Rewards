@@ -6,3 +6,13 @@ novaRewards/backend/coverage/
 dist/
 build/
 .DS_Store
+
+# Terraform
+infra/terraform.tfvars
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfplan
+
+# Soroban test snapshots
+contracts/**/test_snapshots/

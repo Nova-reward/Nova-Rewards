@@ -105,6 +105,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('authToken', accessToken);
       localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('authUser', JSON.stringify(newUser));
+      document.cookie = `authToken=${accessToken}; path=/; SameSite=Lax`;
       
       return { success: true, user: newUser };
     } catch (err) {
@@ -134,6 +135,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('authToken', accessToken);
       localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('authUser', JSON.stringify(loggedInUser));
+      document.cookie = `authToken=${accessToken}; path=/; SameSite=Lax`;
       
       return { success: true, user: loggedInUser };
     } catch (err) {
@@ -158,6 +160,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('authUser');
+    document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   }, []);
 
   /**

@@ -1,5 +1,9 @@
 # Nova Rewards
 
+<p align="center">
+  <img src="repo_avatar.png" width="300" alt="Nova Rewards Logo">
+</p>
+
 **Nova Rewards** is a next-generation, blockchain-powered loyalty platform that enables businesses to reward users with tokenized incentives on the Stellar network.
 
 It transforms traditional reward systems into transparent, secure, and interoperable digital experiences.
@@ -102,14 +106,45 @@ All smart contracts undergo comprehensive security audits before production depl
 
 ### Prerequisites
 
-- Node.js  
-- Stellar CLI / SDK  
+- Node.js
+- Rust `stable`
+- `stellar` CLI
+- Docker Desktop if you want a local standalone Soroban/Stellar network
 - Wallet (e.g., Freighter)
 
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/nova-rewards.git
-cd nova-rewards
-npm install
-npm run dev
+git clone https://github.com/barry01-hash/Nova-Rewards.git
+cd Nova-Rewards
+```
+
+### Soroban Development Setup
+
+PowerShell:
+
+```powershell
+./scripts/setup-soroban-dev.ps1
+./scripts/test-contracts.ps1
+./scripts/build-contracts.ps1
+```
+
+POSIX shell:
+
+```bash
+./scripts/setup-soroban-dev.sh
+./scripts/test-contracts.sh
+./scripts/build-contracts.sh
+```
+
+To run a local standalone testnet with RPC enabled:
+
+```bash
+./scripts/start-local-testnet.sh
+```
+
+PowerShell:
+
+```powershell
+./scripts/start-local-testnet.ps1
+```

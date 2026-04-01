@@ -9,7 +9,8 @@ import TransactionLink from './TransactionLink';
  * Fetches unsigned XDR from backend, signs with Freighter, submits to Horizon.
  * Requirements: 2.1, 2.2
  */
-export default function TrustlineButton({ walletAddress, onSuccess }) {
+export default function TrustlineButton({ onSuccess }) {
+  const { publicKey: walletAddress } = useWalletStore();
   const [status, setStatus] = useState('idle'); // idle | loading | done | error
   const [message, setMessage] = useState('');
   const [txHash, setTxHash] = useState('');

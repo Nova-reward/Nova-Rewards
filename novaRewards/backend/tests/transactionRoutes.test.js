@@ -1,3 +1,42 @@
+// Coverage tests for transaction routes (record, wallet history, merchant-totals)
+process.env.ISSUER_PUBLIC = 'GDQGIY5T5QULPD7V54LJODKC5CMKPNGTWVEMYBQH4LV6STKI6IGO543K';
+process.env.HORIZON_URL = 'https://horizon-testnet.stellar.org';
+process.env.STELLAR_NETWORK = 'testnet';
+
+jest.mock('../middleware/validateEnv', () => ({ validateEnv: jest.fn() }));
+jest.mock('../services/emailService', () => ({ sendWelcome: jest.fn() }));
+jest.mock('../middleware/authenticateUser', () => ({
+  authenticateUser: (req, res, next) => { req.user = { id: 1, role: 'user' }; next(); },
+  requireAdmin: (req, res, next) => next(),
+  requireOwnershipOrAdmin: (req, res, next) => next(),
+}));
+
+jest.mock('../db/transactionRepository', () => ({
+  recordTransaction: jest.fn(),
+  getTransactionsByUser: jest.fn(),
+  getTransactionsByMerchant: jest.fn(),
+  getMerchantTotals: jest.fn(),
+}));
+
+jest.mock('../db/userRepository', () => ({
+  getUserByWallet: jest.fn(),
+  getUserById: jest.fn(),
+  createUser: jest.fn(),
+  exists: jest.fn(),
+  getPublicProfile: jest.fn(),
+  getPrivateProfile: jest.fn(),
+  update: jest.fn(),
+  softDelete: jest.fn(),
+  isAdmin: jest.fn(),
+  findById: jest.fn(),
+  findByWalletAddress: jest.fn(),
+  getReferredUsers: jest.fn(),
+  getReferralPointsEarned: jest.fn(),
+  hasReferralBonusBeenClaimed: jest.fn(),
+  getUnprocessedReferrals: jest.fn(),
+  markReferralBonusClaimed: jest.fn(),
+}));
+
 jest.mock('../middleware/authenticateMerchant', () => ({
   authenticateMerchant: (req, _res, next) => {
     req.merchant = { id: 1 };
