@@ -10,7 +10,7 @@
 //! - Edge cases and error conditions
 
 use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient, SECONDS_PER_YEAR};
-use soroban_sdk::testutils::{Address as_, Ledger as _};
+use soroban_sdk::testutils::{Address as _, Events, Ledger as _};
 use soroban_sdk::{Address, Env};
 
 fn deploy(env: &Env) -> NovaRewardsContractClient {

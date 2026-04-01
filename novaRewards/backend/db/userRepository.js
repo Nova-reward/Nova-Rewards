@@ -183,6 +183,45 @@ async function isAdmin(id) {
   return result.rows[0]?.role === 'admin';
 }
 
+async function listUsers({ search, page = 1, limit = 20 }) {
+  const offset = (page - 1) * limit;
+  const searchPattern = `%${search || ''}%`;
+
+  const result = await query(
+    `SELECT id, wallet_address, email, first_name, last_name, bio, stellar_public_key,
+            role, created_at, updated_at
+     FROM users
+     WHERE is_deleted = FALSE
+       AND (
+         email ILIKE $1 OR
+         first_name ILIKE $1 OR
+         last_name ILIKE $1 OR
+         wallet_address ILIKE $1
+       )
+     ORDER BY created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [searchPattern, limit, offset]
+  );
+
+  const countResult = await query(
+    `SELECT COUNT(*) AS total
+     FROM users
+     WHERE is_deleted = FALSE
+       AND (
+         email ILIKE $1 OR
+         first_name ILIKE $1 OR
+         last_name ILIKE $1 OR
+         wallet_address ILIKE $1
+       )`,
+    [searchPattern]
+  );
+
+  return {
+    users: result.rows,
+    total: parseInt(countResult.rows[0].total, 10),
+  };
+}
+
 module.exports = {
   // Referral functions
   getUserByWallet,
@@ -202,4 +241,5 @@ module.exports = {
   softDelete,
   exists,
   isAdmin,
+  listUsers,
 };
