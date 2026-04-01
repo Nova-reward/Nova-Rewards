@@ -9,6 +9,7 @@
     "test": "jest --runInBand --coverage",
     "test:ci": "jest --runInBand --ci --coverage --json --outputFile=test-results/results.json --reporters=default --reporters=jest-junit",
     "lint": "eslint .",
+    "security": "jest tests/security --runInBand",
     "migrate": "node ../database/migrate.js",
     "migrate:rollback": "node ../database/migrate.js --rollback",
     "db:migrate": "node ../database/migrate.js",
