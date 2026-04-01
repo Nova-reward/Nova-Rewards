@@ -1,0 +1,50 @@
+config:
+  nodeEnv: production
+  port: "4000"
+  apiUrl: https://api.nova-rewards.io
+
+backend:
+  replicaCount: 2
+  image:
+    repository: nova-rewards-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: nova-rewards-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  host: nova-rewards.io
+  tlsSecret: nova-rewards-tls
+
+autoscaling:
+  enabled: true

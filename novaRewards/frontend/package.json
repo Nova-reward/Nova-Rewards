@@ -9,7 +9,8 @@
     "test": "jest --runInBand --coverage",
     "test:ci": "jest --runInBand --ci --coverage --json --outputFile=test-results/results.json --reporters=default --reporters=jest-junit",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "lint": "next lint"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
@@ -18,9 +19,11 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@stellar/freighter-api": "^2.0.0",
+    "albedo-link": "^0.2.3",
     "axios": "^1.7.2",
     "canvas-confetti": "^1.9.4",
     "next": "^14.2.5",
+    "next-i18next": "^14.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-joyride": "^2.9.3",
