@@ -103,10 +103,77 @@ async function getActiveCampaign(campaignId) {
   return result.rows[0] || null;
 }
 
+/**
+ * Updates a campaign's mutable fields.
+ * @param {number} campaignId
+ * @param {number} merchantId - ensures ownership
+ * @param {object} fields - { name, rewardRate, startDate, endDate }
+ * @returns {Promise<object|null>}
+ */
+async function updateCampaign(campaignId, merchantId, { name, rewardRate, startDate, endDate }) {
+  const result = await query(
+    `UPDATE campaigns
+     SET name = $1, reward_rate = $2, start_date = $3, end_date = $4
+     WHERE id = $5 AND merchant_id = $6
+     RETURNING *`,
+    [name, rewardRate, startDate, endDate, campaignId, merchantId]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Deletes a campaign owned by the given merchant.
+ * @param {number} campaignId
+ * @param {number} merchantId
+ * @returns {Promise<boolean>} true if a row was deleted
+ */
+async function deleteCampaign(campaignId, merchantId) {
+  const result = await query(
+    'DELETE FROM campaigns WHERE id = $1 AND merchant_id = $2',
+    [campaignId, merchantId]
+  );
+  return result.rowCount > 0;
+}
+
+/**
+ * Sets is_active on a campaign owned by the given merchant.
+ * @param {number} campaignId
+ * @param {number} merchantId
+ * @param {boolean} isActive
+ * @returns {Promise<object|null>}
+ */
+async function setCampaignStatus(campaignId, merchantId, isActive) {
+  const result = await query(
+    `UPDATE campaigns SET is_active = $1 WHERE id = $2 AND merchant_id = $3 RETURNING *`,
+    [isActive, campaignId, merchantId]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Returns distinct users who participated in a campaign via transactions.
+ * @param {number} campaignId
+ * @returns {Promise<object[]>}
+ */
+async function getCampaignParticipants(campaignId) {
+  const result = await query(
+    `SELECT DISTINCT t.to_wallet AS wallet, u.id AS user_id, u.email
+     FROM transactions t
+     LEFT JOIN users u ON u.stellar_wallet = t.to_wallet
+     WHERE t.campaign_id = $1`,
+    [campaignId]
+  );
+  return result.rows;
+}
+
 module.exports = {
   validateCampaign,
   createCampaign,
   getCampaignsByMerchant,
   getCampaignById,
   getActiveCampaign,
+  updateCampaign,
+  deleteCampaign,
+  setCampaignStatus,
+  getCampaignParticipants,
 };
