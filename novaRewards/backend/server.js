@@ -49,10 +49,8 @@ app.use(globalLimiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/forgot-password", authLimiter);
 
-// Health check
-app.get("/health", (req, res) => {
-  res.json({ success: true, data: { status: "ok" } });
-});
+// Health / readiness probes (no auth required)
+app.use("/health", require("./routes/health"));
 
 // Prometheus metrics scrape endpoint
 app.get("/metrics", async (req, res) => {
