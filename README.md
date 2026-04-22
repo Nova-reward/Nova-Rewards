@@ -100,6 +100,8 @@ All smart contracts undergo comprehensive security audits before production depl
 - Gradual rollout with testing phases
 - Bug bounty program for responsible disclosure
 
+For disclosure policy, scope, severity, and reward tiers, see [SECURITY.md](./SECURITY.md).
+
 ---
 
 ## Getting Started
