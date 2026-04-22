@@ -1,48 +1,17 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-
-const ThemeContext = createContext();
-
-export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState('light');
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem('theme');
-    
-    if (stored) {
-      setTheme(stored);
-      document.documentElement.setAttribute('data-theme', stored);
-    } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const initialTheme = prefersDark ? 'dark' : 'light';
-      setTheme(initialTheme);
-      document.documentElement.setAttribute('data-theme', initialTheme);
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-  };
-
-  if (!mounted) {
-    return null;
-  }
-
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-}
+/**
+ * ThemeContext — thin wrapper around next-themes for backward compatibility.
+ * Components that already import useTheme from this file continue to work.
+ */
+import { useTheme as useNextTheme } from 'next-themes';
 
 export function useTheme() {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within ThemeProvider');
-  }
-  return context;
+  const { theme, setTheme, resolvedTheme } = useNextTheme();
+
+  return {
+    theme: resolvedTheme ?? theme ?? 'light',
+    toggleTheme: () => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark'),
+  };
 }
+
+// Re-export ThemeProvider from next-themes so legacy imports still work.
+export { ThemeProvider } from 'next-themes';
