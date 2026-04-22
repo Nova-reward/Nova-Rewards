@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  walletAddress String @unique
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  // relations
+  rewardIssuances RewardIssuance[]
+  redemptions      Redemption[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+model Merchant {
+  id        String   @id @default(cuid())
+  name      String
+  walletAddress String @unique
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  // relations
+  campaigns Campaign[]
+  auditLogs AuditLog[]
+
+  @@map("merchants")
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  merchantId  String
+  merchant    Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  tokenSymbol String
+  totalSupply Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  // relations
+  rewardIssuances RewardIssuance[]
+  redemptions      Redemption[]
+  auditLogs        AuditLog[]
+
+  @@index([merchantId])
+  @@map("campaigns")
+}
+
+model RewardIssuance {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  amount     Int
+  txHash     String   @unique
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([campaignId])
+  @@map("reward_issuances")
+}
+
+model Redemption {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  amount     Int
+  txHash     String   @unique
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([campaignId])
+  @@map("redemptions")
+}
+
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  eventType String
+  payload   Json
+  processed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("webhook_events")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  merchantId String?
+  merchant  Merchant? @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  campaignId String?
+  campaign  Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([merchantId])
+  @@index([campaignId])
+  @@map("audit_logs")
+}
