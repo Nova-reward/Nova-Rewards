@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "lint": "next lint",
+    "type-check": "echo 'No TypeScript sources — skipping type-check'",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -19,6 +21,8 @@
     "stellar-sdk": "^12.3.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.44.0"
+    "@playwright/test": "^1.44.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.5"
   }
 }
