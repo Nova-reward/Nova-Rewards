@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nova-rewards-config
+  namespace: nova-rewards
+data:
+  NODE_ENV: production
+  PORT: "4000"
+  NEXT_PUBLIC_API_URL: https://api.nova-rewards.io

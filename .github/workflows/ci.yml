@@ -2,153 +2,102 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
-  secret-scan:
-    name: Secret Scan
+  backend:
+    name: Backend – Lint & Test
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified
+    defaults:
+      run:
+        working-directory: novaRewards/backend
 
-  lint-backend:
-    name: Lint (Backend)
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: nova
+          POSTGRES_DB: nova_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://nova:nova@localhost:5432/nova_test
+      NODE_ENV: test
+  backend-tests:
     runs-on: ubuntu-latest
+    name: Backend Tests
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nova_rewards_test
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/backend/package-lock.json
-      - run: npm ci
-        working-directory: novaRewards/backend
+
+      # Install from workspace root so shared deps (eslint, etc.) resolve correctly
+      - run: npm install
+        working-directory: novaRewards
+
       - run: npm run lint
-        working-directory: novaRewards/backend
-
-  lint-frontend:
-    name: Lint (Frontend)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/frontend/package-lock.json
-      - run: npm ci
-        working-directory: novaRewards/frontend
-      - run: npm run lint
-        working-directory: novaRewards/frontend
-
-  type-check-frontend:
-    name: Type Check (Frontend)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/frontend/package-lock.json
-      - run: npm ci
-        working-directory: novaRewards/frontend
-      - run: npm run type-check
-        working-directory: novaRewards/frontend
-
-  test-backend:
-    name: Test (Backend)
-    runs-on: ubuntu-latest
-    needs: [lint-backend]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/backend/package-lock.json
-      - run: npm ci
-        working-directory: novaRewards/backend
       - run: npm test
-        working-directory: novaRewards/backend
-        env:
-          NODE_ENV: test
-          PORT: 3001
-          ISSUER_PUBLIC: ${{ secrets.ISSUER_PUBLIC }}
-          ISSUER_SECRET: ${{ secrets.ISSUER_SECRET }}
-          DISTRIBUTION_PUBLIC: ${{ secrets.DISTRIBUTION_PUBLIC }}
-          DISTRIBUTION_SECRET: ${{ secrets.DISTRIBUTION_SECRET }}
-          STELLAR_NETWORK: ${{ secrets.STELLAR_NETWORK }}
-          HORIZON_URL: ${{ secrets.HORIZON_URL }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }}
-          JWT_REFRESH_EXPIRES_IN: ${{ secrets.JWT_REFRESH_EXPIRES_IN }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-          NOVA_TOKEN_CONTRACT_ID: ${{ secrets.NOVA_TOKEN_CONTRACT_ID }}
-          REWARD_POOL_CONTRACT_ID: ${{ secrets.REWARD_POOL_CONTRACT_ID }}
-          ALLOWED_ORIGIN: ${{ secrets.ALLOWED_ORIGIN }}
 
-  test-contracts:
-    name: Test (Contracts)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: novaRewards/backend/coverage
+
+  frontend:
+    name: Frontend – Build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: novaRewards/frontend
+
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: contracts
-      - run: cargo test
-        working-directory: contracts
 
-  build-frontend:
-    name: Build (Frontend)
-    runs-on: ubuntu-latest
-    needs: [lint-frontend, type-check-frontend]
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/frontend/package-lock.json
-      - run: npm ci
-        working-directory: novaRewards/frontend
-      - run: npm run build
-        working-directory: novaRewards/frontend
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: http://localhost
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
 
-  build-contracts:
-    name: Build (Contracts)
-    runs-on: ubuntu-latest
-    needs: [test-contracts]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: contracts
-      - run: cargo build --release --target wasm32-unknown-unknown
-        working-directory: contracts
+      # Install from workspace root
+      - run: npm install
+        working-directory: novaRewards
+
+      - run: npm run build

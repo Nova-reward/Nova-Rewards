@@ -49,14 +49,19 @@ describe('transaction record round-trip property tests (Property 4)', () => {
                   to_wallet: params[4],
                   merchant_id: params[5],
                   campaign_id: params[6],
-                  stellar_ledger: params[7],
+                  user_id: params[7],
+                  stellar_ledger: params[8],
+                  status: params[9],
+                  reference_tx_hash: params[10],
+                  refund_reason: params[11],
+                  metadata: JSON.parse(params[12]),
                 };
 
                 rowsByHash.set(insertedRow.tx_hash, insertedRow);
                 return { rows: [insertedRow] };
               }
 
-              if (sql.includes('SELECT * FROM transactions WHERE tx_hash = $1')) {
+              if (sql.includes('WHERE t.tx_hash = $1')) {
                 return { rows: [rowsByHash.get(params[0])].filter(Boolean) };
               }
 
@@ -77,12 +82,17 @@ describe('transaction record round-trip property tests (Property 4)', () => {
                 transactionInput.toWallet,
                 transactionInput.merchantId,
                 transactionInput.campaignId,
+                null,
                 transactionInput.stellarLedger,
+                'completed',
+                null,
+                null,
+                '{}',
               ]
             );
             expect(query).toHaveBeenNthCalledWith(
               2,
-              'SELECT * FROM transactions WHERE tx_hash = $1',
+              expect.stringContaining('WHERE t.tx_hash = $1'),
               [transactionInput.txHash]
             );
             expect(inserted).toEqual(retrieved);
@@ -95,7 +105,12 @@ describe('transaction record round-trip property tests (Property 4)', () => {
               to_wallet: transactionInput.toWallet,
               merchant_id: transactionInput.merchantId,
               campaign_id: transactionInput.campaignId,
+              user_id: null,
               stellar_ledger: transactionInput.stellarLedger,
+              status: 'completed',
+              reference_tx_hash: null,
+              refund_reason: null,
+              metadata: {},
             });
 
             query.mockReset();

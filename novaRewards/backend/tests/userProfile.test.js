@@ -13,9 +13,37 @@ jest.mock('../db/index', () => ({
   query: jest.fn(),
 }));
 
+jest.mock('../db/pointTransactionRepository', () => ({
+  recordPointTransaction: jest.fn(),
+  getUserPointTransactions: jest.fn(),
+  getUserBalance: jest.fn(),
+  getUserTotalPoints: jest.fn(),
+  getUserReferralPoints: jest.fn(),
+}));
+
+jest.mock('../db/redemptionRepository', () => ({
+  redeemReward: jest.fn(),
+  getRedemptionById: jest.fn(),
+  getUserRedemptions: jest.fn(),
+}));
+
+jest.mock('../db/transactionRepository', () => ({
+  recordTransaction: jest.fn(),
+  getTransactionByHash: jest.fn(),
+  getTransactionsByMerchant: jest.fn(),
+  getMerchantTotals: jest.fn(),
+  getTransactionsByUser: jest.fn(),
+}));
+
 // Mock emailService to avoid nodemailer dependency
 jest.mock('../services/emailService', () => ({
   sendWelcome: jest.fn().mockResolvedValue({ success: true }),
+}));
+
+// Mock Stellar service for token balance API
+jest.mock('../../blockchain/stellarService', () => ({
+  getNOVABalance: jest.fn().mockResolvedValue('1337.0000000'),
+  isValidStellarAddress: jest.fn().mockReturnValue(true),
 }));
 
 // Mock authenticateUser to inject req.user based on the Authorization header
@@ -54,6 +82,13 @@ jest.mock('../middleware/authenticateUser', () => ({
 
 const app = require('../server');
 const { query } = require('../db/index');
+const {
+  getUserBalance,
+  getUserTotalPoints,
+  getUserReferralPoints,
+} = require('../db/pointTransactionRepository');
+const { getUserRedemptions } = require('../db/redemptionRepository');
+const { getTransactionsByUser } = require('../db/transactionRepository');
 
 describe('User Profile API', () => {
   let authToken;
@@ -150,6 +185,74 @@ describe('User Profile API', () => {
       expect(res.body.success).toBe(false);
       expect(res.body.error).toBe('unauthorized');
     });
+
+    it('should return token balance for user with stellarPublicKey', async () => {
+      query.mockResolvedValueOnce({ rows: [mockUser] });
+
+      const res = await request(app)
+        .get('/api/users/1/token-balance')
+        .set('Authorization', authToken);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveProperty('tokenBalance', '1337.0000000');
+      expect(res.body.data).toHaveProperty('cached', false);
+    });
+
+    it('should return 404 when no linked Stellar public key', async () => {
+      query.mockResolvedValueOnce({ rows: [{ ...mockUser, stellar_public_key: null }] });
+
+      const res = await request(app)
+        .get('/api/users/1/token-balance')
+        .set('Authorization', authToken);
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('not_found');
+    });
+  });
+
+  describe('GET /api/users', () => {
+    it('should return paginated users for admin', async () => {
+      authToken = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGUiOiJhZG1pbiJ9.mock';
+
+      query
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 2,
+            wallet_address: 'GYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY',
+            email: 'jane@example.com',
+            first_name: 'Jane',
+            last_name: 'Smith',
+            role: 'user',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }],
+        })
+        .mockResolvedValueOnce({ rows: [{ total: '1' }] });
+
+      const res = await request(app)
+        .get('/api/users')
+        .set('Authorization', authToken)
+        .query({ search: 'jane', page: 1, limit: 20 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.users).toHaveLength(1);
+      expect(res.body.data.total).toBe(1);
+      expect(res.body.data.page).toBe(1);
+      expect(res.body.data.limit).toBe(20);
+    });
+
+    it('should reject non-admin user list access', async () => {
+      const res = await request(app)
+        .get('/api/users')
+        .set('Authorization', authToken);
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('forbidden');
+    });
   });
 
   describe('PATCH /api/users/:id', () => {
@@ -219,6 +322,109 @@ describe('User Profile API', () => {
       expect(res.status).toBe(403);
       expect(res.body.success).toBe(false);
       expect(res.body.error).toBe('forbidden');
+    });
+  });
+
+  describe('PUT /api/users/:id', () => {
+    it('should update user profile with the PUT alias', async () => {
+      query.mockResolvedValueOnce({ rows: [{ exists: true }] });
+      query.mockResolvedValueOnce({
+        rows: [{
+          ...mockUser,
+          first_name: 'Updated',
+          bio: 'Updated bio',
+          updated_at: new Date().toISOString(),
+        }],
+      });
+
+      const res = await request(app)
+        .put('/api/users/1')
+        .set('Authorization', authToken)
+        .send({ firstName: 'Updated', bio: 'Updated bio' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.first_name).toBe('Updated');
+      expect(res.body.data.bio).toBe('Updated bio');
+    });
+  });
+
+  describe('GET /api/users/:id/rewards', () => {
+    it('should return reward summary and redemption history for owner', async () => {
+      query.mockResolvedValueOnce({ rows: [{ exists: true }] });
+      getUserBalance.mockResolvedValue(450);
+      getUserTotalPoints.mockResolvedValue('1200');
+      getUserReferralPoints.mockResolvedValue('150');
+      getUserRedemptions.mockResolvedValue({
+        data: [{ id: 1, reward_name: 'Coffee Voucher', points_spent: '100' }],
+        total: 1,
+        page: 1,
+        limit: 20,
+      });
+
+      const res = await request(app)
+        .get('/api/users/1/rewards')
+        .set('Authorization', authToken);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.summary.balance).toBe(450);
+      expect(res.body.data.summary.totalPoints).toBe('1200');
+      expect(res.body.data.summary.referralPoints).toBe('150');
+      expect(res.body.data.rewards).toHaveLength(1);
+    });
+
+    it('should reject reward access for non-owner non-admin', async () => {
+      query.mockResolvedValueOnce({ rows: [{ exists: true }] });
+
+      const res = await request(app)
+        .get('/api/users/2/rewards')
+        .set('Authorization', authToken);
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('forbidden');
+    });
+  });
+
+  describe('GET /api/users/:id/transactions', () => {
+    it('should return paginated user transactions for owner', async () => {
+      query.mockResolvedValueOnce({ rows: [{ exists: true }] });
+      getTransactionsByUser.mockResolvedValue({
+        data: [{ id: 1, tx_type: 'distribution', amount: '75' }],
+        total: 1,
+        page: 1,
+        limit: 20,
+      });
+
+      const res = await request(app)
+        .get('/api/users/1/transactions')
+        .set('Authorization', authToken)
+        .query({ type: 'distribution' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveLength(1);
+      expect(getTransactionsByUser).toHaveBeenCalledWith(1, {
+        type: 'distribution',
+        startDate: undefined,
+        endDate: undefined,
+        page: 1,
+        limit: 20,
+      });
+    });
+
+    it('should validate transaction filter values', async () => {
+      query.mockResolvedValueOnce({ rows: [{ exists: true }] });
+
+      const res = await request(app)
+        .get('/api/users/1/transactions')
+        .set('Authorization', authToken)
+        .query({ type: 'invalid' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('validation_error');
     });
   });
 
