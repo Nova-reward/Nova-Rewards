@@ -24,6 +24,7 @@
     "bullmq": "^5.71.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "eslint": "^8.57.1",
     "express": "^4.19.2",
     "express-rate-limit": "^8.3.1",
     "jsonwebtoken": "^9.0.2",
