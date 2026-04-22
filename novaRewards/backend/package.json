@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.13.0",
+    "@bull-board/api": "^5.15.0",
+    "@bull-board/express": "^5.15.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.71.1",
     "cors": "^2.8.5",
