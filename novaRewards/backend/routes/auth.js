@@ -4,6 +4,7 @@ const { query } = require('../db/index');
 const { signAccessToken, signRefreshToken } = require('../services/tokenService');
 const { validateRegisterDto } = require('../dtos/registerDto');
 const { validateLoginDto } = require('../dtos/loginDto');
+const { checkIpBlock, recordFailedLogin } = require('../middleware/abuseDetection');
 
 const SALT_ROUNDS = 12;
 
@@ -38,23 +39,10 @@ const SALT_ROUNDS = 12;
  *     responses:
  *       201:
  *         description: User created.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data: { $ref: '#/components/schemas/User' }
  *       400:
  *         description: Validation error.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       409:
  *         description: Email already registered.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/register', async (req, res, next) => {
   try {
@@ -70,7 +58,6 @@ router.post('/register', async (req, res, next) => {
 
     const { email, password, firstName, lastName } = req.body;
     const normalizedEmail = email.trim().toLowerCase();
-
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     let result;
@@ -82,7 +69,6 @@ router.post('/register', async (req, res, next) => {
         [normalizedEmail, passwordHash, firstName.trim(), lastName.trim()]
       );
     } catch (dbErr) {
-      // Postgres unique violation
       if (dbErr.code === '23505') {
         return res.status(409).json({
           success: false,
@@ -93,7 +79,20 @@ router.post('/register', async (req, res, next) => {
       throw dbErr;
     }
 
-    return res.status(201).json({ success: true, data: result.rows[0] });
+    const newUser = result.rows[0];
+
+    // Explicit audit log for registration
+    logAudit({
+      entityType: 'user',
+      entityId: newUser.id,
+      action: 'register',
+      performedBy: newUser.id,
+      actorType: 'user',
+      details: { email: normalizedEmail },
+      source: 'POST /api/auth/register',
+    }).catch((err) => console.error('[audit] register:', err.message));
+
+    return res.status(201).json({ success: true, data: newUser });
   } catch (err) {
     next(err);
   }
@@ -123,25 +122,12 @@ router.post('/register', async (req, res, next) => {
  *     responses:
  *       200:
  *         description: Login successful.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data: { $ref: '#/components/schemas/AuthTokens' }
  *       400:
  *         description: Validation error.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Invalid credentials.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/login', async (req, res, next) => {
+router.post('/login', checkIpBlock, async (req, res, next) => {
   try {
     const validation = validateLoginDto(req.body);
     if (!validation.valid) {
@@ -165,20 +151,31 @@ router.post('/login', async (req, res, next) => {
 
     const user = result.rows[0];
 
-    // Use a constant-time compare even when user doesn't exist to prevent
-    // timing-based user enumeration attacks.
+    // Constant-time compare to prevent timing-based user enumeration
     const DUMMY_HASH = '$2b$12$invalidhashpaddingtomatchbcryptlength000000000000000000000';
     const passwordMatch = user
       ? await bcrypt.compare(password, user.password_hash)
       : await bcrypt.compare(password, DUMMY_HASH).then(() => false);
 
     if (!user || !passwordMatch) {
+      await recordFailedLogin(req);
       return res.status(401).json({
         success: false,
         error: 'invalid_credentials',
         message: 'Email or password is incorrect',
       });
     }
+
+    // Log successful login
+    logAudit({
+      entityType: 'auth',
+      entityId: user.id,
+      action: 'login',
+      performedBy: user.id,
+      actorType: user.role === 'admin' ? 'admin' : 'user',
+      details: { email: normalizedEmail },
+      source: 'POST /api/auth/login',
+    }).catch((err) => console.error('[audit] login:', err.message));
 
     const accessToken  = signAccessToken(user);
     const refreshToken = signRefreshToken(user);

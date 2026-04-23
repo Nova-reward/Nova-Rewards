@@ -4,6 +4,7 @@ import { Button } from './Button';
 export default {
   title: 'UI/Button',
   component: Button,
+  tags: ['autodocs'],
   argTypes: {
     variant: {
       control: { type: 'select' },
