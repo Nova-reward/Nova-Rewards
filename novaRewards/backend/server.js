@@ -74,6 +74,7 @@ app.use('/api/redemptions', require('./routes/redemptions'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/trustline', require('./routes/trustline'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/users', require('./routes/onboarding'));
 app.use('/api/contract-events', require('./routes/contractEvents'));
 app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
