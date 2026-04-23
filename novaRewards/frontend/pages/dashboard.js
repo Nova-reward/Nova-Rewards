@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/router";
+import dynamic from "next/dynamic";
 import { useWallet } from "../context/WalletContext";
 import { useUser, useCampaigns, useBalance, useTransactions } from "../lib/useApi";
 import DashboardLayout from "../components/DashboardLayout";
@@ -9,9 +10,11 @@ import RedeemForm from "../components/RedeemForm";
 import ReferralLink from "../components/ReferralLink";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
-import StellarDropModal from "../components/StellarDropModal";
 import WalletConnect from "../components/WalletConnect";
 import { truncateAddress } from "../lib/truncateAddress";
+
+// Heavy components — loaded only when the dashboard is rendered client-side
+const StellarDropModal = dynamic(() => import("../components/StellarDropModal"), { ssr: false });
 
 /**
  * Customer dashboard — balance, transaction history, trustline, transfer, redeem.

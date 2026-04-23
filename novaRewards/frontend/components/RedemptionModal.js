@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 
 /**
  * Multi-step redemption modal:
@@ -46,7 +47,9 @@ export default function RedemptionModal({
 
             <div className="redemption-details">
               {reward.image_url && (
-                <img src={reward.image_url} alt={reward.name} className="redemption-image" />
+                <div style={{ position: 'relative', width: '100%', height: '160px', borderRadius: '8px', overflow: 'hidden' }}>
+                  <Image src={reward.image_url} alt={reward.name} fill sizes="(max-width: 600px) 100vw, 480px" style={{ objectFit: 'cover' }} className="redemption-image" />
+                </div>
               )}
               <div className="redemption-info">
                 <h3>{reward.name}</h3>
