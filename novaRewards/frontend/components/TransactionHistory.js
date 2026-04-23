@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTransactions } from '../lib/useApi';
 import EmptyState from './EmptyState';
-import LoadingSkeleton from './LoadingSkeleton';
+import { SkeletonRow } from './Skeleton';
 
 const PAGE_SIZE = 20;
 const TRANSACTION_TYPES = ['all', 'issuance', 'redemption', 'transfer'];
@@ -225,7 +225,9 @@ export default function TransactionHistory({ userId }) {
 
       {/* Transaction Table */}
       {isLoading ? (
-        <LoadingSkeleton rows={5} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {[...Array(5)].map((_, i) => <SkeletonRow key={i} />)}
+        </div>
       ) : transactions && transactions.length > 0 ? (
         <div className="table-wrapper" style={{ overflowX: 'auto', marginBottom: '2rem' }}>
           <table
@@ -318,8 +320,9 @@ export default function TransactionHistory({ userId }) {
         </div>
       ) : (
         <EmptyState
-          title="No Transactions"
-          message="No transactions found matching your filters."
+          icon="transactions"
+          title="No transactions yet"
+          description="Your transaction history will appear here once you start earning or redeeming rewards."
         />
       )}
 
