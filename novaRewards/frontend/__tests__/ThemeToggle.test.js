@@ -8,10 +8,7 @@ const mockSetTheme = jest.fn();
 let mockResolvedTheme = 'light';
 
 jest.mock('next-themes', () => ({
-  useTheme: () => ({
-    resolvedTheme: mockResolvedTheme,
-    setTheme: mockSetTheme,
-  }),
+  useTheme: () => ({ resolvedTheme: mockResolvedTheme, setTheme: mockSetTheme }),
 }));
 
 beforeEach(() => {

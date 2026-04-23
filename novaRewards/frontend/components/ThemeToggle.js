@@ -7,8 +7,7 @@ export default function ThemeToggle() {
 
   useEffect(() => setMounted(true), []);
 
-  // Avoid hydration mismatch — render placeholder until mounted
-  if (!mounted) return <div className="header-icon-btn" style={{ width: 36, height: 36 }} />;
+  if (!mounted) return <div className="header-icon-btn w-10 h-10" />;
 
   const isDark = resolvedTheme === 'dark';
 

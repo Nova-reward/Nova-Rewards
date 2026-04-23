@@ -3,12 +3,19 @@ import { ThemeProvider } from 'next-themes';
 import { WalletProvider } from '../context/WalletContext';
 import { AuthProvider } from '../context/AuthContext';
 import { TourProvider } from '../context/TourContext';
+import { ModalProvider } from '../context/ModalContext';
 import { ToastProvider } from '../components/Toast';
 import { NotificationProvider } from '../context/NotificationContext';
 import OnboardingTour from '../components/OnboardingTour';
 import Footer from '../components/Footer';
 import '../styles/globals.css';
 import '../styles/redemption.css';
+
+function registerServiceWorker() {
+  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+}
 
 export default function App({ Component, pageProps }) {
   useEffect(() => {
@@ -24,9 +31,11 @@ export default function App({ Component, pageProps }) {
           <NotificationProvider>
             <WalletProvider>
               <TourProvider>
-                <Component {...pageProps} />
-                <Footer />
-                <OnboardingTour />
+                <ModalProvider>
+                  <Component {...pageProps} />
+                  <Footer />
+                  <OnboardingTour />
+                </ModalProvider>
               </TourProvider>
             </WalletProvider>
           </NotificationProvider>
