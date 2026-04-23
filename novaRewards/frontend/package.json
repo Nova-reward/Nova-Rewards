@@ -29,6 +29,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-joyride": "^2.9.3",
+    "recharts": "^2.12.7",
     "stellar-sdk": "^12.3.0",
     "zod": "^4.3.6"
   },
