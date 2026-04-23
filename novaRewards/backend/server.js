@@ -80,6 +80,7 @@ app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/drops', require('./routes/drops'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/merchants", require("./routes/merchants"));
 app.use("/api/campaigns", require("./routes/campaigns"));
