@@ -101,6 +101,7 @@ jobs:
           npm run test:ci
 
       - name: Post deployment comment
+        continue-on-error: true
         if: always()
         uses: actions/github-script@v9
         with:
@@ -149,6 +150,7 @@ jobs:
           heroku apps:destroy "${PREVIEW_APP}" --confirm "${PREVIEW_APP}" || true
 
       - name: Post cleanup comment
+        continue-on-error: true
         uses: actions/github-script@v9
         with:
           script: |
