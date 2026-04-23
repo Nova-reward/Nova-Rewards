@@ -1343,79 +1343,72 @@ td {
   flex-wrap: wrap;
 }
 
-/* =============================================================================
-   WCAG 2.1 AA — Accessibility (#613)
-   ============================================================================= */
-
-/* ── Focus indicators — visible for all interactive elements ─────────────────
-   Uses :focus-visible so mouse users don't see the ring, keyboard users do.
-   Contrast ratio of the 3px offset ring against any background exceeds 3:1.  */
-:focus-visible {
-  outline: 3px solid #7c3aed;
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-
-/* Remove default outline only when :focus-visible is supported */
-:focus:not(:focus-visible) {
-  outline: none;
-}
-
-/* Ensure links always show a focus ring */
-a:focus-visible {
-  outline: 3px solid #7c3aed;
-  outline-offset: 2px;
-  border-radius: 2px;
-}
-
-/* ── Color contrast fixes ────────────────────────────────────────────────────
-   --muted (#64748b on #ffffff) = 4.6:1 ✓ (light)
-   --muted (#94a3b8 on #0f0f1a) = 4.7:1 ✓ (dark)
-   Accent purple (#7c3aed on #ffffff) = 4.55:1 ✓
-   Error red (#dc2626 on #ffffff) = 5.9:1 ✓                                   */
-
-/* Ensure placeholder text meets 4.5:1 — use a slightly darker shade */
-::placeholder {
-  color: #6b7280; /* #6b7280 on white = 4.6:1 */
-  opacity: 1;
-}
-
-.dark ::placeholder {
-  color: #9ca3af; /* #9ca3af on #1a1a2e = 4.5:1 */
-  opacity: 1;
-}
-
-/* ── Skip-to-content link ────────────────────────────────────────────────────
-   Allows keyboard users to bypass navigation.                                 */
-.skip-to-content {
-  position: absolute;
-  top: -100%;
-  left: 1rem;
+/* ── Toast Notifications ─────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
   z-index: 9999;
-  padding: 0.5rem 1rem;
-  background: #7c3aed;
-  color: #fff;
-  font-weight: 600;
-  border-radius: 0 0 6px 6px;
-  text-decoration: none;
-  transition: top 0.1s;
+  max-width: 360px;
+  width: 100%;
 }
 
-.skip-to-content:focus {
-  top: 0;
-  outline: 3px solid #fff;
-  outline-offset: 2px;
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: toast-in 0.2s ease;
 }
 
-/* ── Reduced motion ──────────────────────────────────────────────────────────
-   Respect prefers-reduced-motion for all animations.                          */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+.toast-message {
+  flex: 1;
+}
+
+.toast-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  padding: 0 0.25rem;
+  color: inherit;
+}
+
+.toast-close:hover {
+  opacity: 1;
+}
+
+/* Variants */
+.toast-success { background: #166534; color: #dcfce7; }
+.toast-error   { background: #991b1b; color: #fee2e2; }
+.toast-warning { background: #92400e; color: #fef3c7; }
+.toast-info    { background: #1e3a5f; color: #dbeafe; }
+
+/* Mobile: bottom-center */
+@media (max-width: 640px) {
+  .toast-container {
+    right: 50%;
+    transform: translateX(50%);
+    bottom: 1rem;
+    max-width: calc(100vw - 2rem);
   }
 }
