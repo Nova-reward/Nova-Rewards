@@ -5,6 +5,8 @@ import Image from 'next/image';
 import DashboardLayout from '../components/DashboardLayout';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ConfirmationModal from '../components/ConfirmationModal';
+import EmptyState from '../components/EmptyState';
+import { SkeletonGrid } from '../components/Skeleton';
 import { withAuth } from '../context/AuthContext';
 import { getRewards, redeemReward } from '../lib/api';
 import { useInfiniteScroll, useSentinel } from '../hooks/useInfiniteScroll';
@@ -119,17 +121,21 @@ function RewardsContent() {
 
         {/* Empty state (initial load done, nothing returned) */}
         {!loading && !error && rewards.length === 0 && (
-          <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-            <p style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎁</p>
-            <p style={{ color: 'var(--muted)' }}>No rewards available right now. Check back soon!</p>
-          </div>
+          <EmptyState
+            icon="rewards"
+            title="No rewards available"
+            description="There are no rewards in the catalogue right now. Check back soon!"
+            variant="primary"
+          />
         )}
 
         {/* Filtered empty state */}
         {!loading && rewards.length > 0 && visibleRewards.length === 0 && (
-          <div className="card">
-            <p style={{ textAlign: 'center', color: 'var(--muted)' }}>No rewards in this category.</p>
-          </div>
+          <EmptyState
+            icon="search"
+            title="No rewards in this category"
+            description="Try selecting a different category or clearing your filters."
+          />
         )}
 
         {/* Reward grid */}
@@ -169,14 +175,7 @@ function RewardsContent() {
           })}
 
           {/* Skeleton cards while loading next page */}
-          {loading && [...Array(3)].map((_, i) => (
-            <div key={`sk-${i}`} className="card reward-skeleton" aria-hidden="true">
-              <div className="skeleton-block" style={{ height: '180px', marginBottom: '1rem' }} />
-              <div className="skeleton-block" style={{ height: '1.1rem', width: '70%', marginBottom: '0.5rem' }} />
-              <div className="skeleton-block" style={{ height: '0.9rem', marginBottom: '1rem' }} />
-              <div className="skeleton-block" style={{ height: '2.5rem' }} />
-            </div>
-          ))}
+          {loading && <SkeletonGrid count={3} />}
         </div>
 
         {/* Sentinel — invisible trigger element for IntersectionObserver */}

@@ -17,7 +17,7 @@ const { pool } = require('./index');
  * @param {string} params.idempotencyKey  - Caller-supplied dedup key
  * @returns {Promise<object>}  The inserted redemption row
  */
-async function redeemReward({ userId, rewardId, idempotencyKey }) {
+async function redeemReward({ userId, rewardId, campaignId = null, idempotencyKey }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -114,10 +114,10 @@ async function redeemReward({ userId, rewardId, idempotencyKey }) {
     // ── 6. Insert redemption audit row ──────────────────────────────────────
     const { rows: redemptionRows } = await client.query(
       `INSERT INTO redemptions
-         (user_id, reward_id, points_spent, idempotency_key, point_tx_id)
-       VALUES ($1, $2, $3, $4, $5)
+         (user_id, reward_id, campaign_id, points_spent, idempotency_key, point_tx_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [userId, rewardId, pointCost, idempotencyKey, pointTx.id]
+      [userId, rewardId, campaignId, pointCost, idempotencyKey, pointTx.id]
     );
 
     await client.query('COMMIT');
