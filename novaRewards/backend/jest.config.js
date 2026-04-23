@@ -53,6 +53,7 @@ module.exports = {
   collectCoverageFrom: [
     'routes/**/*.js',
     'db/**/*.js',
+    'lib/**/*.js',
     'middleware/**/*.js',
     'services/**/*.js',
     'src/**/*.js',

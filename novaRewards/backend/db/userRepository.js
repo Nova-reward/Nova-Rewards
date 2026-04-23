@@ -1,4 +1,43 @@
 const { query } = require('./index');
+const { encrypt, decrypt } = require('../lib/encryption');
+
+// ---------------------------------------------------------------------------
+// Email encryption helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Encrypts an email address before storing it.
+ * Returns null/undefined unchanged.
+ */
+function encryptEmail(email) {
+  if (email === null || email === undefined) return email;
+  return encrypt(email.trim().toLowerCase());
+}
+
+/**
+ * Decrypts an email address after reading from the database.
+ * Safe to call on legacy plaintext values — decrypt() is a no-op for
+ * values that don't look like encrypted blobs.
+ */
+function decryptEmail(email) {
+  if (email === null || email === undefined) return email;
+  return decrypt(email);
+}
+
+/**
+ * Decrypts the email field on a user row (mutates in place).
+ */
+function decryptUserRow(row) {
+  if (!row) return row;
+  if (row.email !== undefined && row.email !== null) {
+    row.email = decryptEmail(row.email);
+  }
+  return row;
+}
+
+function decryptUserRows(rows) {
+  return rows.map(decryptUserRow);
+}
 
 // ---------------------------------------------------------------------------
 // Referral-related functions (Requirements: #181)
@@ -193,7 +232,6 @@ async function listUsers({ search, page = 1, limit = 20 }) {
      FROM users
      WHERE is_deleted = FALSE
        AND (
-         email ILIKE $1 OR
          first_name ILIKE $1 OR
          last_name ILIKE $1 OR
          wallet_address ILIKE $1
@@ -208,7 +246,6 @@ async function listUsers({ search, page = 1, limit = 20 }) {
      FROM users
      WHERE is_deleted = FALSE
        AND (
-         email ILIKE $1 OR
          first_name ILIKE $1 OR
          last_name ILIKE $1 OR
          wallet_address ILIKE $1
@@ -217,7 +254,7 @@ async function listUsers({ search, page = 1, limit = 20 }) {
   );
 
   return {
-    users: result.rows,
+    users: decryptUserRows(result.rows),
     total: parseInt(countResult.rows[0].total, 10),
   };
 }

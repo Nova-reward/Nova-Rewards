@@ -4,6 +4,7 @@ const { query } = require('../db/index');
 const { signAccessToken, signRefreshToken } = require('../services/tokenService');
 const { validateRegisterDto } = require('../dtos/registerDto');
 const { validateLoginDto } = require('../dtos/loginDto');
+const { encrypt, decrypt } = require('../lib/encryption');
 
 const SALT_ROUNDS = 12;
 
@@ -70,6 +71,7 @@ router.post('/register', async (req, res, next) => {
 
     const { email, password, firstName, lastName } = req.body;
     const normalizedEmail = email.trim().toLowerCase();
+    const encryptedEmail  = encrypt(normalizedEmail);
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
@@ -79,7 +81,7 @@ router.post('/register', async (req, res, next) => {
         `INSERT INTO users (email, password_hash, first_name, last_name)
          VALUES ($1, $2, $3, $4)
          RETURNING id, email, first_name, last_name, role, created_at`,
-        [normalizedEmail, passwordHash, firstName.trim(), lastName.trim()]
+        [encryptedEmail, passwordHash, firstName.trim(), lastName.trim()]
       );
     } catch (dbErr) {
       // Postgres unique violation
@@ -93,7 +95,11 @@ router.post('/register', async (req, res, next) => {
       throw dbErr;
     }
 
-    return res.status(201).json({ success: true, data: result.rows[0] });
+    const user = result.rows[0];
+    // Decrypt email before returning to the caller
+    if (user && user.email) user.email = decrypt(user.email);
+
+    return res.status(201).json({ success: true, data: user });
   } catch (err) {
     next(err);
   }
@@ -155,15 +161,18 @@ router.post('/login', async (req, res, next) => {
 
     const { email, password } = req.body;
     const normalizedEmail = email.trim().toLowerCase();
+    const encryptedEmail  = encrypt(normalizedEmail);
 
     const result = await query(
       `SELECT id, email, password_hash, first_name, last_name, role
        FROM users
        WHERE email = $1 AND is_deleted = FALSE`,
-      [normalizedEmail]
+      [encryptedEmail]
     );
 
     const user = result.rows[0];
+    // Decrypt email for the response
+    if (user && user.email) user.email = decrypt(user.email);
 
     // Use a constant-time compare even when user doesn't exist to prevent
     // timing-based user enumeration attacks.
