@@ -1,29 +1,12 @@
 const express = require('express');
 const router = express.Router();
-<<<<<<< feature/576-redis-caching-layer
-const rateLimit = require('express-rate-limit');
-=======
->>>>>>> main
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 const { verifyTrustline } = require('../../blockchain/trustline');
-<<<<<<< feature/576-redis-caching-layer
-const { cacheDel } = require('./campaigns'); // cache invalidation — issue #576
-
-/**
- * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
- * Closes: #123
- */
-const distributeRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'rate_limit_exceeded', message: 'Too many requests. Please try again later.' },
-=======
 const { slidingRewards } = require('../middleware/rateLimiter');
 const { enqueueRewardIssuance } = require('../services/rewardIssuanceService');
+const { checkRewardFarming, recordRewardClaim } = require('../middleware/abuseDetection');
 
 /**
  * @openapi
@@ -74,7 +57,6 @@ router.post('/issue', slidingRewards, authenticateMerchant, async (req, res, nex
   } catch (err) {
     next(err);
   }
->>>>>>> main
 });
 
 /**
@@ -133,7 +115,7 @@ router.post('/issue', slidingRewards, authenticateMerchant, async (req, res, nex
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/distribute', slidingRewards, authenticateMerchant, async (req, res, next) => {
+router.post('/distribute', slidingRewards, authenticateMerchant, checkRewardFarming, async (req, res, next) => {
   try {
     const { walletAddress, customerWallet, amount, campaignId } = req.body;
     const recipientWallet = walletAddress || customerWallet;
@@ -197,8 +179,7 @@ router.post('/distribute', slidingRewards, authenticateMerchant, async (req, res
       campaignId,
     });
 
-    // Invalidate campaign cache on reward issuance — issue #576
-    await cacheDel(`campaigns:merchant:${campaign.merchant_id}`);
+    await recordRewardClaim(recipientWallet, campaignId);
 
     res.json({ success: true, txHash: result.txHash, transaction: result.tx });
   } catch (err) {
