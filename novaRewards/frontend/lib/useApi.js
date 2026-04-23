@@ -45,22 +45,24 @@ const mutationFetcher = async (url, { arg }) => {
   }
 };
 
+const REVALIDATE_30S = { refreshInterval: 30000 };
+
 // User hooks
 export function useUser(userId) {
-  return useSWR(userId ? `/users/${userId}` : null, fetcher);
+  return useSWR(userId ? `/users/${userId}` : null, fetcher, REVALIDATE_30S);
 }
 
 export function useCampaigns() {
-  return useSWR('/campaigns', fetcher);
+  return useSWR('/campaigns', fetcher, REVALIDATE_30S);
 }
 
 export function useBalance(userId) {
-  return useSWR(userId ? `/users/${userId}/balance` : null, fetcher);
+  return useSWR(userId ? `/users/${userId}/balance` : null, fetcher, REVALIDATE_30S);
 }
 
 export function useTransactions(userId, filters = {}) {
   const query = new URLSearchParams(filters).toString();
-  return useSWR(userId ? `/users/${userId}/transactions?${query}` : null, fetcher);
+  return useSWR(userId ? `/users/${userId}/transactions?${query}` : null, fetcher, REVALIDATE_30S);
 }
 
 // Mutation hooks with optimistic updates
