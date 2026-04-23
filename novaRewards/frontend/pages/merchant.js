@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import CampaignManager from '../components/CampaignManager';
-import CampaignAnalytics from '../components/CampaignAnalytics';
-import IssueRewardForm from '../components/IssueRewardForm';
+import dynamic from 'next/dynamic';
 import api from '../lib/api';
+
+const CampaignManager  = dynamic(() => import('../components/CampaignManager'),  { ssr: false });
+const CampaignAnalytics = dynamic(() => import('../components/CampaignAnalytics'), { ssr: false });
+const IssueRewardForm  = dynamic(() => import('../components/IssueRewardForm'),  { ssr: false });
 
 const TABS = ['Campaigns', 'Analytics', 'Issue Rewards'];
 

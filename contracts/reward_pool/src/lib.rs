@@ -1,3 +1,22 @@
+//! # Reward Pool Contract
+//!
+//! A shared liquidity pool that merchants deposit into and users withdraw from,
+//! subject to a configurable per-wallet daily withdrawal cap.
+//!
+//! ## Usage
+//! ```ignore
+//! // Admin initializes
+//! client.initialize(&admin);
+//!
+//! // Merchant deposits
+//! client.deposit(&merchant, &50_000);
+//!
+//! // Set a daily limit of 1 000 tokens per wallet
+//! client.set_daily_limit(&1_000);
+//!
+//! // User withdraws
+//! client.withdraw(&user, &500);
+//! ```
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN,
@@ -58,22 +77,16 @@ pub struct RewardPoolContract;
 
 #[contractimpl]
 impl RewardPoolContract {
-    // -----------------------------------------------------------------------
-    // Initialisation
-    // -----------------------------------------------------------------------
-
-    /// Initializes the reward pool.
+    /// Initializes the reward pool and stores the admin address.
     ///
-    /// * `admin`       – privileged operator address.
-    /// * `nova_token`  – address of the Nova token contract; the pool must
-    ///                   hold a sufficient balance there before claims are made.
-    /// * `merkle_root` – 32-byte SHA-256 Merkle root of the claim tree.
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        nova_token: Address,
-        merkle_root: BytesN<32>,
-    ) {
+    /// Sets the initial pool balance to `0` and the daily limit to `i128::MAX` (unlimited).
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized to call [`set_daily_limit`](RewardPoolContract::set_daily_limit).
+    ///
+    /// # Panics
+    /// - `"already initialised"` if called more than once.
+    pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
         }
@@ -199,67 +212,20 @@ impl RewardPoolContract {
             .expect("merkle root not set")
     }
 
-    // -----------------------------------------------------------------------
-    // Internal: Merkle helpers
-    // -----------------------------------------------------------------------
-
-    /// Computes the leaf hash: `SHA-256(address_bytes ++ amount_le_16_bytes)`.
-    fn compute_leaf(env: &Env, claimer: &Address, amount: i128) -> BytesN<32> {
-        // Serialize claimer address to raw bytes via its ScVal representation.
-        // We use the 32-byte account id bytes when available; for contract
-        // addresses we use the full serialised form.
-        let mut preimage = Bytes::new(env);
-
-        // Append address bytes (Soroban Address → 32-byte strkey raw bytes).
-        let addr_bytes = claimer.clone().to_xdr(env);
-        preimage.append(&addr_bytes);
-
-        // Append amount as 16-byte little-endian.
-        let amount_bytes = amount.to_le_bytes();
-        preimage.append(&Bytes::from_slice(env, &amount_bytes));
-
-        env.crypto().sha256(&preimage)
-    }
-
-    /// Verifies a sorted-pair Merkle proof.
+    /// Deposits funds into the shared reward pool.
     ///
-    /// At each level: `node = SHA-256(min(node, sibling) ++ max(node, sibling))`.
-    fn verify_proof(
-        env: &Env,
-        leaf: BytesN<32>,
-        proof: &Vec<BytesN<32>>,
-        root: &BytesN<32>,
-    ) -> bool {
-        let mut current = leaf;
-
-        for i in 0..proof.len() {
-            let sibling = proof.get(i).unwrap();
-            current = Self::hash_pair(env, current, sibling);
-        }
-
-        current == *root
-    }
-
-    /// Hashes two nodes in sorted order: `SHA-256(min ++ max)`.
-    fn hash_pair(env: &Env, a: BytesN<32>, b: BytesN<32>) -> BytesN<32> {
-        let mut buf = Bytes::new(env);
-        // Lexicographic sort ensures deterministic ordering regardless of
-        // which side of the tree the sibling is on.
-        if a.as_ref() <= b.as_ref() {
-            buf.append(&a.into());
-            buf.append(&b.into());
-        } else {
-            buf.append(&b.into());
-            buf.append(&a.into());
-        }
-        env.crypto().sha256(&buf)
-    }
-
-    // -----------------------------------------------------------------------
-    // Deposit / Withdraw (existing functionality, preserved)
-    // -----------------------------------------------------------------------
-
-    /// Deposits funds into the shared reward pool (internal accounting).
+    /// # Parameters
+    /// - `from` – Address making the deposit (must authorize).
+    /// - `amount` – Amount to deposit (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `from` authorization.
+    ///
+    /// # Events
+    /// Emits `("rwd_pool", "deposited")` with data `(from: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
     pub fn deposit(env: Env, from: Address, amount: i128) {
         from.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -276,6 +242,24 @@ impl RewardPoolContract {
     }
 
     /// Withdraws funds from the shared reward pool subject to the daily wallet limit.
+    ///
+    /// The 24-hour window resets automatically when 86 400 seconds have elapsed
+    /// since the wallet's last window start.
+    ///
+    /// # Parameters
+    /// - `to` – Recipient address (must authorize).
+    /// - `amount` – Amount to withdraw (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `to` authorization.
+    ///
+    /// # Events
+    /// Emits `("rwd_pool", "withdrawn")` with data `(to: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
+    /// - `"insufficient pool balance"` if the pool holds fewer tokens than `amount`.
+    /// - `"daily withdrawal limit exceeded"` if the wallet's 24-hour usage would exceed the limit.
     pub fn withdraw(env: Env, to: Address, amount: i128) {
         to.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -307,6 +291,15 @@ impl RewardPoolContract {
     }
 
     /// Updates the per-wallet daily withdrawal cap. Admin only.
+    ///
+    /// # Parameters
+    /// - `limit` – New daily cap in base units (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"limit must be positive"` if `limit <= 0`.
     pub fn set_daily_limit(env: Env, limit: i128) {
         Self::admin(&env).require_auth();
         assert!(limit > 0, "limit must be positive");
