@@ -1,0 +1,196 @@
+name: Dependency Vulnerability Scan
+
+on:
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Weekly full scan every Monday at 08:00 UTC
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write   # needed to post PR comments
+
+jobs:
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend deps
+        run: npm install
+        working-directory: novaRewards/backend
+
+      - name: Install frontend deps
+        run: npm install
+        working-directory: novaRewards/frontend
+
+      - name: Run npm audit (backend)
+        id: audit_backend
+        run: |
+          set +e
+          REPORT=$(npm audit --audit-level=high --json 2>&1)
+          EXIT=$?
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          echo "$REPORT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "exit_code=$EXIT" >> $GITHUB_OUTPUT
+          # Human-readable summary for step log
+          echo "$REPORT" | node -e "
+            const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const v=d.metadata?.vulnerabilities||{};
+            console.log('critical:',v.critical||0,'high:',v.high||0,'moderate:',v.moderate||0,'low:',v.low||0);
+          " 2>/dev/null || echo "$REPORT"
+        working-directory: novaRewards/backend
+
+      - name: Run npm audit (frontend)
+        id: audit_frontend
+        run: |
+          set +e
+          REPORT=$(npm audit --audit-level=high --json 2>&1)
+          EXIT=$?
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          echo "$REPORT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "exit_code=$EXIT" >> $GITHUB_OUTPUT
+          echo "$REPORT" | node -e "
+            const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const v=d.metadata?.vulnerabilities||{};
+            console.log('critical:',v.critical||0,'high:',v.high||0,'moderate:',v.moderate||0,'low:',v.low||0);
+          " 2>/dev/null || echo "$REPORT"
+        working-directory: novaRewards/frontend
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const backendReport = JSON.parse(`${{ steps.audit_backend.outputs.report }}` || '{}');
+            const frontendReport = JSON.parse(`${{ steps.audit_frontend.outputs.report }}` || '{}');
+
+            function summary(label, report) {
+              const v = report?.metadata?.vulnerabilities || {};
+              const total = (v.critical||0) + (v.high||0) + (v.moderate||0) + (v.low||0);
+              if (total === 0) return `**${label}**: ✅ No vulnerabilities found`;
+              const icon = (v.critical||0) > 0 ? '🔴' : (v.high||0) > 0 ? '🟠' : '🟡';
+              return `**${label}**: ${icon} critical: ${v.critical||0}, high: ${v.high||0}, moderate: ${v.moderate||0}, low: ${v.low||0}`;
+            }
+
+            const backendExit  = '${{ steps.audit_backend.outputs.exit_code }}';
+            const frontendExit = '${{ steps.audit_frontend.outputs.exit_code }}';
+            const blocked = backendExit !== '0' || frontendExit !== '0';
+
+            const body = [
+              '## 🔍 npm Dependency Vulnerability Scan',
+              '',
+              summary('Backend (novaRewards/backend)', backendReport),
+              summary('Frontend (novaRewards/frontend)', frontendReport),
+              '',
+              blocked
+                ? '> ❌ **Critical/high vulnerabilities detected — merge is blocked until resolved.**'
+                : '> ✅ No critical or high severity vulnerabilities found.',
+            ].join('\n');
+
+            // Update existing comment if present, otherwise create
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes('npm Dependency Vulnerability Scan'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail on critical/high vulnerabilities
+        if: steps.audit_backend.outputs.exit_code != '0' || steps.audit_frontend.outputs.exit_code != '0'
+        run: |
+          echo "Critical or high severity npm vulnerabilities found. Blocking merge."
+          exit 1
+
+  cargo-audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run cargo audit
+        id: cargo_audit
+        run: |
+          set +e
+          REPORT=$(cargo audit --json 2>&1)
+          EXIT=$?
+          echo "exit_code=$EXIT" >> $GITHUB_OUTPUT
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          echo "$REPORT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          # Human-readable output to log
+          cargo audit 2>&1 || true
+        working-directory: contracts
+
+      - name: Post PR comment (cargo)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const exitCode = '${{ steps.cargo_audit.outputs.exit_code }}';
+            const blocked  = exitCode !== '0';
+
+            const body = [
+              '## 🦀 Cargo Dependency Vulnerability Scan',
+              '',
+              blocked
+                ? '> ❌ **Vulnerabilities found in Rust dependencies — merge is blocked until resolved.**\n>\n> Run `cargo audit` locally in `contracts/` for details.'
+                : '> ✅ No vulnerabilities found in Rust dependencies.',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes('Cargo Dependency Vulnerability Scan'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail on vulnerabilities
+        if: steps.cargo_audit.outputs.exit_code != '0'
+        run: |
+          echo "Cargo audit found vulnerabilities. Blocking merge."
+          exit 1

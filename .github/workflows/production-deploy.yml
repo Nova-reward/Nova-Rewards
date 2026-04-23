@@ -1,0 +1,276 @@
+name: Production Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  # ── 1. Run full test suite before touching production ─────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: novaRewards
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: novaRewards/package-lock.json
+
+      - run: npm install
+      - run: npm run lint
+        working-directory: novaRewards/backend
+      - run: npm test
+        working-directory: novaRewards/backend
+
+  # ── 2. Manual approval gate (GitHub Environment protection rule) ──────────
+  approve:
+    name: Await Approval
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ secrets.PROD_BACKEND_URL }}
+    steps:
+      - name: Approved
+        run: echo "Production deployment approved for ${{ github.ref_name }}"
+
+  # ── 3. Blue-green backend deploy ──────────────────────────────────────────
+  deploy-backend:
+    name: Deploy Backend (blue-green)
+    needs: approve
+    runs-on: ubuntu-latest
+    outputs:
+      deployed_slot: ${{ steps.swap.outputs.deployed_slot }}
+      previous_slot: ${{ steps.swap.outputs.previous_slot }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: novaRewards/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: novaRewards/backend
+
+      - name: Write SSH key
+        run: |
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" | base64 -d > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+
+      # Determine which slot is currently live and deploy to the other one
+      - name: Determine slots and deploy
+        id: swap
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          APP_VERSION: ${{ github.ref_name }}
+        run: |
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST"
+
+          # Read current live slot (blue or green); default to blue
+          LIVE=$($SSH "cat /app/nova-backend/LIVE_SLOT 2>/dev/null || echo blue")
+          if [ "$LIVE" = "blue" ]; then
+            DEPLOY_SLOT="green"
+          else
+            DEPLOY_SLOT="blue"
+          fi
+
+          echo "deployed_slot=$DEPLOY_SLOT" >> "$GITHUB_OUTPUT"
+          echo "previous_slot=$LIVE"        >> "$GITHUB_OUTPUT"
+
+          # Sync code to the idle slot
+          rsync -az --delete \
+            -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            novaRewards/backend/ \
+            "$DEPLOY_USER@$DEPLOY_HOST:/app/nova-backend/$DEPLOY_SLOT/"
+
+          # Run DB migrations on the idle slot
+          $SSH "cd /app/nova-backend/$DEPLOY_SLOT && \
+                DATABASE_URL='${{ secrets.PROD_DATABASE_URL }}' npm run db:migrate"
+
+          # Start the idle slot on its staging port
+          $SSH "cd /app/nova-backend/$DEPLOY_SLOT && \
+                PORT=3002 NODE_ENV=production \
+                DATABASE_URL='${{ secrets.PROD_DATABASE_URL }}' \
+                REDIS_URL='${{ secrets.PROD_REDIS_URL }}' \
+                JWT_SECRET='${{ secrets.JWT_SECRET }}' \
+                pm2 start server.js --name nova-backend-$DEPLOY_SLOT \
+                  --update-env -- || \
+                pm2 restart nova-backend-$DEPLOY_SLOT --update-env"
+
+      # Health-check the idle slot before switching traffic
+      - name: Health check (idle slot)
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SLOT: ${{ steps.swap.outputs.deployed_slot }}
+        run: |
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST"
+          for i in $(seq 1 12); do
+            STATUS=$($SSH "curl -sf http://localhost:3002/health | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('status',''))\" 2>/dev/null || echo fail")
+            if [ "$STATUS" = "ok" ]; then
+              echo "Health check passed on attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "Health check failed after 12 attempts"
+          exit 1
+
+      # Switch Nginx upstream to the new slot
+      - name: Switch traffic to new slot
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SLOT: ${{ steps.swap.outputs.deployed_slot }}
+        run: |
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST"
+          $SSH "echo '$DEPLOY_SLOT' > /app/nova-backend/LIVE_SLOT && \
+                sudo nginx -s reload"
+
+  # ── 4. Post-switch health check — rollback on failure ────────────────────
+  verify-or-rollback:
+    name: Verify & Rollback
+    needs: deploy-backend
+    runs-on: ubuntu-latest
+    if: always() && needs.deploy-backend.result != 'skipped'
+
+    steps:
+      - name: Write SSH key
+        run: |
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" | base64 -d > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+
+      - name: Post-switch health check
+        id: health
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST"
+          for i in $(seq 1 6); do
+            STATUS=$($SSH "curl -sf http://localhost:3001/health | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('status',''))\" 2>/dev/null || echo fail")
+            if [ "$STATUS" = "ok" ]; then
+              echo "result=healthy" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "result=unhealthy" >> "$GITHUB_OUTPUT"
+
+      - name: Rollback to previous slot
+        if: steps.health.outputs.result == 'unhealthy'
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          PREVIOUS_SLOT: ${{ needs.deploy-backend.outputs.previous_slot }}
+        run: |
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST"
+          $SSH "echo '$PREVIOUS_SLOT' > /app/nova-backend/LIVE_SLOT && \
+                sudo nginx -s reload"
+          echo "::error::Production health check failed — rolled back to $PREVIOUS_SLOT"
+          exit 1
+
+  # ── 5. Deploy frontend ────────────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: verify-or-rollback
+    runs-on: ubuntu-latest
+    if: needs.verify-or-rollback.result == 'success'
+    defaults:
+      run:
+        working-directory: novaRewards/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: novaRewards/frontend/package-lock.json
+
+      - run: npm install
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.PROD_API_URL }}
+          NEXT_PUBLIC_STELLAR_NETWORK: PUBLIC
+        run: npm run build
+
+      - name: Write SSH key
+        run: |
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" | base64 -d > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          rsync -az --delete \
+            -e "ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no" \
+            .next/ "$DEPLOY_USER@$DEPLOY_HOST:/app/nova-frontend/.next/"
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /app/nova-frontend && pm2 restart nova-frontend --update-env || \
+             pm2 start npm --name nova-frontend -- start"
+
+  # ── 6. Slack notification ─────────────────────────────────────────────────
+  notify:
+    name: Notify Slack
+    needs: [deploy-backend, deploy-frontend, verify-or-rollback]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Send Slack notification
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          BACKEND_RESULT="${{ needs.deploy-backend.result }}"
+          VERIFY_RESULT="${{ needs.verify-or-rollback.result }}"
+          FRONTEND_RESULT="${{ needs.deploy-frontend.result }}"
+          TAG="${{ github.ref_name }}"
+          ACTOR="${{ github.actor }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ "$VERIFY_RESULT" = "success" ] && [ "$FRONTEND_RESULT" = "success" ]; then
+            COLOR="good"
+            STATUS="✅ Production deployment succeeded"
+          elif [ "$VERIFY_RESULT" = "failure" ]; then
+            COLOR="danger"
+            STATUS="🔴 Production deployment FAILED — automatic rollback triggered"
+          else
+            COLOR="warning"
+            STATUS="⚠️ Production deployment finished with warnings"
+          fi
+
+          curl -sf -X POST "$SLACK_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"$STATUS\",
+                \"fields\": [
+                  {\"title\": \"Tag\",    \"value\": \"$TAG\",    \"short\": true},
+                  {\"title\": \"Actor\",  \"value\": \"$ACTOR\",  \"short\": true},
+                  {\"title\": \"Run\",    \"value\": \"$RUN_URL\", \"short\": false}
+                ]
+              }]
+            }"
