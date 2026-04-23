@@ -301,7 +301,7 @@ function HowItWorksSection() {
           <p className="section-subtitle">No complicated setup. Just connect, earn, and redeem.</p>
         </FadeIn>
         <StaggerList className="steps-list">
-          {STEPS.map((s, i) => (
+          {STEPS.map((s) => (
             <motion.div key={s.step} variants={fadeUp} className="step-item">
               <div className="step-number" aria-hidden="true">{s.step}</div>
               <div className="step-connector" aria-hidden="true" />
