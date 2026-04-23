@@ -1,3 +1,25 @@
+//! # Admin Roles Contract
+//!
+//! Centralized access control for Nova Rewards protocol operations.
+//!
+//! ## Features
+//! - Two-step admin transfer (propose → accept) to prevent accidental ownership loss
+//! - Configurable multisig threshold and signer set
+//! - Privileged stubs for mint, withdraw, rate update, and pause operations
+//!
+//! ## Usage
+//! ```ignore
+//! client.initialize(&admin, &signers_vec, &threshold);
+//!
+//! // Two-step admin transfer
+//! client.propose_admin(&new_admin);
+//! // new_admin calls:
+//! client.accept_admin();
+//!
+//! // Update multisig settings
+//! client.update_signers(&signers_vec);
+//! client.update_threshold(&2);
+//! ```
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, vec, Address, Env, Vec};
 
@@ -17,6 +39,14 @@ pub struct AdminRolesContract;
 #[contractimpl]
 impl AdminRolesContract {
     /// Initializes the contract with the first admin and optional multisig settings.
+    ///
+    /// # Parameters
+    /// - `admin` – Initial admin address.
+    /// - `signers` – Initial multisig signer set (may be empty).
+    /// - `threshold` – Minimum approvals required for multisig operations.
+    ///
+    /// # Panics
+    /// - `"already initialised"` if called more than once.
     pub fn initialize(env: Env, admin: Address, signers: Vec<Address>, threshold: u32) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
@@ -43,6 +73,18 @@ impl AdminRolesContract {
     // ── Two-step admin transfer ───────────────────────────────────────────────
 
     /// Stores a pending admin that can later accept ownership.
+    ///
+    /// The current admin must call this first; the new admin then calls
+    /// [`accept_admin`](AdminRolesContract::accept_admin) to complete the transfer.
+    ///
+    /// # Parameters
+    /// - `new_admin` – Address being proposed as the next admin.
+    ///
+    /// # Authorization
+    /// Requires current admin authorization.
+    ///
+    /// # Events
+    /// Emits `("adm_roles", "adm_prop")` with data `(current_admin: Address, proposed: Address)`.
     pub fn propose_admin(env: Env, new_admin: Address) {
         Self::require_admin(&env);
         env.storage()
@@ -57,6 +99,17 @@ impl AdminRolesContract {
     }
 
     /// Completes the two-step admin transfer for the pending admin.
+    ///
+    /// Must be called by the address previously set via [`propose_admin`](AdminRolesContract::propose_admin).
+    ///
+    /// # Authorization
+    /// Requires pending admin authorization.
+    ///
+    /// # Events
+    /// Emits `("adm_roles", "adm_xfer")` with data `(old_admin: Address, new_admin: Address)`.
+    ///
+    /// # Panics
+    /// - `"no pending admin"` if no admin transfer is in progress.
     pub fn accept_admin(env: Env) {
         let pending: Address = env
             .storage()
@@ -79,6 +132,12 @@ impl AdminRolesContract {
     // ── Multisig threshold ────────────────────────────────────────────────────
 
     /// Updates the multisig approval threshold.
+    ///
+    /// # Parameters
+    /// - `threshold` – New minimum number of signer approvals required.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
     pub fn update_threshold(env: Env, threshold: u32) {
         Self::require_admin(&env);
         env.storage()
@@ -87,6 +146,12 @@ impl AdminRolesContract {
     }
 
     /// Replaces the configured multisig signer set.
+    ///
+    /// # Parameters
+    /// - `signers` – New list of authorized signer addresses.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
     pub fn update_signers(env: Env, signers: Vec<Address>) {
         Self::require_admin(&env);
         env.storage().instance().set(&DataKey::Signers, &signers);

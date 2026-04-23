@@ -44,7 +44,8 @@
   --animation-counter-increment-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-[data-theme="dark"] {
+[data-theme="dark"],
+.dark {
   --bg: #0f0f1a;
   --text: #e2e8f0;
   --accent: #7c3aed;
@@ -67,6 +68,7 @@ body {
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
+  @apply bg-white text-slate-900 dark:bg-brand-dark dark:text-slate-100;
 }
 
 a {

@@ -7,60 +7,27 @@ on:
     branches: [main, develop]
 
 jobs:
-  backend:
-    name: Backend – Lint & Test
+  secret-scan:
+    name: Secret Scan (TruffleHog)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: novaRewards/backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: nova
-          POSTGRES_PASSWORD: nova
-          POSTGRES_DB: nova_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+      - name: TruffleHog scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
 
-    env:
-      DATABASE_URL: postgresql://nova:nova@localhost:5432/nova_test
-      NODE_ENV: test
-  backend-tests:
-    runs-on: ubuntu-latest
+  test:
     name: Backend Tests
-    permissions:
-      contents: read
-
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: nova_rewards_test
-          POSTGRES_USER: nova
-          POSTGRES_PASSWORD: test_password
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
+    runs-on: ubuntu-latest
+    needs: secret-scan
 
     steps:
       - uses: actions/checkout@v4
