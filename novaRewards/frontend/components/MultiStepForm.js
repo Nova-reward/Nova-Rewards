@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/router';
 
 /**
  * Generic multi-step form component.
@@ -11,6 +12,7 @@ import { useState, useCallback, useEffect } from 'react';
  *   storageKey   — localStorage key for progress persistence (optional)
  *   onSubmit     — async (data) => void  called on final submission
  *   renderSummary — (data) => JSX  custom summary view (optional)
+ *   urlParamKey  — URL search param name to persist step index (optional, e.g. 'step')
  */
 export default function MultiStepForm({
   steps,
@@ -18,10 +20,22 @@ export default function MultiStepForm({
   storageKey,
   onSubmit,
   renderSummary,
+  urlParamKey,
 }) {
-  const REVIEW_INDEX = steps.length; // last "step" is the review screen
+  const REVIEW_INDEX = steps.length;
+  const router = useRouter();
 
-  const [current, setCurrent] = useState(0);
+  // Resolve initial step from URL param if provided
+  const getInitialStep = () => {
+    if (urlParamKey && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const s = parseInt(params.get(urlParamKey), 10);
+      if (!isNaN(s) && s >= 0 && s <= REVIEW_INDEX) return s;
+    }
+    return 0;
+  };
+
+  const [current, setCurrent] = useState(getInitialStep);
   const [data, setData] = useState(() => {
     if (storageKey && typeof window !== 'undefined') {
       try {
@@ -36,7 +50,16 @@ export default function MultiStepForm({
   const [submitError, setSubmitError] = useState('');
   const [done, setDone] = useState(false);
 
-  // Persist progress whenever data changes
+  // Sync step to URL param
+  useEffect(() => {
+    if (!urlParamKey || done) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set(urlParamKey, String(current));
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState(null, '', newUrl);
+  }, [current, urlParamKey, done]);
+
+  // Persist form data to localStorage
   useEffect(() => {
     if (!storageKey || done) return;
     try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
@@ -71,13 +94,18 @@ export default function MultiStepForm({
     try {
       await onSubmit(data);
       if (storageKey) localStorage.removeItem(storageKey);
+      if (urlParamKey) {
+        const params = new URLSearchParams(window.location.search);
+        params.delete(urlParamKey);
+        window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+      }
       setDone(true);
     } catch (err) {
       setSubmitError(err.message || 'Submission failed. Please try again.');
     } finally {
       setSubmitting(false);
     }
-  }, [data, onSubmit, storageKey]);
+  }, [data, onSubmit, storageKey, urlParamKey]);
 
   if (done) {
     return (
@@ -89,7 +117,7 @@ export default function MultiStepForm({
   }
 
   const isReview = current === REVIEW_INDEX;
-  const totalSteps = steps.length; // excludes review
+  const totalSteps = steps.length;
 
   return (
     <div className="msf">
