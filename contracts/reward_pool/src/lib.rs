@@ -1,3 +1,22 @@
+//! # Reward Pool Contract
+//!
+//! A shared liquidity pool that merchants deposit into and users withdraw from,
+//! subject to a configurable per-wallet daily withdrawal cap.
+//!
+//! ## Usage
+//! ```ignore
+//! // Admin initializes
+//! client.initialize(&admin);
+//!
+//! // Merchant deposits
+//! client.deposit(&merchant, &50_000);
+//!
+//! // Set a daily limit of 1 000 tokens per wallet
+//! client.set_daily_limit(&1_000);
+//!
+//! // User withdraws
+//! client.withdraw(&user, &500);
+//! ```
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
@@ -26,6 +45,14 @@ pub struct RewardPoolContract;
 #[contractimpl]
 impl RewardPoolContract {
     /// Initializes the reward pool and stores the admin address.
+    ///
+    /// Sets the initial pool balance to `0` and the daily limit to `i128::MAX` (unlimited).
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized to call [`set_daily_limit`](RewardPoolContract::set_daily_limit).
+    ///
+    /// # Panics
+    /// - `"already initialised"` if called more than once.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
@@ -74,6 +101,19 @@ impl RewardPoolContract {
     }
 
     /// Deposits funds into the shared reward pool.
+    ///
+    /// # Parameters
+    /// - `from` – Address making the deposit (must authorize).
+    /// - `amount` – Amount to deposit (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `from` authorization.
+    ///
+    /// # Events
+    /// Emits `("rwd_pool", "deposited")` with data `(from: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
     pub fn deposit(env: Env, from: Address, amount: i128) {
         from.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -90,6 +130,24 @@ impl RewardPoolContract {
     }
 
     /// Withdraws funds from the shared reward pool subject to the daily wallet limit.
+    ///
+    /// The 24-hour window resets automatically when 86 400 seconds have elapsed
+    /// since the wallet's last window start.
+    ///
+    /// # Parameters
+    /// - `to` – Recipient address (must authorize).
+    /// - `amount` – Amount to withdraw (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `to` authorization.
+    ///
+    /// # Events
+    /// Emits `("rwd_pool", "withdrawn")` with data `(to: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
+    /// - `"insufficient pool balance"` if the pool holds fewer tokens than `amount`.
+    /// - `"daily withdrawal limit exceeded"` if the wallet's 24-hour usage would exceed the limit.
     pub fn withdraw(env: Env, to: Address, amount: i128) {
         to.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -121,6 +179,15 @@ impl RewardPoolContract {
     }
 
     /// Updates the per-wallet daily withdrawal cap. Admin only.
+    ///
+    /// # Parameters
+    /// - `limit` – New daily cap in base units (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"limit must be positive"` if `limit <= 0`.
     pub fn set_daily_limit(env: Env, limit: i128) {
         Self::admin(&env).require_auth();
         assert!(limit > 0, "limit must be positive");
