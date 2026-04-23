@@ -1342,3 +1342,28 @@ td {
   gap: 0.75rem;
   flex-wrap: wrap;
 }
+
+/* ── Campaign Discovery Page (#598) ─────────────────────────────────────── */
+
+/* Skeleton loading animation used by CampaignCardSkeleton */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton-block {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    var(--border)    50%,
+    var(--surface-2) 75%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer var(--animation-loading-skeleton-duration, 1.5s)
+    var(--animation-loading-skeleton-timing-function, linear) infinite;
+}
+
+/* Campaign card hover — GPU-composited lift */
+.campaign-card {
+  will-change: transform, box-shadow;
+}

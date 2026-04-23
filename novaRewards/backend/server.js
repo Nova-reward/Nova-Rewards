@@ -69,6 +69,7 @@ app.get("/metrics", async (req, res) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/merchants', require('./routes/merchants'));
 app.use('/api/campaigns', require('./routes/campaigns'));
+app.use('/api/campaigns', require('./routes/campaignAnalytics'));
 app.use('/api/rewards', require('./routes/rewards'));
 app.use('/api/redemptions', require('./routes/redemptions'));
 app.use('/api/transactions', require('./routes/transactions'));
