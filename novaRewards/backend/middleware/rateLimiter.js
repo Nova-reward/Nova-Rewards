@@ -117,6 +117,18 @@ const slidingWebhook = slidingRateLimiter({
   keyBy:    'ip',
 });
 
+/**
+ * Webhook endpoint limiter keyed by merchant API key.
+ * 1000 req/min per API key (env: RL_WEBHOOK_API_KEY_MAX).
+ * Falls back to IP if no x-api-key header is present.
+ */
+const webhookApiKeyLimiter = slidingRateLimiter({
+  prefix:   'sw:webhook-apikey',
+  windowMs: w(60),
+  max:      parseInt(process.env.RL_WEBHOOK_API_KEY_MAX) || 1000,
+  keyBy:    'api-key',
+});
+
 const slidingRewards = slidingRateLimiter({
   prefix:   'sw:rewards',
   windowMs: w(60),
@@ -141,6 +153,7 @@ module.exports = {
   slidingUser,
   slidingSearch,
   slidingWebhook,
+  webhookApiKeyLimiter,
   slidingRewards,
   slidingAdmin,
 };

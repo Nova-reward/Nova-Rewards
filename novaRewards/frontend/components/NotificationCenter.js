@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { useNotifications, getTypeIcon, relativeTime } from '../context/NotificationContext';
+import EmptyState from './EmptyState';
+import { SkeletonNotification } from './Skeleton';
 
 export default function NotificationCenter() {
   const {
@@ -53,10 +55,12 @@ export default function NotificationCenter() {
           </div>
 
           {notifications.length === 0 && archived.length === 0 ? (
-            <div className="notification-empty">
-              <span>🔕</span>
-              <p>No notifications yet</p>
-            </div>
+            <EmptyState
+              icon="notifications"
+              title="All caught up"
+              description="You have no notifications right now."
+              variant="default"
+            />
           ) : (
             <ul className="notification-list">
               {notifications.map((n, i) => (

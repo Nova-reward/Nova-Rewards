@@ -12,6 +12,7 @@
 
 const router = require('express').Router();
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { webhookApiKeyLimiter } = require('../middleware/rateLimiter');
 const {
   createWebhook,
   getWebhooksByMerchant,
@@ -45,7 +46,7 @@ const webhookDeliveryQueue = new Queue('webhook-delivery', { connection });
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/actions  — Inbound webhook from merchant
 // ---------------------------------------------------------------------------
-router.post('/actions', async (req, res, next) => {
+router.post('/actions', webhookApiKeyLimiter, async (req, res, next) => {
   try {
     const signature = req.headers['x-signature'] || req.headers['x-hub-signature-256'];
     if (!signature) {

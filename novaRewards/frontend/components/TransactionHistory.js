@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTransactions } from '../lib/useApi';
 import EmptyState from './EmptyState';
 import LoadingSkeleton from './LoadingSkeleton';
+import MobileCardList from './MobileCardList';
 
 const PAGE_SIZE = 20;
 const TRANSACTION_TYPES = ['all', 'issuance', 'redemption', 'transfer'];
@@ -223,103 +224,37 @@ export default function TransactionHistory({ userId }) {
         </div>
       </div>
 
-      {/* Transaction Table */}
+      {/* Transaction Table / Card List */}
       {isLoading ? (
-        <LoadingSkeleton rows={5} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {[...Array(5)].map((_, i) => <SkeletonRow key={i} />)}
+        </div>
       ) : transactions && transactions.length > 0 ? (
-        <div className="table-wrapper" style={{ overflowX: 'auto', marginBottom: '2rem' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '0.875rem',
-            }}
-          >
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 600 }}>Type</th>
-                <th style={{ padding: '1rem', textAlign: 'right', fontWeight: 600 }}>Amount</th>
-                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 600 }}>Campaign</th>
-                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 600 }}>Date</th>
-                <th style={{ padding: '1rem', textAlign: 'center', fontWeight: 600 }}>Status</th>
-                <th style={{ padding: '1rem', textAlign: 'center', fontWeight: 600 }}>Explorer</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((tx, idx) => (
-                <tr
-                  key={tx.id}
-                  style={{
-                    borderBottom: '1px solid #e5e7eb',
-                    backgroundColor: idx % 2 === 0 ? '#fff' : '#f9fafb',
-                  }}
-                >
-                  <td style={{ padding: '1rem' }}>
-                    <span
-                      className="badge"
-                      style={{
-                        display: 'inline-block',
-                        padding: '0.25rem 0.75rem',
-                        borderRadius: '9999px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        backgroundColor: getBadgeColor(tx.type),
-                        color: '#fff',
-                      }}
-                    >
-                      {tx.type}
-                    </span>
-                  </td>
-                  <td style={{ padding: '1rem', textAlign: 'right', fontWeight: 500 }}>
-                    {tx.amount}
-                  </td>
-                  <td style={{ padding: '1rem' }}>{tx.campaign?.name || 'N/A'}</td>
-                  <td style={{ padding: '1rem' }}>
-                    {new Date(tx.createdAt).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }}>
-                    <span
-                      className="status-badge"
-                      style={{
-                        display: 'inline-block',
-                        padding: '0.25rem 0.75rem',
-                        borderRadius: '0.25rem',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        backgroundColor: getStatusColor(tx.status),
-                        color: '#fff',
-                      }}
-                    >
-                      {tx.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '1rem', textAlign: 'center' }}>
-                    {tx.txHash ? (
-                      <a
-                        href={`https://stellar.expert/explorer/public/tx/${tx.txHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: '#3b82f6',
-                          textDecoration: 'none',
-                          fontWeight: 500,
-                        }}
-                      >
-                        View
-                      </a>
-                    ) : (
-                      <span style={{ color: '#9ca3af' }}>-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mb-8">
+          <MobileCardList
+            columns={[
+              { key: 'type',     label: 'Type',     render: (v) => <span className="font-semibold capitalize">{v}</span> },
+              { key: 'amount',   label: 'Amount',   render: (v) => <span className="font-medium">{v}</span> },
+              { key: 'campaign', label: 'Campaign', render: (v) => v?.name || 'N/A' },
+              { key: 'createdAt',label: 'Date',     render: (v) => new Date(v).toLocaleDateString() },
+              { key: 'status',   label: 'Status',   render: (v) => <span className="capitalize font-semibold">{v}</span> },
+              {
+                key: 'txHash',
+                label: 'Explorer',
+                render: (v) => v
+                  ? <a href={`https://stellar.expert/explorer/public/tx/${v}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 font-medium">View</a>
+                  : '—',
+              },
+            ]}
+            data={transactions}
+            emptyMessage="No transactions found."
+          />
         </div>
       ) : (
         <EmptyState
-          title="No Transactions"
-          message="No transactions found matching your filters."
+          icon="transactions"
+          title="No transactions yet"
+          description="Your transaction history will appear here once you start earning or redeeming rewards."
         />
       )}
 

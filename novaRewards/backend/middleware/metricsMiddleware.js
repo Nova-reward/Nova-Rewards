@@ -48,6 +48,21 @@ const redisOperationDuration = new client.Histogram({
   registers: [registry],
 });
 
+// Cache hit/miss counters — issue #576
+const cacheHits = new client.Counter({
+  name: 'cache_hits_total',
+  help: 'Total number of cache hits',
+  labelNames: ['key_type'],
+  registers: [registry],
+});
+
+const cacheMisses = new client.Counter({
+  name: 'cache_misses_total',
+  help: 'Total number of cache misses',
+  labelNames: ['key_type'],
+  registers: [registry],
+});
+
 // Business metrics
 const rewardsDistributed = new client.Counter({
   name: 'rewards_distributed_total',
@@ -111,5 +126,7 @@ module.exports = {
     rewardsDistributed,
     redemptionsProcessed,
     userRegistrations,
+    cacheHits,
+    cacheMisses,
   },
 };
