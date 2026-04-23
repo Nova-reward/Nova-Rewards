@@ -1,9 +1,8 @@
-const { query } = require('../db/index');
+const { findMerchantByKeyHash, hashKey } = require('../db/apiKeyRepository');
 
 /**
  * Middleware: validates the merchant API key from the x-api-key header.
- * Attaches the merchant record to req.merchant on success.
- * Requirements: 3.1
+ * Checks the merchant_api_keys table (hashed). Attaches req.merchant on success.
  */
 async function authenticateMerchant(req, res, next) {
   const apiKey = req.headers['x-api-key'];
@@ -15,21 +14,20 @@ async function authenticateMerchant(req, res, next) {
     });
   }
 
-  const result = await query(
-    'SELECT * FROM merchants WHERE api_key = $1',
-    [apiKey]
-  );
-
-  if (!result.rows[0]) {
-    return res.status(401).json({
-      success: false,
-      error: 'unauthorized',
-      message: 'Invalid API key',
-    });
+  try {
+    const merchant = await findMerchantByKeyHash(hashKey(apiKey));
+    if (!merchant) {
+      return res.status(401).json({
+        success: false,
+        error: 'unauthorized',
+        message: 'Invalid API key',
+      });
+    }
+    req.merchant = merchant;
+    next();
+  } catch (err) {
+    next(err);
   }
-
-  req.merchant = result.rows[0];
-  next();
 }
 
 module.exports = { authenticateMerchant };
