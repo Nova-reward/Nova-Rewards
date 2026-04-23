@@ -152,7 +152,10 @@ export default function DataTable({ columns = [], data = [], pageSize: defaultPa
 
       {/* Table */}
       <div className="table-scroll">
-        <table style={{ width: '100%' }}>
+        <table style={{ width: '100%' }} role="grid" aria-label="Data table" aria-rowcount={sorted.length}>
+          <caption className="sr-only">
+            {sorted.length} row{sorted.length !== 1 ? 's' : ''}{search ? ` matching "${search}"` : ''}
+          </caption>
           <thead>
             <tr>
               <th style={{ width: '2.5rem' }}>

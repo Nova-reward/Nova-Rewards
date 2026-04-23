@@ -5,11 +5,17 @@ const {
   createReward, updateReward, deleteReward, getRewardById,
 } = require('../db/adminRepository');
 const {
+  getCampaignById,
+  softDeleteCampaign,
+} = require('../db/campaignRepository');
+const {
   buildRecoveryPlan,
   listBackups,
 } = require('../services/backupService');
 const { runBackupCycle } = require('../jobs/backupJob');
 const AuditService = require('../services/auditService');
+const { query } = require('../db/index');
+const { unblock } = require('../middleware/abuseDetection');
 
 // All admin routes require a valid user token AND admin role
 router.use(authenticateUser, requireAdmin);
@@ -342,6 +348,137 @@ router.get('/audit-logs', async (req, res, next) => {
     
     const logs = await AuditService.getLogs(filters);
     res.json({ success: true, data: logs });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /admin/campaigns/{id}/pause:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Pause any campaign (admin override)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 3 }
+ *     responses:
+ *       200:
+ *         description: Campaign paused.
+ *       404:
+ *         description: Campaign not found.
+ */
+router.post('/campaigns/:id/pause', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+
+    const campaign = await getCampaignById(id);
+    if (!campaign) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'Campaign not found' });
+    }
+
+    const paused = await softDeleteCampaign(id, null);
+
+    await AuditService.log({
+      entityType: 'campaign',
+      entityId: id,
+      action: 'PAUSE_CAMPAIGN',
+      performedBy: req.user.id,
+      beforeState: campaign,
+      afterState: paused,
+      source: 'admin_api',
+    });
+
+    res.json({ success: true, data: paused });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /admin/metrics:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Platform KPIs — total rewards issued, active campaigns, redemption totals
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Platform metrics.
+ */
+router.get('/metrics', async (req, res, next) => {
+  try {
+    const { rows } = await query(`
+      SELECT
+        (SELECT COUNT(*)                          FROM users       WHERE is_deleted = FALSE)                          AS total_users,
+        (SELECT COUNT(*)                          FROM campaigns   WHERE deleted_at IS NULL AND is_active = TRUE)     AS active_campaigns,
+        (SELECT COUNT(*)                          FROM campaigns   WHERE deleted_at IS NULL)                          AS total_campaigns,
+        (SELECT COALESCE(SUM(amount), 0)          FROM point_transactions WHERE type = 'earned')                     AS total_rewards_issued,
+        (SELECT COUNT(*)                          FROM redemptions)                                                   AS total_redemptions,
+        (SELECT COALESCE(SUM(points_spent), 0)    FROM redemptions)                                                  AS total_points_redeemed,
+        (SELECT COUNT(*)                          FROM rewards     WHERE is_active = TRUE AND is_deleted = FALSE)     AS active_rewards
+    `);
+
+    await AuditService.log({
+      entityType: 'metrics',
+      entityId: null,
+      action: 'VIEW_METRICS',
+      performedBy: req.user.id,
+      source: 'admin_api',
+    });
+
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /admin/abuse/unblock/{identifier}:
+ *   delete:
+ *     tags: [Admin]
+ *     summary: Manually unblock an IP or wallet flagged by abuse detection
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: identifier
+ *         required: true
+ *         schema: { type: string }
+ *         description: IP address or wallet public key to unblock
+ *     responses:
+ *       200:
+ *         description: Identifier unblocked.
+ *       401:
+ *         description: Unauthenticated.
+ *       403:
+ *         description: Admin role required.
+ */
+router.delete('/abuse/unblock/:identifier', async (req, res, next) => {
+  try {
+    const { identifier } = req.params;
+    if (!identifier) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'identifier is required' });
+    }
+    await unblock(identifier);
+    await AuditService.log({
+      entityType: 'abuse_block',
+      entityId: null,
+      action: 'MANUAL_UNBLOCK',
+      performedBy: req.user.id,
+      afterState: { identifier, unblocked: true },
+      source: 'admin_api',
+    });
+    res.json({ success: true, message: `${identifier} has been unblocked` });
   } catch (err) {
     next(err);
   }
