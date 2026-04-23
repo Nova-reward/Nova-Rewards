@@ -244,13 +244,11 @@ ADMIN_ROLES_ID="$(deploy_contract \
 # ── Post-deployment verification ──────────────────────────────────────────────
 
 log "Running post-deployment verification..."
-verify_contract "$NOVA_TOKEN_ID"    "balance"    --addr "${ADMIN_ADDRESS}"
-verify_contract "$REWARD_POOL_ID"   "get_balance"
-verify_contract "$VESTING_ID"       "get_admin"
-verify_contract "$REFERRAL_ID"      "get_admin"
-verify_contract "$DISTRIBUTION_ID"  "get_admin"
-verify_contract "$NOVA_REWARDS_ID"  "get_admin"
-verify_contract "$ADMIN_ROLES_ID"   "get_admin"
+if $DRY_RUN; then
+  log "Skipping verification (dry-run mode)"
+else
+  NETWORK="${NETWORK}" bash "${REPO_ROOT}/scripts/verify-deployment.sh"
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
