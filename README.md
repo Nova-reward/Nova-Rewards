@@ -159,6 +159,8 @@ npm run test:backend    # Jest — backend unit + integration
 npm run test:frontend   # Jest — frontend components
 ```
 
+For disclosure policy, scope, severity, and reward tiers, see [SECURITY.md](./SECURITY.md).
+
 ---
 
 ## Environment Setup
