@@ -85,7 +85,7 @@ router.post('/', async (req, res, next) => {
     }
 
     // ── Body validation ───────────────────────────────────────────────────
-    const { userId, rewardId } = req.body;
+    const { userId, rewardId, campaignId } = req.body;
 
     if (!userId || !Number.isInteger(Number(userId)) || Number(userId) <= 0) {
       return res.status(400).json({
@@ -103,8 +103,18 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    const userIdNum   = Number(userId);
-    const rewardIdNum = Number(rewardId);
+    if (campaignId !== undefined && campaignId !== null &&
+        (!Number.isInteger(Number(campaignId)) || Number(campaignId) <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'campaignId must be a positive integer',
+      });
+    }
+
+    const userIdNum     = Number(userId);
+    const rewardIdNum   = Number(rewardId);
+    const campaignIdNum = campaignId != null ? Number(campaignId) : null;
 
     // ── Authorisation: users may only redeem for themselves ───────────────
     if (req.user.id !== userIdNum) {
@@ -119,6 +129,7 @@ router.post('/', async (req, res, next) => {
     const { redemption, pointTx, idempotent } = await redeemReward({
       userId: userIdNum,
       rewardId: rewardIdNum,
+      campaignId: campaignIdNum,
       idempotencyKey: idempotencyKey.trim(),
     });
 

@@ -6,6 +6,7 @@ const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 const { verifyTrustline } = require('../../blockchain/trustline');
 const { slidingRewards } = require('../middleware/rateLimiter');
 const { enqueueRewardIssuance } = require('../services/rewardIssuanceService');
+const { checkRewardFarming, recordRewardClaim } = require('../middleware/abuseDetection');
 
 /**
  * @openapi
@@ -114,7 +115,7 @@ router.post('/issue', slidingRewards, authenticateMerchant, async (req, res, nex
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/distribute', slidingRewards, authenticateMerchant, async (req, res, next) => {
+router.post('/distribute', slidingRewards, authenticateMerchant, checkRewardFarming, async (req, res, next) => {
   try {
     const { walletAddress, customerWallet, amount, campaignId } = req.body;
     const recipientWallet = walletAddress || customerWallet;
@@ -177,6 +178,8 @@ router.post('/distribute', slidingRewards, authenticateMerchant, async (req, res
       amount,
       campaignId,
     });
+
+    await recordRewardClaim(recipientWallet, campaignId);
 
     res.json({ success: true, txHash: result.txHash, transaction: result.tx });
   } catch (err) {

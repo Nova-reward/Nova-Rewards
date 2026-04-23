@@ -4,6 +4,7 @@ const { query } = require('../db/index');
 const { signAccessToken, signRefreshToken } = require('../services/tokenService');
 const { validateRegisterDto } = require('../dtos/registerDto');
 const { validateLoginDto } = require('../dtos/loginDto');
+const { checkIpBlock, recordFailedLogin } = require('../middleware/abuseDetection');
 
 const SALT_ROUNDS = 12;
 
@@ -141,7 +142,7 @@ router.post('/register', async (req, res, next) => {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/login', async (req, res, next) => {
+router.post('/login', checkIpBlock, async (req, res, next) => {
   try {
     const validation = validateLoginDto(req.body);
     if (!validation.valid) {
@@ -173,6 +174,7 @@ router.post('/login', async (req, res, next) => {
       : await bcrypt.compare(password, DUMMY_HASH).then(() => false);
 
     if (!user || !passwordMatch) {
+      await recordFailedLogin(req);
       return res.status(401).json({
         success: false,
         error: 'invalid_credentials',
