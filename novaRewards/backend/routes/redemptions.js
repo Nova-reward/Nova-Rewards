@@ -4,6 +4,7 @@ const { redeemReward, getRedemptionById, getUserRedemptions } = require('../db/r
 const { getUserById } = require('../db/userRepository');
 const { getRewardById } = require('../db/adminRepository');
 const appEvents = require('../services/eventEmitter');
+const { logAudit } = require('../db/auditLogRepository');
 
 // All redemption routes require an authenticated user
 router.use(authenticateUser);
@@ -134,6 +135,17 @@ router.post('/', async (req, res, next) => {
       }).catch((err) => {
         console.error('[redemptions] event emit failed:', err.message);
       });
+
+      // Explicit audit log for redemption
+      logAudit({
+        entityType: 'redemption',
+        entityId: redemption.id,
+        action: 'redeem_reward',
+        performedBy: req.user.id,
+        actorType: req.user.role === 'admin' ? 'admin' : 'user',
+        details: { rewardId: rewardIdNum, userId: userIdNum, pointsSpent: redemption.points_spent },
+        source: 'POST /api/redemptions',
+      }).catch((err) => console.error('[audit] redeem_reward:', err.message));
     }
 
     const statusCode = idempotent ? 200 : 201;

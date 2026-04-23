@@ -9,6 +9,7 @@ const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 const { verifyTrustline } = require('../../blockchain/trustline');
+const { logAudit } = require('../db/auditLogRepository');
 
 /**
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
@@ -155,6 +156,21 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
       amount,
       campaignId,
     });
+
+    // Audit log for reward distribution
+    logAudit({
+      entityType: 'reward',
+      action: 'distribute_reward',
+      actorType: 'merchant',
+      merchantId: req.merchant.id,
+      details: {
+        recipientWallet,
+        amount,
+        campaignId,
+        txHash: result.txHash,
+      },
+      source: 'POST /api/rewards/distribute',
+    }).catch((err) => console.error('[audit] distribute_reward:', err.message));
 
     res.json({ success: true, txHash: result.txHash, transaction: result.tx });
   } catch (err) {
