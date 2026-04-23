@@ -6,8 +6,12 @@ const {
   markOnChainFailed,
   getCampaignById,
   getCampaignsByMerchant,
+<<<<<<< feature/576-redis-caching-layer
+  getCampaignById,
+=======
   updateCampaign,
   softDeleteCampaign,
+>>>>>>> main
 } = require('../db/campaignRepository');
 const {
   registerCampaign,
@@ -15,10 +19,60 @@ const {
   pauseCampaign,
 } = require('../services/sorobanService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { getRedisClient } = require('../cache/redisClient');
+const { metrics } = require('../middleware/metricsMiddleware');
 
+const CAMPAIGN_TTL = 60; // 60s TTL per issue #576
+
+/**
+ * Cache helpers with hit/miss metric tracking.
+ */
+async function cacheGet(key) {
+  const redis = getRedisClient();
+  if (!redis) return null;
+  try {
+    const val = await redis.get(key);
+    if (val !== null) {
+      metrics.cacheHits.inc({ key_type: 'campaign' });
+      return JSON.parse(val);
+    }
+    metrics.cacheMisses.inc({ key_type: 'campaign' });
+    return null;
+  } catch {
+    metrics.cacheMisses.inc({ key_type: 'campaign' });
+    return null;
+  }
+}
+
+async function cacheSet(key, value) {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.set(key, JSON.stringify(value), 'EX', CAMPAIGN_TTL);
+  } catch { /* non-fatal */ }
+}
+
+async function cacheDel(key) {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try { await redis.del(key); } catch { /* non-fatal */ }
+}
+
+<<<<<<< feature/576-redis-caching-layer
+/**
+ * @openapi
+ * /campaigns:
+ *   post:
+ *     tags: [Campaigns]
+ *     summary: Create a reward campaign
+ *     security:
+ *       - merchantApiKey: []
+ */
+=======
 // ---------------------------------------------------------------------------
 // POST /campaigns — create campaign in DB then register on-chain
 // ---------------------------------------------------------------------------
+>>>>>>> main
 router.post('/', authenticateMerchant, async (req, res, next) => {
   try {
     const { name, rewardRate, startDate, endDate } = req.body;
@@ -31,6 +85,14 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
     const { valid, errors } = validateCampaign({ rewardRate, startDate, endDate });
     if (!valid) {
       return res.status(400).json({ success: false, error: 'validation_error', message: errors.join('; ') });
+<<<<<<< feature/576-redis-caching-layer
+    }
+
+    const campaign = await createCampaign({ merchantId, name: name.trim(), rewardRate, startDate, endDate });
+
+    // Invalidate merchant campaign list cache on creation
+    await cacheDel(`campaigns:merchant:${merchantId}`);
+=======
     }
 
     // 1. Persist to DB first (on_chain_status = 'pending')
@@ -76,6 +138,7 @@ router.get('/:id', authenticateMerchant, async (req, res, next) => {
     if (!campaign) {
       return res.status(404).json({ success: false, error: 'not_found', message: 'Campaign not found' });
     }
+>>>>>>> main
 
     // Merchants may only read their own campaigns
     if (campaign.merchant_id !== req.merchant.id) {
@@ -88,6 +151,29 @@ router.get('/:id', authenticateMerchant, async (req, res, next) => {
   }
 });
 
+<<<<<<< feature/576-redis-caching-layer
+/**
+ * @openapi
+ * /campaigns:
+ *   get:
+ *     tags: [Campaigns]
+ *     summary: List campaigns for the authenticated merchant (cached 60s)
+ *     security:
+ *       - merchantApiKey: []
+ */
+router.get('/', authenticateMerchant, async (req, res, next) => {
+  try {
+    const merchantId = req.merchant.id;
+    const cacheKey = `campaigns:merchant:${merchantId}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+
+    const campaigns = await getCampaignsByMerchant(merchantId);
+    await cacheSet(cacheKey, campaigns);
+
+    res.json({ success: true, data: campaigns, cached: false });
+=======
 // ---------------------------------------------------------------------------
 // PATCH /campaigns/:id — update mutable fields + on-chain update
 // ---------------------------------------------------------------------------
@@ -143,11 +229,36 @@ router.patch('/:id', authenticateMerchant, async (req, res, next) => {
 
     const updated = await updateCampaign(id, { name, rewardRate, txHash });
     res.json({ success: true, data: updated });
+>>>>>>> main
   } catch (err) {
     next(err);
   }
 });
 
+<<<<<<< feature/576-redis-caching-layer
+/**
+ * @openapi
+ * /campaigns/{merchantId}:
+ *   get:
+ *     tags: [Campaigns]
+ *     summary: List campaigns for a given merchant ID (cached 60s)
+ */
+router.get('/:merchantId', async (req, res, next) => {
+  try {
+    const merchantId = parseInt(req.params.merchantId, 10);
+    if (isNaN(merchantId) || merchantId <= 0) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'merchantId must be a positive integer' });
+    }
+
+    const cacheKey = `campaigns:merchant:${merchantId}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+
+    const campaigns = await getCampaignsByMerchant(merchantId);
+    await cacheSet(cacheKey, campaigns);
+
+    res.json({ success: true, data: campaigns, cached: false });
+=======
 // ---------------------------------------------------------------------------
 // DELETE /campaigns/:id — pause on-chain then soft-delete in DB
 // ---------------------------------------------------------------------------
@@ -195,9 +306,11 @@ router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
     const campaigns = await getCampaignsByMerchant(req.merchant.id);
     res.json({ success: true, data: campaigns });
+>>>>>>> main
   } catch (err) {
     next(err);
   }
 });
 
 module.exports = router;
+module.exports.cacheDel = cacheDel; // exported for use in rewards route invalidation
