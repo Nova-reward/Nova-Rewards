@@ -19,7 +19,9 @@ function registerServiceWorker() {
 
 export default function App({ Component, pageProps }) {
   useEffect(() => {
-    registerServiceWorker();
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
   }, []);
 
   return (
