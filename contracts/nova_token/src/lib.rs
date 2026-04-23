@@ -1,10 +1,28 @@
 //! # Nova Token Contract
 //!
-//! A Soroban token contract implementing ERC20-like functionality with:
+//! A Soroban token contract implementing ERC20-like fungible token functionality.
+//!
+//! ## Features
 //! - Token initialization, mint, burn, and transfer
 //! - Approve/allowance functionality and balance tracking
 //! - Events emitted on all state-changing operations
-//! - transfer_from support for allowance-based transfers
+//! - [`transfer_from`](NovaToken::transfer_from) support for allowance-based transfers
+//!
+//! ## Usage
+//! ```ignore
+//! // Initialize
+//! client.initialize(&admin);
+//!
+//! // Mint tokens to a user
+//! client.mint(&user, &1_000_000);
+//!
+//! // Transfer between accounts
+//! client.transfer(&from, &to, &500_000);
+//!
+//! // Approve a spender and use transfer_from
+//! client.approve(&owner, &spender, &200_000);
+//! client.transfer_from(&spender, &owner, &recipient, &100_000);
+//! ```
 
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
@@ -30,6 +48,12 @@ pub struct NovaToken;
 #[contractimpl]
 impl NovaToken {
     /// Initializes the token contract with the admin allowed to mint.
+    ///
+    /// # Parameters
+    /// - `admin` – Address that will be authorized to call [`mint`](NovaToken::mint).
+    ///
+    /// # Panics
+    /// - `"already initialized"` if called more than once.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
@@ -72,6 +96,19 @@ impl NovaToken {
     // ========================================
 
     /// Mints new tokens to a recipient.
+    ///
+    /// # Parameters
+    /// - `to` – Recipient address.
+    /// - `amount` – Number of tokens to mint (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Events
+    /// Emits `("nova_tok", "mint")` with data `(to: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
     pub fn mint(env: Env, to: Address, amount: i128) {
         Self::admin(&env).require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -86,6 +123,20 @@ impl NovaToken {
     }
 
     /// Burns tokens from the caller's balance.
+    ///
+    /// # Parameters
+    /// - `from` – Address whose tokens are burned.
+    /// - `amount` – Number of tokens to burn (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `from` authorization.
+    ///
+    /// # Events
+    /// Emits `("nova_tok", "burn")` with data `(from: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
+    /// - `"insufficient balance"` if `from` holds fewer tokens than `amount`.
     pub fn burn(env: Env, from: Address, amount: i128) {
         from.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -102,6 +153,21 @@ impl NovaToken {
     }
 
     /// Transfers tokens between two accounts.
+    ///
+    /// # Parameters
+    /// - `from` – Sender address.
+    /// - `to` – Recipient address.
+    /// - `amount` – Number of tokens to transfer (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `from` authorization.
+    ///
+    /// # Events
+    /// Emits `("nova_tok", "transfer")` with data `(from: Address, to: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
+    /// - `"insufficient balance"` if `from` holds fewer tokens than `amount`.
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -120,7 +186,25 @@ impl NovaToken {
     }
 
     /// Transfer tokens from `from` to `to` using allowance.
-    /// Caller spends allowance from `from`.
+    ///
+    /// The `spender` must have a sufficient allowance granted by `from` via [`approve`](NovaToken::approve).
+    ///
+    /// # Parameters
+    /// - `spender` – Address spending the allowance.
+    /// - `from` – Token owner whose allowance is consumed.
+    /// - `to` – Recipient address.
+    /// - `amount` – Number of tokens to transfer (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `spender` authorization.
+    ///
+    /// # Events
+    /// Emits `("nova_tok", "transfer_from")` with data `(spender, from, to, amount)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
+    /// - `"insufficient allowance"` if spender's allowance is less than `amount`.
+    /// - `"insufficient balance"` if `from` holds fewer tokens than `amount`.
     pub fn transfer_from(env: Env, spender: Address, from: Address, to: Address, amount: i128) {
         spender.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -160,7 +244,19 @@ impl NovaToken {
     // ========================================
 
     /// Approve `spender` to spend up to `amount` on behalf of `owner`.
-    /// Sets an allowance for a spender on behalf of an owner.
+    ///
+    /// Overwrites any existing allowance. Set `amount` to `0` to revoke.
+    ///
+    /// # Parameters
+    /// - `owner` – Token owner granting the allowance.
+    /// - `spender` – Address authorized to spend.
+    /// - `amount` – Maximum tokens the spender may transfer.
+    ///
+    /// # Authorization
+    /// Requires `owner` authorization.
+    ///
+    /// # Events
+    /// Emits `("nova_tok", "approve")` with data `(owner, spender, amount)`.
     pub fn approve(env: Env, owner: Address, spender: Address, amount: i128) {
         owner.require_auth();
         let key = DataKey::Allowance(owner.clone(), spender.clone());
@@ -177,6 +273,20 @@ impl NovaToken {
     }
 
     /// Increase allowance for `spender` by `amount`.
+    ///
+    /// # Parameters
+    /// - `owner` – Token owner.
+    /// - `spender` – Address whose allowance is increased.
+    /// - `amount` – Amount to add to the existing allowance (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `owner` authorization.
+    ///
+    /// # Events
+    /// Emits `("nova_tok", "inc_allow")` with data `(owner, spender, new_allowance)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
     pub fn increase_allowance(env: Env, owner: Address, spender: Address, amount: i128) {
         owner.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -197,7 +307,21 @@ impl NovaToken {
         );
     }
 
-    /// Decrease allowance for `spender` by `amount`.
+    /// Decrease allowance for `spender` by `amount`. Saturates at zero.
+    ///
+    /// # Parameters
+    /// - `owner` – Token owner.
+    /// - `spender` – Address whose allowance is decreased.
+    /// - `amount` – Amount to subtract from the existing allowance (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `owner` authorization.
+    ///
+    /// # Events
+    /// Emits `("nova_tok", "dec_allow")` with data `(owner, spender, new_allowance)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
     pub fn decrease_allowance(env: Env, owner: Address, spender: Address, amount: i128) {
         owner.require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -223,11 +347,24 @@ impl NovaToken {
     // ========================================
 
     /// Returns the current token balance for an address.
+    ///
+    /// # Parameters
+    /// - `addr` – Address to query.
+    ///
+    /// # Returns
+    /// Token balance in base units (`i128`). Returns `0` if no balance is recorded.
     pub fn balance(env: Env, addr: Address) -> i128 {
         Self::balance_of(&env, &addr)
     }
 
     /// Returns the remaining allowance recorded for an owner and spender pair.
+    ///
+    /// # Parameters
+    /// - `owner` – Token owner who granted the allowance.
+    /// - `spender` – Address authorized to spend.
+    ///
+    /// # Returns
+    /// Remaining allowance in base units. Returns `0` if no allowance is set.
     pub fn allowance(env: Env, owner: Address, spender: Address) -> i128 {
         let key = DataKey::Allowance(owner, spender);
         let allowance = env.storage().persistent().get(&key).unwrap_or(0);
