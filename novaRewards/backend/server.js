@@ -32,6 +32,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(tracingMiddleware);
 app.use(metricsMiddleware);
+app.use(require('./middleware/auditMiddleware').auditMiddleware);
 
 // Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
 app.use((err, req, res, next) => {
