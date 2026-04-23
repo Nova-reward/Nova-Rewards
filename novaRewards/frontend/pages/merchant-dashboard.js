@@ -86,25 +86,24 @@ function MerchantDashboardContent() {
   }
 
   return (
-    <div className="container">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 700, margin: 0 }}>📊 Merchant Dashboard</h1>
+          <h1 className="text-xl md:text-2xl font-bold dark:text-white">📊 Merchant Dashboard</h1>
           {lastRefreshed && (
-            <p style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+            <p className="text-xs text-slate-400 mt-1">
               Last updated: {lastRefreshed.toLocaleTimeString()} · auto-refreshes every 60s
             </p>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div className="flex items-center gap-2">
           <DateRangePicker value={range} onChange={setRange} />
           <button
-            className="btn btn-secondary"
+            className="touch-target px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card hover:bg-slate-50 dark:hover:bg-brand-border transition-colors"
             onClick={loadAll}
             disabled={loading}
             aria-label="Refresh dashboard data"
-            style={{ padding: '0.45rem 1rem', fontSize: '0.85rem' }}
           >
             {loading ? '…' : '↻ Refresh'}
           </button>
@@ -113,9 +112,9 @@ function MerchantDashboardContent() {
 
       {/* Error */}
       {error && (
-        <div className="card" style={{ textAlign: 'center' }}>
-          <p className="error" style={{ marginBottom: '0.75rem' }}>⚠️ {error}</p>
-          <button className="btn btn-secondary" onClick={loadAll}>Try Again</button>
+        <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 p-4 text-center">
+          <p className="text-red-600 dark:text-red-400 text-sm mb-2">⚠️ {error}</p>
+          <button className="touch-target px-4 py-2 text-sm rounded-lg bg-white dark:bg-brand-card border border-slate-200 dark:border-brand-border" onClick={loadAll}>Try Again</button>
         </div>
       )}
 
@@ -123,18 +122,18 @@ function MerchantDashboardContent() {
       <KpiCards kpis={kpis} loading={loading} />
 
       {/* Daily Issuance Chart */}
-      <div className="card">
-        <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>🎁 Daily Reward Issuance</h2>
+      <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
+        <h2 className="text-base font-semibold dark:text-white mb-4">🎁 Daily Reward Issuance</h2>
         {loading ? (
-          <div className="skeleton-block" style={{ height: 240, borderRadius: 8 }} />
+          <div className="h-60 rounded-lg bg-slate-100 dark:bg-brand-border animate-pulse" />
         ) : (
           <RewardsLineChart data={issuance} />
         )}
       </div>
 
       {/* Campaign List */}
-      <div className="card">
-        <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>🚀 Campaigns</h2>
+      <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
+        <h2 className="text-base font-semibold dark:text-white mb-4">🚀 Campaigns</h2>
         <CampaignList
           campaigns={campaigns}
           loading={loading}
