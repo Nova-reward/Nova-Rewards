@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import Image from 'next/image';
 import DashboardLayout from '../components/DashboardLayout';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -140,7 +141,9 @@ function RewardsContent() {
             return (
               <div key={reward.id} className="card" style={{ display: 'flex', flexDirection: 'column' }}>
                 {reward.image && (
-                  <img src={reward.image} alt={reward.name} style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '8px', marginBottom: '1rem' }} />
+                  <div style={{ position: 'relative', width: '100%', height: '180px', borderRadius: '8px', overflow: 'hidden', marginBottom: '1rem' }}>
+                    <Image src={reward.image} alt={reward.name} fill sizes="(max-width: 768px) 100vw, 33vw" style={{ objectFit: 'cover' }} />
+                  </div>
                 )}
                 <h3 style={{ marginBottom: '0.5rem', fontSize: '1.1rem' }}>{reward.name}</h3>
                 {reward.description && (
