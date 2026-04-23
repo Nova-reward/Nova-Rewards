@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  repository_dispatch:
+    types: [pact-provider-verify]
 
 jobs:
   secret-scan:
@@ -71,3 +73,128 @@ jobs:
         working-directory: novaRewards
 
       - run: npm run build
+
+  consumer-pact:
+    name: Consumer Pact Tests
+    runs-on: ubuntu-latest
+    needs: frontend
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: novaRewards/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: novaRewards
+
+      - name: Run consumer Pact tests
+        run: npx jest --selectProjects pact --runInBand --testTimeout=30000
+        env:
+          PACT_BROKER_URL: ${{ secrets.PACT_BROKER_URL }}
+          PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
+
+      - name: Publish pacts to broker
+        if: success()
+        run: |
+          npx pact-broker publish ./pacts \
+            --broker-base-url "$PACT_BROKER_URL" \
+            --broker-token "$PACT_BROKER_TOKEN" \
+            --consumer-app-version "${{ github.sha }}" \
+            --branch "${{ github.ref_name }}"
+        env:
+          PACT_BROKER_URL: ${{ secrets.PACT_BROKER_URL }}
+          PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
+
+  provider-verify:
+    name: Provider Pact Verification
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 10
+    # Also runs when triggered by the Pact Broker webhook
+    if: >
+      always() &&
+      (github.event_name != 'repository_dispatch' || github.event.action == 'pact-provider-verify')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: novaRewards
+
+      - name: Run provider Pact verification
+        run: npx jest --selectProjects pact --runInBand --testTimeout=60000
+        working-directory: novaRewards/backend
+        env:
+          PACT_BROKER_URL: ${{ secrets.PACT_BROKER_URL }}
+          PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
+          GIT_COMMIT: ${{ github.sha }}
+          GIT_BRANCH: ${{ github.ref_name }}
+          CI: "true"
+
+  can-i-deploy-consumer:
+    name: Can I Deploy (Consumer)
+    runs-on: ubuntu-latest
+    needs: consumer-pact
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Pact CLI
+        run: npm install -g @pact-foundation/pact-node
+
+      - name: Can I Deploy — nova-rewards-frontend
+        run: |
+          npx pact-broker can-i-deploy \
+            --pacticipant nova-rewards-frontend \
+            --version "${{ github.sha }}" \
+            --to-environment production \
+            --broker-base-url "$PACT_BROKER_URL" \
+            --broker-token "$PACT_BROKER_TOKEN"
+        env:
+          PACT_BROKER_URL: ${{ secrets.PACT_BROKER_URL }}
+          PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
+
+  can-i-deploy-provider:
+    name: Can I Deploy (Provider)
+    runs-on: ubuntu-latest
+    needs: provider-verify
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Pact CLI
+        run: npm install -g @pact-foundation/pact-node
+
+      - name: Can I Deploy — nova-rewards-backend
+        run: |
+          npx pact-broker can-i-deploy \
+            --pacticipant nova-rewards-backend \
+            --version "${{ github.sha }}" \
+            --to-environment production \
+            --broker-base-url "$PACT_BROKER_URL" \
+            --broker-token "$PACT_BROKER_TOKEN"
+        env:
+          PACT_BROKER_URL: ${{ secrets.PACT_BROKER_URL }}
+          PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
