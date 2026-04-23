@@ -10,6 +10,7 @@ import { NotificationProvider } from '../context/NotificationContext';
 import Footer from '../components/Footer';
 import '../styles/globals.css';
 import '../styles/redemption.css';
+import '../styles/landing.css';
 
 // react-joyride pulls in a large dependency — defer until client
 const OnboardingTour = dynamic(() => import('../components/OnboardingTour'), { ssr: false });
