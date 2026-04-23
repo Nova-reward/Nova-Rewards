@@ -130,6 +130,8 @@ if (require.main === module) {
     startWebhookRetryJob();
     // Register event listeners
     require("./services/redemptionEventListener").registerRedemptionEventListener();
+    // Initialize Webhook Worker
+    require("./jobs/webhookHandler");
     console.log(`NovaRewards backend running on port ${PORT}`);
   });
 }
