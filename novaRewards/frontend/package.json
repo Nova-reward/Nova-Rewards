@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^14.2.5",
+    "@pact-foundation/pact": "^13.0.0",
     "@playwright/test": "^1.44.0",
     "@swc/jest": "^0.2.39",
     "@testing-library/jest-dom": "^6.9.1",
