@@ -1,3 +1,25 @@
+//! # Vesting Contract
+//!
+//! Linear token vesting with optional cliff periods for beneficiaries.
+//!
+//! ## Lifecycle
+//! 1. Admin calls [`fund_pool`](VestingContract::fund_pool) to deposit tokens.
+//! 2. Admin calls [`create_schedule`](VestingContract::create_schedule) for each beneficiary.
+//! 3. Beneficiary calls [`release`](VestingContract::release) at any time to claim vested tokens.
+//!
+//! ## Vesting Formula
+//! - Before `start_time + cliff_duration`: 0 tokens vested.
+//! - Between cliff and `start_time + total_duration`: linear pro-rata.
+//! - After `start_time + total_duration`: 100% vested.
+//!
+//! ## Usage
+//! ```ignore
+//! client.initialize(&admin);
+//! client.fund_pool(&1_000_000);
+//! let id = client.create_schedule(&beneficiary, &100_000, &start, &cliff, &duration);
+//! // time passes …
+//! let released = client.release(&beneficiary, &id);
+//! ```
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
@@ -31,6 +53,13 @@ pub struct VestingContract;
 #[contractimpl]
 impl VestingContract {
     /// Initializes the vesting contract and resets its funding pool.
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized to call [`fund_pool`](VestingContract::fund_pool)
+    ///   and [`create_schedule`](VestingContract::create_schedule).
+    ///
+    /// # Panics
+    /// - `"already initialised"` if called more than once.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
@@ -45,6 +74,15 @@ impl VestingContract {
     }
 
     /// Adds tokens to the vesting pool used for future releases.
+    ///
+    /// # Parameters
+    /// - `amount` – Tokens to add to the pool (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
     pub fn fund_pool(env: Env, amount: i128) {
         Self::admin(&env).require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -59,6 +97,25 @@ impl VestingContract {
     }
 
     /// Creates a vesting schedule for a beneficiary and returns its schedule id.
+    ///
+    /// Schedule ids are per-beneficiary and start at `0`.
+    ///
+    /// # Parameters
+    /// - `beneficiary` – Address that will receive vested tokens.
+    /// - `total_amount` – Total tokens to vest (must be > 0).
+    /// - `start_time` – Unix timestamp (seconds) when vesting begins.
+    /// - `cliff_duration` – Seconds after `start_time` before any tokens vest.
+    /// - `total_duration` – Total vesting period in seconds (must be > 0).
+    ///
+    /// # Returns
+    /// The new schedule id (`u32`) for this beneficiary.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"total_duration must be > 0"` if `total_duration == 0`.
+    /// - `"total_amount must be > 0"` if `total_amount <= 0`.
     pub fn create_schedule(
         env: Env,
         beneficiary: Address,
@@ -107,6 +164,24 @@ impl VestingContract {
     }
 
     /// Releases the newly vested portion of a schedule.
+    ///
+    /// Computes the releasable amount (`vested - already_released`) and transfers
+    /// it from the pool to the beneficiary.
+    ///
+    /// # Parameters
+    /// - `beneficiary` – Address that owns the schedule.
+    /// - `schedule_id` – Id of the schedule to release from.
+    ///
+    /// # Returns
+    /// The number of tokens released in this call.
+    ///
+    /// # Events
+    /// Emits `("vesting", "tok_rel")` with data `(beneficiary: Address, amount: i128, timestamp: u64)`.
+    ///
+    /// # Panics
+    /// - `"schedule not found"` if no schedule exists for the given beneficiary and id.
+    /// - `"nothing to release"` if no new tokens have vested since the last release.
+    /// - `"insufficient pool balance"` if the pool holds fewer tokens than the releasable amount.
     pub fn release(env: Env, beneficiary: Address, schedule_id: u32) -> i128 {
         let key = DataKey::Schedule(beneficiary.clone(), schedule_id);
         let mut schedule: VestingSchedule = env
@@ -151,6 +226,9 @@ impl VestingContract {
     }
 
     /// Returns the stored schedule for a beneficiary and schedule id.
+    ///
+    /// # Panics
+    /// - `"schedule not found"` if no schedule exists for the given beneficiary and id.
     pub fn get_schedule(env: Env, beneficiary: Address, schedule_id: u32) -> VestingSchedule {
         let key = DataKey::Schedule(beneficiary, schedule_id);
         let schedule = env

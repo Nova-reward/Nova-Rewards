@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
 const StellarSdk = require('@stellar/stellar-sdk');
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient();
 
 // PostgreSQL connection pool
 const pool = new Pool({
@@ -257,6 +260,55 @@ router.post('/transactions/record', async (req, res) => {
             message: 'Failed to record transaction',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
+    }
+});
+
+/**
+ * GET /api/users/:userId/transactions
+ * Get reward transactions for a user with pagination and filters
+ */
+router.get('/users/:userId/transactions', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { limit = 20, offset = 0, type, dateFrom, dateTo, campaignId } = req.query;
+
+        const where = { userId };
+        if (type) where.type = type;
+        if (campaignId) where.campaignId = campaignId;
+        if (dateFrom || dateTo) {
+            where.createdAt = {};
+            if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+            if (dateTo) where.createdAt.lte = new Date(dateTo);
+        }
+
+        // Get issuances
+        const issuances = await prisma.rewardIssuance.findMany({
+            where,
+            include: { campaign: true },
+            orderBy: { createdAt: 'desc' },
+            take: parseInt(limit),
+            skip: parseInt(offset),
+        });
+
+        // Get redemptions
+        const redemptions = await prisma.redemption.findMany({
+            where,
+            include: { campaign: true },
+            orderBy: { createdAt: 'desc' },
+            take: parseInt(limit),
+            skip: parseInt(offset),
+        });
+
+        // Combine and sort
+        const transactions = [
+            ...issuances.map(i => ({ ...i, type: 'issuance' })),
+            ...redemptions.map(r => ({ ...r, type: 'redemption' })),
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, parseInt(limit));
+
+        res.json(transactions);
+    } catch (error) {
+        console.error('Error fetching user transactions:', error);
+        res.status(500).json({ error: 'Failed to fetch transactions' });
     }
 });
 

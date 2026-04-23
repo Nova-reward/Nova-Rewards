@@ -1,21 +1,21 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import api from '../lib/api';
+import { useState, useEffect } from 'react';
+import { useTransactions } from '../lib/useApi';
 
-const PAGE_SIZE = 10;
-const STATUS_OPTIONS = ['all', 'pending', 'claimed', 'redeemed'];
-const POLL_INTERVAL = 30000; // 30s
+const PAGE_SIZE = 20;
+const TRANSACTION_TYPES = ['all', 'issuance', 'redemption', 'transfer'];
 
 function exportCSV(rows) {
-  const headers = ['Date', 'Type', 'Amount (NOVA)', 'Status', 'Campaign', 'TX Hash'];
+  const headers = ['Date', 'Type', 'Amount', 'Campaign', 'Status', 'TX Hash', 'Explorer Link'];
   const lines = rows.map((r) => [
-    new Date(r.created_at).toISOString(),
+    new Date(r.createdAt).toISOString(),
     r.type,
     r.amount,
+    r.campaign?.name || '',
     r.status,
-    r.campaign_name || '',
-    r.tx_hash || '',
+    r.txHash || '',
+    `https://stellar.expert/explorer/public/tx/${r.txHash}`,
   ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
   const csv = [headers.join(','), ...lines].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -28,76 +28,293 @@ function exportCSV(rows) {
 }
 
 /**
- * Rewards history table with pagination, filters, search, CSV export,
- * and real-time balance polling.
+ * Paginated transaction history with filters and CSV export
  */
 export default function RewardsHistory({ userId }) {
-  const [rows, setRows] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [balance, setBalance] = useState(null);
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState('all');
-  const [search, setSearch] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const pollRef = useRef(null);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [campaignFilter, setCampaignFilter] = useState('all');
 
-  const fetchBalance = useCallback(async () => {
-    try {
-      const res = await api.get(`/users/${userId}/points`);
-      setBalance(res.data.data?.balance ?? res.data.balance ?? null);
-    } catch {
-      // non-fatal
-    }
-  }, [userId]);
-
-  const fetchHistory = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const params = { page, limit: PAGE_SIZE };
-      if (status !== 'all') params.status = status;
-      if (search) params.search = search;
-      const res = await api.get('/rewards/history', { params });
-      setRows(res.data.data || []);
-      setTotal(res.data.total || 0);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load reward history.');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, status, search]);
-
-  // Initial load + re-fetch on filter/page change
-  useEffect(() => {
-    fetchHistory();
-    if (userId) fetchBalance();
-  }, [fetchHistory, fetchBalance, userId]);
-
-  // Real-time balance polling
-  useEffect(() => {
-    if (!userId) return;
-    pollRef.current = setInterval(fetchBalance, POLL_INTERVAL);
-    return () => clearInterval(pollRef.current);
-  }, [fetchBalance, userId]);
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setPage(1);
-    setSearch(searchInput);
+  const filters = {
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+    ...(typeFilter !== 'all' && { type: typeFilter }),
+    ...(dateFrom && { dateFrom }),
+    ...(dateTo && { dateTo }),
+    ...(campaignFilter !== 'all' && { campaignId: campaignFilter }),
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const { data: transactions, error, isLoading, mutate } = useTransactions(userId, filters);
 
-  const statusBadge = (s) => {
-    const map = {
-      pending: { bg: '#fef9c3', color: '#854d0e' },
-      claimed: { bg: '#dbeafe', color: '#1e40af' },
-      redeemed: { bg: '#dcfce7', color: '#15803d' },
-    };
-    const style = map[s] || { bg: 'var(--surface-2)', color: 'var(--muted)' };
-    return (
+  const handleExport = () => {
+    if (transactions) exportCSV(transactions);
+  };
+
+  const handleFilterChange = () => {
+    setPage(1); // Reset to first page
+    mutate(); // Re-fetch
+  };
+
+  useEffect(() => {
+    handleFilterChange();
+  }, [typeFilter, dateFrom, dateTo, campaignFilter]);
+
+  if (error) {
+    return <div className="error">Error loading transactions: {error.message}</div>;
+  }
+
+  return (
+    <div className="rewards-history">
+      {/* Filters */}
+      <div className="filters" style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+          <option value="all">All Types</option>
+          {TRANSACTION_TYPES.slice(1).map(type => (
+            <option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          placeholder="From date"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          placeholder="To date"
+        />
+        <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}>
+          <option value="all">All Campaigns</option>
+          {/* Assume campaigns are fetched separately or from context */}
+        </select>
+        <button onClick={handleExport} className="btn btn-secondary">Export CSV</button>
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : transactions && transactions.length > 0 ? (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Campaign</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Explorer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx) => (
+                <tr key={tx.id}>
+                  <td>{tx.type}</td>
+                  <td>{tx.amount}</td>
+                  <td>{tx.campaign?.name || 'N/A'}</td>
+                  <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
+                  <td><span className={`badge ${tx.status}`}>{tx.status}</span></td>
+                  <td>
+                    {tx.txHash ? (
+                      <a href={`https://stellar.expert/explorer/public/tx/${tx.txHash}`} target="_blank" rel="noopener">
+                        View
+                      </a>
+                    ) : 'N/A'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <p>No transactions found.</p>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {transactions && transactions.length >= PAGE_SIZE && (
+        <div className="pagination" style={{ marginTop: '1rem', textAlign: 'center' }}>
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="btn btn-secondary"
+          >
+            Previous
+          </button>
+          <span style={{ margin: '0 1rem' }}>Page {page}</span>
+          <button
+            onClick={() => setPage(p => p + 1)}
+            className="btn btn-secondary"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTransactions } from '../lib/useApi';
+
+const PAGE_SIZE = 20;
+const TRANSACTION_TYPES = ['all', 'issuance', 'redemption', 'transfer'];
+
+function exportCSV(rows) {
+  const headers = ['Date', 'Type', 'Amount', 'Campaign', 'Status', 'TX Hash', 'Explorer Link'];
+  const lines = rows.map((r) => [
+    new Date(r.createdAt).toISOString(),
+    r.type,
+    r.amount,
+    r.campaign?.name || '',
+    r.status,
+    r.txHash || '',
+    `https://stellar.expert/explorer/public/tx/${r.txHash}`,
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
+  const csv = [headers.join(','), ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `nova-rewards-history-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Paginated transaction history with filters and CSV export
+ */
+export default function RewardsHistory({ userId }) {
+  const [page, setPage] = useState(1);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [campaignFilter, setCampaignFilter] = useState('all');
+
+  const filters = {
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+    ...(typeFilter !== 'all' && { type: typeFilter }),
+    ...(dateFrom && { dateFrom }),
+    ...(dateTo && { dateTo }),
+    ...(campaignFilter !== 'all' && { campaignId: campaignFilter }),
+  };
+
+  const { data: transactions, error, isLoading, mutate } = useTransactions(userId, filters);
+
+  const handleExport = () => {
+    if (transactions) exportCSV(transactions);
+  };
+
+  const handleFilterChange = () => {
+    setPage(1); // Reset to first page
+    mutate(); // Re-fetch
+  };
+
+  useEffect(() => {
+    handleFilterChange();
+  }, [typeFilter, dateFrom, dateTo, campaignFilter]);
+
+  if (error) {
+    return <div className="error">Error loading transactions: {error.message}</div>;
+  }
+
+  return (
+    <div className="rewards-history">
+      {/* Filters */}
+      <div className="filters" style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+          <option value="all">All Types</option>
+          {TRANSACTION_TYPES.slice(1).map(type => (
+            <option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          placeholder="From date"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          placeholder="To date"
+        />
+        <select value={campaignFilter} onChange={(e) => setCampaignFilter(e.target.value)}>
+          <option value="all">All Campaigns</option>
+          {/* Assume campaigns are fetched separately or from context */}
+        </select>
+        <button onClick={handleExport} className="btn btn-secondary">Export CSV</button>
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : transactions && transactions.length > 0 ? (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Campaign</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Explorer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx) => (
+                <tr key={tx.id}>
+                  <td>{tx.type}</td>
+                  <td>{tx.amount}</td>
+                  <td>{tx.campaign?.name || 'N/A'}</td>
+                  <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
+                  <td><span className={`badge ${tx.status}`}>{tx.status}</span></td>
+                  <td>
+                    {tx.txHash ? (
+                      <a href={`https://stellar.expert/explorer/public/tx/${tx.txHash}`} target="_blank" rel="noopener">
+                        View
+                      </a>
+                    ) : 'N/A'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <p>No transactions found.</p>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {transactions && transactions.length >= PAGE_SIZE && (
+        <div className="pagination" style={{ marginTop: '1rem', textAlign: 'center' }}>
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="btn btn-secondary"
+          >
+            Previous
+          </button>
+          <span style={{ margin: '0 1rem' }}>Page {page}</span>
+          <button
+            onClick={() => setPage(p => p + 1)}
+            className="btn btn-secondary"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
       <span style={{
         background: style.bg, color: style.color,
         padding: '2px 8px', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 600,
