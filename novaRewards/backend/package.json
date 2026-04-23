@@ -19,7 +19,7 @@
     "@aws-sdk/client-secrets-manager": "^3.0.0",
     "@elastic/elasticsearch": "^8.13.0",
     "@prisma/client": "^7.8.0",
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.71.1",
     "class-validator": "^0.15.1",
     "cors": "^2.8.5",
