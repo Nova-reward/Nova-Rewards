@@ -3,8 +3,47 @@ const {
   validateCampaign,
   createCampaign,
   getCampaignsByMerchant,
+  getCampaignById,
 } = require('../db/campaignRepository');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { getRedisClient } = require('../cache/redisClient');
+const { metrics } = require('../middleware/metricsMiddleware');
+
+const CAMPAIGN_TTL = 60; // 60s TTL per issue #576
+
+/**
+ * Cache helpers with hit/miss metric tracking.
+ */
+async function cacheGet(key) {
+  const redis = getRedisClient();
+  if (!redis) return null;
+  try {
+    const val = await redis.get(key);
+    if (val !== null) {
+      metrics.cacheHits.inc({ key_type: 'campaign' });
+      return JSON.parse(val);
+    }
+    metrics.cacheMisses.inc({ key_type: 'campaign' });
+    return null;
+  } catch {
+    metrics.cacheMisses.inc({ key_type: 'campaign' });
+    return null;
+  }
+}
+
+async function cacheSet(key, value) {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.set(key, JSON.stringify(value), 'EX', CAMPAIGN_TTL);
+  } catch { /* non-fatal */ }
+}
+
+async function cacheDel(key) {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try { await redis.del(key); } catch { /* non-fatal */ }
+}
 
 /**
  * @openapi
@@ -14,48 +53,6 @@ const { authenticateMerchant } = require('../middleware/authenticateMerchant');
  *     summary: Create a reward campaign
  *     security:
  *       - merchantApiKey: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [name, rewardRate, startDate, endDate]
- *             properties:
- *               name:
- *                 type: string
- *                 example: Summer Loyalty Drive
- *               rewardRate:
- *                 type: number
- *                 example: 1.5
- *               startDate:
- *                 type: string
- *                 format: date
- *                 example: "2025-06-01"
- *               endDate:
- *                 type: string
- *                 format: date
- *                 example: "2025-08-31"
- *     responses:
- *       201:
- *         description: Campaign created.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data: { $ref: '#/components/schemas/Campaign' }
- *       400:
- *         description: Validation error.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       401:
- *         description: Missing or invalid API key.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', authenticateMerchant, async (req, res, next) => {
   try {
@@ -63,29 +60,18 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
     const merchantId = req.merchant.id;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'name is required',
-      });
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'name is required' });
     }
 
     const { valid, errors } = validateCampaign({ rewardRate, startDate, endDate });
     if (!valid) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: errors.join('; '),
-      });
+      return res.status(400).json({ success: false, error: 'validation_error', message: errors.join('; ') });
     }
 
-    const campaign = await createCampaign({
-      merchantId,
-      name: name.trim(),
-      rewardRate,
-      startDate,
-      endDate,
-    });
+    const campaign = await createCampaign({ merchantId, name: name.trim(), rewardRate, startDate, endDate });
+
+    // Invalidate merchant campaign list cache on creation
+    await cacheDel(`campaigns:merchant:${merchantId}`);
 
     res.status(201).json({ success: true, data: campaign });
   } catch (err) {
@@ -98,31 +84,22 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
  * /campaigns:
  *   get:
  *     tags: [Campaigns]
- *     summary: List campaigns for the authenticated merchant
+ *     summary: List campaigns for the authenticated merchant (cached 60s)
  *     security:
  *       - merchantApiKey: []
- *     responses:
- *       200:
- *         description: Campaign list.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data:
- *                   type: array
- *                   items: { $ref: '#/components/schemas/Campaign' }
- *       401:
- *         description: Missing or invalid API key.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
-    const campaigns = await getCampaignsByMerchant(req.merchant.id);
-    res.json({ success: true, data: campaigns });
+    const merchantId = req.merchant.id;
+    const cacheKey = `campaigns:merchant:${merchantId}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+
+    const campaigns = await getCampaignsByMerchant(merchantId);
+    await cacheSet(cacheKey, campaigns);
+
+    res.json({ success: true, data: campaigns, cached: false });
   } catch (err) {
     next(err);
   }
@@ -133,45 +110,27 @@ router.get('/', authenticateMerchant, async (req, res, next) => {
  * /campaigns/{merchantId}:
  *   get:
  *     tags: [Campaigns]
- *     summary: List campaigns for a given merchant ID
- *     parameters:
- *       - in: path
- *         name: merchantId
- *         required: true
- *         schema: { type: integer, example: 7 }
- *     responses:
- *       200:
- *         description: Campaign list.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data:
- *                   type: array
- *                   items: { $ref: '#/components/schemas/Campaign' }
- *       400:
- *         description: Invalid merchantId.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *     summary: List campaigns for a given merchant ID (cached 60s)
  */
 router.get('/:merchantId', async (req, res, next) => {
   try {
     const merchantId = parseInt(req.params.merchantId, 10);
     if (isNaN(merchantId) || merchantId <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'merchantId must be a positive integer',
-      });
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'merchantId must be a positive integer' });
     }
+
+    const cacheKey = `campaigns:merchant:${merchantId}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+
     const campaigns = await getCampaignsByMerchant(merchantId);
-    res.json({ success: true, data: campaigns });
+    await cacheSet(cacheKey, campaigns);
+
+    res.json({ success: true, data: campaigns, cached: false });
   } catch (err) {
     next(err);
   }
 });
 
 module.exports = router;
+module.exports.cacheDel = cacheDel; // exported for use in rewards route invalidation

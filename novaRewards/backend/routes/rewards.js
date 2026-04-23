@@ -1,39 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
-const { createHash } = require('crypto');
-const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
-const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
-const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 const { verifyTrustline } = require('../../blockchain/trustline');
+const { cacheDel } = require('./campaigns'); // cache invalidation — issue #576
 
 /**
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
- * Uses Redis as the backing store when REDIS_URL is set (production),
- * falling back to in-memory for local development.
  * Closes: #123
  */
-const redisClient = getRedisClient();
 const distributeRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  // Use Redis store only when a client is available
-  ...(redisClient && {
-    store: new RedisStore({
-      sendCommand: (...args) => redisClient.call(...args),
-      prefix: 'rl:distribute:',
-    }),
-  }),
-  message: {
-    success: false,
-    error: 'rate_limit_exceeded',
-    message: 'Too many requests. Please try again later.',
-  },
+  message: { success: false, error: 'rate_limit_exceeded', message: 'Too many requests. Please try again later.' },
 });
 
 /**
@@ -155,6 +138,9 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
       amount,
       campaignId,
     });
+
+    // Invalidate campaign cache on reward issuance — issue #576
+    await cacheDel(`campaigns:merchant:${campaign.merchant_id}`);
 
     res.json({ success: true, txHash: result.txHash, transaction: result.tx });
   } catch (err) {
