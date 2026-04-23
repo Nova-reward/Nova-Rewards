@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "../context/WalletContext";
-import { useUser, useCampaigns, useBalance } from "../lib/useApi";
+import { useUser, useCampaigns, useBalance, useTransactions } from "../lib/useApi";
 import DashboardLayout from "../components/DashboardLayout";
 import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";

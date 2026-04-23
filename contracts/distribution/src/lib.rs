@@ -1,3 +1,25 @@
+//! # Distribution Contract
+//!
+//! Admin-controlled token distribution with batch support and a 30-day clawback window.
+//!
+//! ## Features
+//! - Single and batch token distribution (up to 50 recipients per call)
+//! - Fixed-point reward calculation via [`calculate_reward`](DistributionContract::calculate_reward)
+//! - 30-day clawback window per distribution
+//!
+//! ## Usage
+//! ```ignore
+//! client.initialize(&admin, &token_id);
+//!
+//! // Single distribution
+//! client.distribute(&recipient, &1_000);
+//!
+//! // Batch distribution
+//! client.distribute_batch(&recipients_vec, &amounts_vec);
+//!
+//! // Clawback within 30 days
+//! client.clawback(&recipient);
+//! ```
 #![no_std]
 
 use soroban_sdk::{
@@ -29,6 +51,13 @@ impl DistributionContract {
     // ── Init ─────────────────────────────────────────────────────────────────
 
     /// One-time setup. `token_id` is the Nova token contract address.
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized to call distribution and clawback functions.
+    /// - `token_id` – Address of the Nova token contract used for transfers.
+    ///
+    /// # Panics
+    /// - `"already initialized"` if called more than once.
     pub fn initialize(env: Env, admin: Address, token_id: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
@@ -84,9 +113,21 @@ impl DistributionContract {
     ///
     /// - Admin-gated.
     /// - Validates `amount > 0` and that the contract holds sufficient balance.
-    /// - Records the distribution for clawback within `CLAWBACK_WINDOW` seconds.
+    /// - Records the distribution for clawback within `CLAWBACK_WINDOW` seconds (30 days).
     ///
-    /// Emits `("dist", recipient)` with data `(amount, deadline)`.
+    /// # Parameters
+    /// - `recipient` – Address to receive the tokens.
+    /// - `amount` – Number of tokens to distribute (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Events
+    /// Emits `("dist", recipient)` with data `(amount: i128, deadline: u64)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
+    /// - `"insufficient contract balance"` if the contract holds fewer tokens than `amount`.
     pub fn distribute(env: Env, recipient: Address, amount: i128) {
         Self::require_admin(&env);
         Self::_distribute(&env, &recipient, amount);
@@ -125,7 +166,22 @@ impl DistributionContract {
     /// `recipients` and `amounts` must be the same length (max 50 entries).
     /// The entire batch is validated before any transfer is executed.
     ///
+    /// # Parameters
+    /// - `recipients` – List of recipient addresses (max 50).
+    /// - `amounts` – Corresponding token amounts for each recipient (all must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Events
     /// Emits one `("dist", recipient)` event per entry.
+    ///
+    /// # Panics
+    /// - `"recipients and amounts length mismatch"` if lengths differ.
+    /// - `"empty batch"` if the list is empty.
+    /// - `"batch exceeds maximum of 50"` if more than 50 entries are provided.
+    /// - `"amount must be positive"` if any amount is ≤ 0.
+    /// - `"insufficient contract balance for batch"` if the contract cannot cover the total.
     pub fn distribute_batch(
         env: Env,
         recipients: Vec<Address>,
@@ -164,11 +220,23 @@ impl DistributionContract {
 
     /// Reclaim tokens from `recipient` back to the contract.
     ///
-    /// Only callable by admin within `CLAWBACK_WINDOW` seconds of distribution.
+    /// Only callable by admin within `CLAWBACK_WINDOW` (30 days) of distribution.
     /// Requires the recipient to have approved the contract as a spender
     /// (standard token allowance flow).
     ///
-    /// Emits `("clawback", recipient)` with data `amount`.
+    /// # Parameters
+    /// - `recipient` – Address from which tokens are reclaimed.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Events
+    /// Emits `("clawback", recipient)` with data `amount: i128`.
+    ///
+    /// # Panics
+    /// - `"no clawback record for recipient"` if no distribution was recorded.
+    /// - `"clawback window has expired"` if more than 30 days have passed since distribution.
+    /// - `"nothing to clawback"` if the recorded distribution amount is 0.
     pub fn clawback(env: Env, recipient: Address) {
         Self::require_admin(&env);
 
@@ -214,6 +282,7 @@ impl DistributionContract {
 
     // ── View helpers ──────────────────────────────────────────────────────────
 
+    /// Returns the amount originally distributed to `recipient` (0 if none or already clawed back).
     pub fn get_distributed(env: Env, recipient: Address) -> i128 {
         env.storage()
             .persistent()
@@ -221,6 +290,8 @@ impl DistributionContract {
             .unwrap_or(0)
     }
 
+    /// Returns the Unix timestamp (seconds) after which clawback is no longer possible for `recipient`.
+    /// Returns `0` if no active clawback record exists.
     pub fn get_clawback_deadline(env: Env, recipient: Address) -> u64 {
         env.storage()
             .persistent()
@@ -228,6 +299,7 @@ impl DistributionContract {
             .unwrap_or(0)
     }
 
+    /// Returns the current Nova token balance held by this contract.
     pub fn contract_balance(env: Env) -> i128 {
         Self::token(&env).balance(&env.current_contract_address())
     }
