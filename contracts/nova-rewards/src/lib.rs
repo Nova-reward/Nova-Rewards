@@ -1,3 +1,26 @@
+//! # Nova Rewards Contract
+//!
+//! Core rewards contract for the Nova Rewards platform. Manages user balances,
+//! staking with yield accrual, cross-asset swaps, emergency recovery, and
+//! contract upgrades.
+//!
+//! ## Features
+//! - User balance management with daily withdrawal limits
+//! - Staking with configurable annual yield (basis points)
+//! - Cross-asset swap: burn Nova points for XLM via a DEX router
+//! - Emergency pause / unpause with optional auto-expiry
+//! - Account snapshot and restore for emergency recovery
+//! - Two-step WASM upgrade with migration versioning
+//!
+//! ## Usage
+//! ```ignore
+//! client.initialize(&admin);
+//! client.set_annual_rate(&500); // 5% APY
+//! client.set_balance(&user, &10_000);
+//! client.stake(&user, &5_000);
+//! // time passes …
+//! let total = client.unstake(&user); // principal + yield
+//! ```
 #![no_std]
 
 pub mod utils;
@@ -317,6 +340,12 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     /// Initializes the contract and records the admin plus migration version state.
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized for all admin-gated operations.
+    ///
+    /// # Panics
+    /// - `"already initialized"` if called more than once.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
@@ -416,7 +445,15 @@ impl NovaRewardsContract {
     }
 
     /// Sets the XLM SAC token address and DEX router address.
-    /// Admin only. Must be called before swap_for_xlm is usable.
+    ///
+    /// Must be called before [`swap_for_xlm`](NovaRewardsContract::swap_for_xlm) is usable.
+    ///
+    /// # Parameters
+    /// - `xlm_token` – Address of the XLM Stellar Asset Contract (SAC).
+    /// - `router` – Address of the DEX router contract for multi-hop swaps.
+    ///
+    /// # Authorization
+    /// Admin only.
     pub fn set_swap_config(env: Env, xlm_token: Address, router: Address) {
         Self::require_admin(&env);
         env.storage().instance().set(&DataKey::XlmToken, &xlm_token);
@@ -424,7 +461,15 @@ impl NovaRewardsContract {
     }
 
     /// Assigns a dedicated recovery operator for emergency procedures.
+    ///
+    /// # Parameters
+    /// - `recovery_admin` – Address authorized to call snapshot/restore/recover functions.
+    ///
+    /// # Authorization
     /// Admin only.
+    ///
+    /// # Events
+    /// Emits `("recovery", "operator")` with data `recovery_admin: Address`.
     pub fn set_recovery_admin(env: Env, recovery_admin: Address) {
         Self::require_admin(&env);
         env.storage()
@@ -483,6 +528,29 @@ impl NovaRewardsContract {
 
     /// Burns `nova_amount` Nova points for the caller and exchanges them for
     /// XLM via the configured DEX router.
+    ///
+    /// # Parameters
+    /// - `user` – Address burning Nova points (must authorize).
+    /// - `nova_amount` – Number of Nova points to burn (must be > 0).
+    /// - `min_xlm_out` – Minimum XLM to receive; reverts if slippage exceeds this.
+    /// - `path` – Swap path as a list of token addresses (max 5 hops).
+    ///
+    /// # Returns
+    /// The amount of XLM received from the swap.
+    ///
+    /// # Authorization
+    /// Requires `user` authorization.
+    ///
+    /// # Events
+    /// Emits `("swap", user)` with data `(nova_amount: i128, xlm_received: i128, path: Vec<Address>)`.
+    ///
+    /// # Panics
+    /// - `"nova_amount must be positive"` if `nova_amount <= 0`.
+    /// - `"min_xlm_out must be non-negative"` if `min_xlm_out < 0`.
+    /// - `"path exceeds maximum of 5 hops"` if `path.len() > 5`.
+    /// - `"insufficient Nova balance"` if the user holds fewer points than `nova_amount`.
+    /// - `"router not configured"` if [`set_swap_config`](NovaRewardsContract::set_swap_config) has not been called.
+    /// - `"slippage: received X < min Y"` if the DEX returns fewer XLM than `min_xlm_out`.
     pub fn swap_for_xlm(
         env: Env,
         user: Address,
@@ -547,11 +615,17 @@ impl NovaRewardsContract {
     /// Replaces the contract WASM with `new_wasm_hash`. Admin only.
     ///
     /// - Increments `migration_version` in instance storage.
-    /// - Stores `new_wasm_hash` so `migrate()` can include it in the event.
+    /// - Stores `new_wasm_hash` so [`migrate`](NovaRewardsContract::migrate) can include it in the event.
     /// - Calls `env.deployer().update_current_contract_wasm(new_wasm_hash)`.
     ///
-    /// After this call the caller must invoke `migrate()` to apply any
+    /// After this call the caller must invoke [`migrate`](NovaRewardsContract::migrate) to apply any
     /// data transformations for the new version.
+    ///
+    /// # Parameters
+    /// - `new_wasm_hash` – 32-byte hash of the new contract WASM.
+    ///
+    /// # Authorization
+    /// Admin only.
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
         Self::require_admin(&env);
 
@@ -580,6 +654,16 @@ impl NovaRewardsContract {
     ///
     /// Gated: panics if `migrated_version >= migration_version` (already done).
     /// Emits `upgraded` event with the new WASM hash and migration version.
+    ///
+    /// # Authorization
+    /// Admin only.
+    ///
+    /// # Events
+    /// Emits `("upgraded",)` with data `(wasm_hash: BytesN<32>, migration_version: u32)`.
+    ///
+    /// # Panics
+    /// - `"migration already applied"` if `migrated_version >= migration_version`.
+    /// - `"no pending wasm hash"` if [`upgrade`](NovaRewardsContract::upgrade) was not called first.
     pub fn migrate(env: Env) {
         Self::require_admin(&env);
 
@@ -627,11 +711,21 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     /// Test helper that writes a balance directly into contract storage.
+    ///
+    /// # Parameters
+    /// - `user` – Address to update.
+    /// - `amount` – New balance value.
     pub fn set_balance(env: Env, user: Address, amount: i128) {
         Self::write_balance(&env, &user, amount);
     }
 
     /// Returns the raw Nova balance recorded for a user.
+    ///
+    /// # Parameters
+    /// - `user` – Address to query.
+    ///
+    /// # Returns
+    /// Balance in base units. Returns `0` if no balance is recorded.
     pub fn get_balance(env: Env, user: Address) -> i128 {
         Self::read_balance(&env, &user)
     }
@@ -660,6 +754,15 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     /// Updates the annual staking rate in basis points.
+    ///
+    /// # Parameters
+    /// - `rate` – Annual rate in basis points (0–10 000, where 10 000 = 100%).
+    ///
+    /// # Authorization
+    /// Admin only.
+    ///
+    /// # Panics
+    /// - `"rate must be between 0 and 10000 basis points"` if `rate < 0 || rate > 10000`.
     pub fn set_annual_rate(env: Env, rate: i128) {
         Self::require_admin(&env);
         

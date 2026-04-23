@@ -18,6 +18,7 @@ const {
   metricsMiddleware,
   registry,
 } = require("./middleware/metricsMiddleware");
+const { tracingMiddleware } = require("./middleware/tracingMiddleware");
 
 const app = express();
 
