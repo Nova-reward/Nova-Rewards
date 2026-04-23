@@ -16,19 +16,11 @@
     "generate:openapi": "node -e \"const fs=require('fs'); const swagger=require('./swagger'); fs.mkdirSync('../..//docs', { recursive: true}); fs.writeFileSync('../../docs/openapi.json', JSON.stringify(swagger, null, 2)); console.log('docs/openapi.json generated');\""
   },
   "dependencies": {
-<<<<<<< dependabot/npm_and_yarn/novaRewards/backend/backend-minor-patch-4bcb609bb6
-    "@aws-sdk/client-secrets-manager": "^3.1035.0",
-    "@elastic/elasticsearch": "^8.13.0",
-    "@prisma/client": "^7.8.0",
-    "bcryptjs": "^2.4.3",
-    "bullmq": "^5.76.1",
-=======
     "@aws-sdk/client-secrets-manager": "^3.0.0",
     "@elastic/elasticsearch": "^9.3.4",
     "@prisma/client": "^7.8.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.71.1",
->>>>>>> main
     "class-validator": "^0.15.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
