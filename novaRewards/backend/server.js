@@ -133,6 +133,8 @@ if (require.main === module) {
     require("./services/redemptionEventListener").registerRedemptionEventListener();
     // Initialize Webhook Worker
     require("./jobs/webhookHandler");
+    // Initialize Reward Issuance Worker
+    require("./jobs/rewardIssuanceWorker");
     console.log(`NovaRewards backend running on port ${PORT}`);
   });
 }
