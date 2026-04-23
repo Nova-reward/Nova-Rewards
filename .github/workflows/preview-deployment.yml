@@ -24,7 +24,7 @@ jobs:
           cache: 'npm'
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
       - name: Generate preview URL
         id: preview-url
