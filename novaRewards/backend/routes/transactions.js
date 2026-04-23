@@ -325,7 +325,7 @@ router.post('/reconcile', authenticateMerchant, async (req, res, next) => {
       logSpan(req, 'horizon_payments_fetch', { walletAddress, success: true });
       return res.json({ success: true, data: transactions, source: 'horizon' });
     } catch (err) {
-      // Horizon unavailable — fall back to PostgreSQL records
+      // Horizon unavailable - fall back to PostgreSQL records
       logSpan(req, 'horizon_payments_fetch', { walletAddress, success: false, error: err.message, fallback: true });
       const result = await query(
         `SELECT * FROM transactions
