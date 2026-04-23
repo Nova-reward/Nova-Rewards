@@ -33,7 +33,13 @@ export default function App({ Component, pageProps }) {
             <WalletProvider>
               <TourProvider>
                 <ModalProvider>
-                  <Component {...pageProps} />
+                  {/* Skip-to-content — WCAG 2.4.1 */}
+                  <a href="#main-content" className="skip-to-content">
+                    Skip to main content
+                  </a>
+                  <main id="main-content">
+                    <Component {...pageProps} />
+                  </main>
                   <Footer />
                   <OnboardingTour />
                 </ModalProvider>
