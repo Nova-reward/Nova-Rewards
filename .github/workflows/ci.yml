@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   secret-scan:
@@ -30,43 +30,41 @@ jobs:
     needs: secret-scan
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/backend/package-lock.json
 
-      - name: Install dependencies
-        working-directory: novaRewards/backend
-        run: npm install
+      # Install from workspace root so shared deps (eslint, etc.) resolve correctly
+      - run: npm install
+        working-directory: novaRewards
 
-      - name: Run tests
-        working-directory: novaRewards/backend
-        env:
-          ISSUER_PUBLIC: ${{ secrets.ISSUER_PUBLIC }}
-          ISSUER_SECRET: ${{ secrets.ISSUER_SECRET }}
-          DISTRIBUTION_PUBLIC: ${{ secrets.DISTRIBUTION_PUBLIC }}
-          DISTRIBUTION_SECRET: ${{ secrets.DISTRIBUTION_SECRET }}
-          STELLAR_NETWORK: ${{ secrets.STELLAR_NETWORK }}
-          HORIZON_URL: ${{ secrets.HORIZON_URL }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          JWT_EXPIRES_IN: ${{ secrets.JWT_EXPIRES_IN }}
-          JWT_REFRESH_EXPIRES_IN: ${{ secrets.JWT_REFRESH_EXPIRES_IN }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-          NOVA_TOKEN_CONTRACT_ID: ${{ secrets.NOVA_TOKEN_CONTRACT_ID }}
-          REWARD_POOL_CONTRACT_ID: ${{ secrets.REWARD_POOL_CONTRACT_ID }}
-          ALLOWED_ORIGIN: ${{ secrets.ALLOWED_ORIGIN }}
-          PORT: 3001
-          NODE_ENV: test
-        run: npx jest --runInBand --ci
+      - run: npm run lint
+      - run: npm test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: novaRewards/backend/coverage
+
+  frontend:
+    name: Frontend – Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: novaRewards/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Install from workspace root
+      - run: npm install
+        working-directory: novaRewards
+
+      - run: npm run build

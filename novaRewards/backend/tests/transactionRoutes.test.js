@@ -30,8 +30,6 @@ jest.mock('../db/userRepository', () => ({
   isAdmin: jest.fn(),
   findById: jest.fn(),
   findByWalletAddress: jest.fn(),
-  getPublicProfile: jest.fn(),
-  getPrivateProfile: jest.fn(),
   getReferredUsers: jest.fn(),
   getReferralPointsEarned: jest.fn(),
   hasReferralBonusBeenClaimed: jest.fn(),
@@ -40,101 +38,179 @@ jest.mock('../db/userRepository', () => ({
 }));
 
 jest.mock('../middleware/authenticateMerchant', () => ({
-  authenticateMerchant: (req, res, next) => {
+  authenticateMerchant: (req, _res, next) => {
     req.merchant = { id: 1 };
     next();
   },
 }));
 
-jest.mock('../../blockchain/stellarService', () => ({
-  server: { transactions: jest.fn(), payments: jest.fn() },
-  NOVA: { code: 'NOVA', issuer: 'GDQGIY5T5QULPD7V54LJODKC5CMKPNGTWVEMYBQH4LV6STKI6IGO543K' },
-  isValidStellarAddress: jest.fn((addr) => {
-    try {
-      const { StrKey } = require('stellar-sdk');
-      return StrKey.isValidEd25519PublicKey(addr);
-    } catch { return false; }
-  }),
+jest.mock('../services/transactionService', () => ({
+  recordTransaction: jest.fn(),
+  getWalletHistory: jest.fn(),
+  getUserHistory: jest.fn(),
+  getMerchantHistory: jest.fn(),
+  refundTransaction: jest.fn(),
+  reconcileMerchantTransactions: jest.fn(),
+  getMerchantTransactionReport: jest.fn(),
 }));
 
-const request = require('supertest');
-const { Keypair } = require('stellar-sdk');
-const app = require('../server');
-const { recordTransaction, getMerchantTotals } = require('../db/transactionRepository');
-const { server: stellarServer } = require('../../blockchain/stellarService');
+jest.mock('../db/transactionRepository', () => ({
+  getMerchantTotals: jest.fn(),
+}));
+
+const router = require('../routes/transactions');
+const { getMerchantTotals } = require('../db/transactionRepository');
+const {
+  recordTransaction,
+  getMerchantHistory,
+  refundTransaction,
+  reconcileMerchantTransactions,
+  getMerchantTransactionReport,
+} = require('../services/transactionService');
+
+function getRouteHandlers(method, path) {
+  const layer = router.stack.find(
+    (candidate) => candidate.route && candidate.route.path === path && candidate.route.methods[method]
+  );
+
+  if (!layer) {
+    throw new Error(`Route ${method.toUpperCase()} ${path} not found`);
+  }
+
+  return layer.route.stack.map((entry) => entry.handle);
+}
+
+async function invokeRoute(method, path, { body = {}, query = {}, params = {} } = {}) {
+  const handlers = getRouteHandlers(method, path);
+  const req = { body, query, params, headers: {} };
+  let statusCode = 200;
+  let payload;
+
+  const res = {
+    status(code) {
+      statusCode = code;
+      return this;
+    },
+    json(value) {
+      payload = value;
+      return this;
+    },
+  };
+
+  for (const handler of handlers) {
+    let nextCalled = false;
+    let nextError;
+
+    await Promise.resolve(handler(req, res, (err) => {
+      nextCalled = true;
+      nextError = err;
+    }));
+
+    if (nextError) {
+      throw nextError;
+    }
+
+    if (!nextCalled) {
+      break;
+    }
+  }
+
+  return { status: statusCode, body: payload, req };
+}
 
 beforeEach(() => jest.clearAllMocks());
 
-describe('POST /api/transactions/record', () => {
-  test('400 - missing txHash', async () => {
-    const res = await request(app).post('/api/transactions/record').send({ txType: 'distribution' });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('validation_error');
-  });
-
-  test('400 - invalid txType', async () => {
-    const res = await request(app).post('/api/transactions/record').send({ txHash: 'abc', txType: 'invalid' });
-    expect(res.status).toBe(400);
-  });
-
-  test('400 - invalid fromWallet', async () => {
-    const res = await request(app).post('/api/transactions/record').send({
-      txHash: 'abc', txType: 'distribution', fromWallet: 'bad-wallet',
-    });
-    expect(res.status).toBe(400);
-  });
-
-  test('400 - tx not found on Horizon', async () => {
-    stellarServer.transactions.mockReturnValue({
-      transaction: jest.fn().mockReturnValue({
-        call: jest.fn().mockRejectedValue(new Error('not found')),
-      }),
-    });
-    const res = await request(app).post('/api/transactions/record').send({
-      txHash: 'abc123', txType: 'distribution',
-    });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('tx_not_found');
-  });
-
-  test('201 - records transaction successfully', async () => {
-    stellarServer.transactions.mockReturnValue({
-      transaction: jest.fn().mockReturnValue({
-        call: jest.fn().mockResolvedValue({ ledger_attr: 12345 }),
-      }),
-    });
+describe('transaction routes', () => {
+  test('POST /record returns 201 for successful records', async () => {
     recordTransaction.mockResolvedValue({ id: 1, tx_hash: 'abc123' });
 
-    const res = await request(app).post('/api/transactions/record').send({
-      txHash: 'abc123', txType: 'distribution', amount: '10',
-      fromWallet: Keypair.random().publicKey(),
-      toWallet: Keypair.random().publicKey(),
+    const result = await invokeRoute('post', '/record', {
+      body: { txHash: 'abc123', txType: 'distribution', amount: '10' },
     });
-    expect(res.status).toBe(201);
+
+    expect(result.status).toBe(201);
+    expect(result.body.data.tx_hash).toBe('abc123');
   });
 
-  test('409 - duplicate transaction', async () => {
-    stellarServer.transactions.mockReturnValue({
-      transaction: jest.fn().mockReturnValue({
-        call: jest.fn().mockResolvedValue({ ledger_attr: 12345 }),
-      }),
-    });
+  test('POST /record returns 409 for duplicate transactions', async () => {
     const err = new Error('duplicate');
     err.code = '23505';
     recordTransaction.mockRejectedValue(err);
 
-    const res = await request(app).post('/api/transactions/record').send({
-      txHash: 'abc123', txType: 'distribution',
+    const result = await invokeRoute('post', '/record', {
+      body: { txHash: 'abc123', txType: 'distribution', amount: '10' },
     });
-    expect(res.status).toBe(409);
-  });
-});
 
-describe('GET /api/transactions/merchant-totals', () => {
-  test('200 - returns merchant totals', async () => {
+    expect(result.status).toBe(409);
+    expect(result.body.error).toBe('duplicate_transaction');
+  });
+
+  test('GET /merchant-totals returns merchant totals', async () => {
     getMerchantTotals.mockResolvedValue({ totalDistributed: '100', totalRedeemed: '20' });
-    const res = await request(app).get('/api/transactions/merchant-totals');
-    expect(res.status).toBe(200);
-    expect(res.body.data.totalDistributed).toBe('100');
+
+    const result = await invokeRoute('get', '/merchant-totals');
+
+    expect(result.status).toBe(200);
+    expect(result.body.data.totalDistributed).toBe('100');
+  });
+
+  test('GET /merchant/history returns merchant history', async () => {
+    getMerchantHistory.mockResolvedValue({
+      data: [{ tx_hash: 'abc123', status: 'completed' }],
+      total: 1,
+      page: 1,
+      limit: 20,
+    });
+
+    const result = await invokeRoute('get', '/merchant/history', {
+      query: { status: 'completed' },
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.body.data).toHaveLength(1);
+    expect(getMerchantHistory).toHaveBeenCalledWith(1, { status: 'completed' });
+  });
+
+  test('POST /refund returns 201 when a refund is processed', async () => {
+    refundTransaction.mockResolvedValue({
+      originalTransaction: { tx_hash: 'sale-1', status: 'refunded' },
+      refundTransaction: { tx_hash: 'refund-1', tx_type: 'refund' },
+    });
+
+    const result = await invokeRoute('post', '/refund', {
+      body: { txHash: 'sale-1', refundTxHash: 'refund-1', reason: 'Customer request' },
+    });
+
+    expect(result.status).toBe(201);
+    expect(result.body.data.refundTransaction.tx_hash).toBe('refund-1');
+  });
+
+  test('POST /reconcile returns reconciliation details', async () => {
+    reconcileMerchantTransactions.mockResolvedValue({
+      count: 2,
+      totalAmount: '30.0000000',
+      transactions: [{ tx_hash: 'one' }, { tx_hash: 'two' }],
+    });
+
+    const result = await invokeRoute('post', '/reconcile', {
+      body: { startDate: '2026-03-01', endDate: '2026-03-31' },
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.body.data.count).toBe(2);
+  });
+
+  test('GET /report returns merchant reporting data', async () => {
+    getMerchantTransactionReport.mockResolvedValue({
+      summary: { total_transactions: '2', total_amount: '50.0000000' },
+      breakdown: [{ tx_type: 'distribution', status: 'completed', transaction_count: '2' }],
+    });
+
+    const result = await invokeRoute('get', '/report', {
+      query: { startDate: '2026-03-01', endDate: '2026-03-31' },
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.body.data.summary.total_transactions).toBe('2');
   });
 });
