@@ -167,6 +167,9 @@ async function getPrivateProfile(id) {
 }
 
 async function updateUser(id, updates) {
+  // 'role' is intentionally excluded from allowedFields — per Requirements 5.3,
+  // the role column must never be updated through the general user-update path.
+  // Role changes are only permitted via the dedicated updateUserRole() function.
   const allowedFields = ['first_name', 'last_name', 'bio', 'stellar_public_key'];
   const fields = [];
   const values = [];
@@ -190,6 +193,29 @@ async function updateUser(id, updates) {
      RETURNING id, wallet_address, first_name, last_name, bio, stellar_public_key,
                role, created_at, updated_at`,
     [...values, id]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Updates only the `role` column for the given user.
+ *
+ * @param {number} userId - The user's ID
+ * @param {string} role   - The new role value ('user' | 'merchant')
+ * @param {object} [trx]  - Optional pg transaction client. When provided,
+ *                          `trx.query(sql, params)` is used so the update
+ *                          participates in the caller's transaction. Falls
+ *                          back to the shared pool `query` when omitted.
+ * @returns {Promise<object|null>} The updated row (id, role, updated_at) or null
+ */
+async function updateUserRole(userId, role, trx) {
+  const executor = trx ? (sql, params) => trx.query(sql, params) : query;
+  const result = await executor(
+    `UPDATE users
+     SET role = $1, updated_at = NOW()
+     WHERE id = $2 AND is_deleted = FALSE
+     RETURNING id, role, updated_at`,
+    [role, userId]
   );
   return result.rows[0] || null;
 }
@@ -275,6 +301,7 @@ module.exports = {
   getPublicProfile,
   getPrivateProfile,
   update: updateUser,
+  updateUserRole,
   softDelete,
   exists,
   isAdmin,
