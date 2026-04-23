@@ -5,7 +5,7 @@ const userRepository = require('../db/userRepository');
 const { getUserReferralStats, processReferralBonus } = require('../services/referralService');
 const { getUserBalance, getUserTotalPoints, getUserReferralPoints } = require('../db/pointTransactionRepository');
 const { getUserRedemptions } = require('../db/redemptionRepository');
-const { getTransactionsByUser } = require('../db/transactionRepository');
+const { getTransactionsByUser, getRewardsHistoryCursor } = require('../db/transactionRepository');
 const { sendWelcome } = require('../services/emailService');
 const { authenticateUser, requireAdmin, requireOwnershipOrAdmin } = require('../middleware/authenticateUser');
 const { validateUpdateUserDto } = require('../middleware/validateDto');
@@ -711,6 +711,87 @@ router.patch('/:id/password', authenticateUser, async (req, res, next) => {
     const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
     res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /users/:id/balance — Horizon token balance per campaign, cached 30s
+// ---------------------------------------------------------------------------
+router.get('/:id/balance', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parsePositiveInteger(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+    if (!ensureSelfOrAdmin(req, res, userId)) return;
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const cacheKey = `balance:${userId}`;
+    if (redisClient && redisClient.isOpen) {
+      const cached = await redisClient.get(cacheKey).catch(() => null);
+      if (cached) {
+        return res.json({ success: true, data: JSON.parse(cached), cached: true });
+      }
+    }
+
+    // Fetch on-chain balance from Horizon
+    const onChainBalance = user.stellar_public_key
+      ? await getNOVABalance(user.stellar_public_key).catch(() => '0')
+      : '0';
+
+    // Fetch off-chain point balance
+    const offChainBalance = await getUserBalance(userId).catch(() => 0);
+
+    const data = {
+      userId,
+      stellarPublicKey: user.stellar_public_key || null,
+      onChainBalance,          // NOVA token balance from Horizon
+      offChainPoints: offChainBalance, // accumulated off-chain points
+    };
+
+    if (redisClient && redisClient.isOpen) {
+      redisClient.setEx(cacheKey, 30, JSON.stringify(data)).catch(() => {});
+    }
+
+    res.json({ success: true, data, cached: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /users/:id/rewards/history — cursor-paginated reward history
+// ---------------------------------------------------------------------------
+router.get('/:id/rewards/history', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parsePositiveInteger(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+    if (!ensureSelfOrAdmin(req, res, userId)) return;
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'limit must be between 1 and 100' });
+    }
+
+    const { data, nextCursor } = await getRewardsHistoryCursor(userId, {
+      limit,
+      cursor: req.query.cursor,
+    });
+
+    res.json({ success: true, data, pagination: { nextCursor, limit } });
   } catch (err) {
     next(err);
   }
