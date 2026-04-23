@@ -19,14 +19,14 @@ jobs:
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Build & push backend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: novaRewards/backend
           push: true
           tags: ${{ secrets.REGISTRY }}/nova-rewards-backend:${{ github.sha }}
 
       - name: Build & push frontend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: novaRewards/frontend
           push: true
