@@ -2,29 +2,69 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
-  test:
+  secret-scan:
+    name: Secret Scan (TruffleHog)
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: TruffleHog scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+  test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    needs: secret-scan
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: novaRewards/backend/package-lock.json
 
-      - name: Install dependencies
-        working-directory: novaRewards/backend
-        run: npm install
+      # Install from workspace root so shared deps (eslint, etc.) resolve correctly
+      - run: npm install
+        working-directory: novaRewards
 
-      - name: Run tests
-        working-directory: novaRewards/backend
-        run: npx jest --runInBand --ci
+      - run: npm run lint
+      - run: npm test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: novaRewards/backend/coverage
+
+  frontend:
+    name: Frontend – Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: novaRewards/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Install from workspace root
+      - run: npm install
+        working-directory: novaRewards
+
+      - run: npm run build

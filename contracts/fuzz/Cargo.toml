@@ -1,0 +1,32 @@
+[package]
+name = "nova-rewards-fuzz"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+nova-rewards = { path = "../nova-rewards", features = ["testutils"] }
+vesting = { path = "../vesting", features = ["testutils"] }
+soroban-sdk = { version = "21.0.0", features = ["testutils"] }
+
+[[bin]]
+name = "fuzz_calculate_payout"
+path = "fuzz_targets/fuzz_calculate_payout.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_staking"
+path = "fuzz_targets/fuzz_staking.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_vesting"
+path = "fuzz_targets/fuzz_vesting.rs"
+test = false
+doc = false

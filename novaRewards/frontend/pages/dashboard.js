@@ -1,12 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "../context/WalletContext";
 import DashboardLayout from "../components/DashboardLayout";
 import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
+import ReferralLink from "../components/ReferralLink";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
+import StellarDropModal from "../components/StellarDropModal";
+import WalletConnect from "../components/WalletConnect";
 import { truncateAddress } from "../lib/truncateAddress";
 
 /**
@@ -23,12 +26,24 @@ function DashboardContent() {
     refreshBalance,
     freighterInstalled,
     loading,
+    error: walletError,
   } = useWallet();
   const router = useRouter();
+  const dropModalRef = useRef(null);
 
   useEffect(() => {
     if (!loading && !publicKey) router.push("/");
   }, [publicKey, loading, router]);
+
+  // Check for eligible drops when dashboard loads
+  useEffect(() => {
+    if (publicKey && !loading) {
+      // Trigger the drop modal's eligibility check
+      if (dropModalRef.current) {
+        dropModalRef.current.checkEligibility();
+      }
+    }
+  }, [publicKey, loading]);
 
   if (!publicKey) return null;
 
@@ -46,9 +61,33 @@ function DashboardContent() {
     return { type, counterparty, amount: tx.amount, date };
   }
 
+  // Handle successful drop claim
+  const handleDropClaimSuccess = (claimedAmount) => {
+    // Refresh the balance to show the new tokens
+    refreshBalance();
+  };
+
   return (
     <DashboardLayout>
       <div className="dashboard-content">
+        {/* Wallet connection section */}
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h2 style={{ marginBottom: '0.25rem' }}>Wallet</h2>
+              {publicKey && (
+                <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                  {publicKey}
+                </p>
+              )}
+            </div>
+            <WalletConnect />
+          </div>
+          {walletError && (
+            <p className="error" style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>{walletError}</p>
+          )}
+        </div>
+
         {loading ? (
           <LoadingSkeleton />
         ) : (
@@ -121,7 +160,6 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Trustline */}
             <div className="card">
               <h2 style={{ marginBottom: "1rem" }}>Trustline</h2>
               <TrustlineButton
@@ -129,6 +167,10 @@ function DashboardContent() {
                 onSuccess={() => refreshBalance()}
               />
             </div>
+
+            {/* Referral Link — Requirement 168 */}
+            <ReferralLink userId={publicKey} />
+
 
             {/* Transfer */}
             <div className="card">
@@ -152,6 +194,12 @@ function DashboardContent() {
           </>
         )}
       </div>
+      
+      {/* Stellar Drop Modal */}
+      <StellarDropModal 
+        ref={dropModalRef}
+        onClaimSuccess={handleDropClaimSuccess}
+      />
     </DashboardLayout>
   );
 }
@@ -163,3 +211,7 @@ export default function Dashboard() {
     </ErrorBoundary>
   );
 }
+
+Dashboard.getLayout = function getLayout(page) {
+  return <DashboardLayout>{page}</DashboardLayout>;
+};

@@ -1,0 +1,90 @@
+groups:
+  - name: application
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          (sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+           /
+           sum(rate(http_requests_total[5m])) by (service)) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected for {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} has a high error rate of {{ $value | humanizePercentage }}
+            Current value: {{ $value }}
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected for {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} P99 latency is {{ $value }}s
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          (db_connections_active / db_connections_max) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Database {{ $labels.instance }} has {{ $value | humanizePercentage }} connections in use"
+
+      - alert: DiskSpaceLow
+        expr: |
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs"} / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "{{ $labels.device }} has only {{ $value | humanizePercentage }} free space"
+
+      - alert: MemoryUsageHigh
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+  - name: loki
+    interval: 30s
+    rules:
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Loki instance is down"
+          description: "Loki instance on {{ $labels.instance }} has been down for more than 5 minutes"
+
+      - alert: LokiHighChunkAge
+        expr: loki_chunk_store_max_chunk_age_seconds > 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki chunks are getting old"
+          description: "Max chunk age is {{ $value }}s"
+
+  - name: alertmanager
+    interval: 30s
+    rules:
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager instance is down"
+          description: "Alertmanager instance on {{ $labels.instance }} has been down for more than 5 minutes"
