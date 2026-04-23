@@ -1,0 +1,4 @@
+# Ignore generated deployment JSON files (contain live contract IDs)
+# Commit them intentionally if you want to track deployments in source control
+*.json
+!.gitkeep

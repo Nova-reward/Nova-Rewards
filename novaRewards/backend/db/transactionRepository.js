@@ -493,6 +493,59 @@ async function getTransactionReport(filters = {}) {
   };
 }
 
+/**
+ * Cursor-based rewards history for a user.
+ * Cursor is the base64-encoded `created_at::id` of the last seen row.
+ *
+ * @param {number} userId
+ * @param {{ limit?: number, cursor?: string }} opts
+ * @returns {Promise<{ data: object[], nextCursor: string|null }>}
+ */
+async function getRewardsHistoryCursor(userId, { limit = 20, cursor } = {}) {
+  const safeLimit = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
+  const params = [userId];
+  let cursorClause = '';
+
+  if (cursor) {
+    try {
+      const decoded = Buffer.from(cursor, 'base64').toString('utf8');
+      const [ts, id] = decoded.split('::');
+      params.push(ts, parseInt(id, 10));
+      cursorClause = `AND (t.created_at, t.id) < ($${params.length - 1}::timestamptz, $${params.length})`;
+    } catch (_) {
+      // invalid cursor — ignore and start from the beginning
+    }
+  }
+
+  const result = await query(
+    `SELECT t.id,
+            t.tx_hash,
+            t.tx_type   AS action_type,
+            t.amount,
+            t.created_at AS timestamp,
+            t.status,
+            c.name       AS campaign_name,
+            c.id         AS campaign_id
+     FROM transactions t
+     LEFT JOIN campaigns c ON t.campaign_id = c.id
+     WHERE t.user_id = $1
+       ${cursorClause}
+     ORDER BY t.created_at DESC, t.id DESC
+     LIMIT $${params.length + 1}`,
+    [...params, safeLimit + 1]
+  );
+
+  const rows = result.rows;
+  const hasMore = rows.length > safeLimit;
+  const data = hasMore ? rows.slice(0, safeLimit) : rows;
+
+  const nextCursor = hasMore
+    ? Buffer.from(`${data[data.length - 1].timestamp}::${data[data.length - 1].id}`).toString('base64')
+    : null;
+
+  return { data, nextCursor };
+}
+
 module.exports = {
   recordTransaction,
   getTransactionByHash,
@@ -500,6 +553,7 @@ module.exports = {
   getMerchantTotals,
   getTransactionsByUser,
   getTransactionHistory,
+  getRewardsHistoryCursor,
   updateTransaction,
   processRefund,
   reconcileTransactions,
