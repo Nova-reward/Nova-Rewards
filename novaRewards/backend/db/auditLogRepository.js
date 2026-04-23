@@ -12,7 +12,7 @@ async function logAudit({ entityType, entityId = null, action, performedBy = nul
 }
 
 
-async function getAuditLogs({ entityType, entityId, actor, action, startDate, endDate, page = 1, limit = 20 } = {}) {
+async function getAuditLogs({ entityType, entityId, performedBy, actorType, merchantId, action, startDate, endDate, statusCode, httpMethod, endpoint, ipAddress, page = 1, limit = 20 } = {}) {
   const conditions = [];
   const params = [];
   let i = 1;

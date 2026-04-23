@@ -35,6 +35,17 @@ const nextConfig = {
       ...cacheHeaders,
     ];
   },
+  webpack(config, { isServer }) {
+    // These packages are loaded dynamically at runtime only; exclude from bundle
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        'albedo-link': false,
+        '@creit.tech/stellar-wallets-kit': false,
+      };
+    }
+    return config;
+  },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_HORIZON_URL: process.env.NEXT_PUBLIC_HORIZON_URL,
