@@ -12,6 +12,7 @@ import OnboardingModal from '../components/OnboardingModal';
 import { useOnboardingStore } from '../store/onboardingStore';
 import '../styles/globals.css';
 import '../styles/redemption.css';
+import '../styles/landing.css';
 
 // react-joyride pulls in a large dependency — defer until client
 const OnboardingTour = dynamic(() => import('../components/OnboardingTour'), { ssr: false });
