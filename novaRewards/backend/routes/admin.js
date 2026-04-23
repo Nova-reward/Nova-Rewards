@@ -15,6 +15,7 @@ const {
 const { runBackupCycle } = require('../jobs/backupJob');
 const AuditService = require('../services/auditService');
 const { query } = require('../db/index');
+const { unblock } = require('../middleware/abuseDetection');
 
 // All admin routes require a valid user token AND admin role
 router.use(authenticateUser, requireAdmin);
@@ -435,6 +436,49 @@ router.get('/metrics', async (req, res, next) => {
     });
 
     res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /admin/abuse/unblock/{identifier}:
+ *   delete:
+ *     tags: [Admin]
+ *     summary: Manually unblock an IP or wallet flagged by abuse detection
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: identifier
+ *         required: true
+ *         schema: { type: string }
+ *         description: IP address or wallet public key to unblock
+ *     responses:
+ *       200:
+ *         description: Identifier unblocked.
+ *       401:
+ *         description: Unauthenticated.
+ *       403:
+ *         description: Admin role required.
+ */
+router.delete('/abuse/unblock/:identifier', async (req, res, next) => {
+  try {
+    const { identifier } = req.params;
+    if (!identifier) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'identifier is required' });
+    }
+    await unblock(identifier);
+    await AuditService.log({
+      entityType: 'abuse_block',
+      entityId: null,
+      action: 'MANUAL_UNBLOCK',
+      performedBy: req.user.id,
+      afterState: { identifier, unblocked: true },
+      source: 'admin_api',
+    });
+    res.json({ success: true, message: `${identifier} has been unblocked` });
   } catch (err) {
     next(err);
   }
