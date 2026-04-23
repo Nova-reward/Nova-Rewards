@@ -8,6 +8,7 @@ import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
 import ReferralLink from "../components/ReferralLink";
+import StakingPanel from "../components/StakingPanel";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 import WalletConnect from "../components/WalletConnect";
@@ -196,6 +197,13 @@ function DashboardContent() {
 
             {/* Referral Link — Requirement 168 */}
             <ReferralLink userId={publicKey} />
+
+            {/* Staking Panel — gated by NEXT_PUBLIC_STAKING_ENABLED */}
+            <StakingPanel
+              walletAddress={publicKey}
+              balance={balance}
+              onSuccess={() => refreshBalance()}
+            />
 
 
             {/* Transfer */}
