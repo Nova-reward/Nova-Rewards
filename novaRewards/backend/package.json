@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.0.0",
-    "@elastic/elasticsearch": "^8.13.0",
+    "@elastic/elasticsearch": "^9.3.4",
     "@prisma/client": "^7.8.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.71.1",
