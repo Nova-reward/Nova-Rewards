@@ -8,8 +8,7 @@ import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
 import ReferralLink from "../components/ReferralLink";
-import StakingPanel from "../components/StakingPanel";
-import LoadingSkeleton from "../components/LoadingSkeleton";
+import { SkeletonDashboard } from "../components/Skeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 import WalletConnect from "../components/WalletConnect";
 import { truncateAddress } from "../lib/truncateAddress";
@@ -83,14 +82,14 @@ function DashboardContent() {
 
   return (
     <DashboardLayout>
-      <div className="dashboard-content">
+      <div className="space-y-4 md:space-y-6">
         {/* Wallet connection section */}
-        <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 style={{ marginBottom: '0.25rem' }}>Wallet</h2>
+              <h2 className="text-lg font-bold dark:text-white">Wallet</h2>
               {publicKey && (
-                <p style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                <p className="font-mono text-xs text-slate-500 dark:text-slate-400 mt-1 break-all">
                   {publicKey}
                 </p>
               )}
@@ -98,142 +97,111 @@ function DashboardContent() {
             <WalletConnect />
           </div>
           {walletError && (
-            <p className="error" style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>{walletError}</p>
+            <p className="mt-3 text-sm text-red-500">{walletError}</p>
           )}
         </div>
 
         {userLoading || campaignsLoading || balanceLoading ? (
-          <LoadingSkeleton />
+          <SkeletonDashboard />
         ) : (
           <>
-            <div className="dashboard-summary-grid">
+            {/* Summary grid — 1 col mobile, 2 col md, 3 col lg */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Balance cards per campaign */}
               {userBalance && campaigns ? (
                 Object.entries(userBalance).map(([campaignId, amount]) => {
                   const campaign = campaigns.find(c => c.id === campaignId);
                   return (
-                    <div key={campaignId} className="card" style={{ textAlign: "center" }}>
-                      <p style={{ color: "#94a3b8", marginBottom: "0.4rem" }}>
-                        {campaign?.name || 'Unknown Campaign'} Balance
-                      </p>
-                      <p style={{ fontSize: "2rem", fontWeight: 800, color: "#7c3aed" }}>
-                        {parseFloat(amount).toFixed(2)}
-                      </p>
-                      <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>{campaign?.tokenSymbol || 'TOKEN'}</p>
-                      <div style={{ marginTop: "0.5rem", width: "100%", background: "#e5e7eb", borderRadius: "4px", height: "8px" }}>
-                        <div style={{ width: `${Math.min((amount / (campaign?.totalSupply || 1000)) * 100, 100)}%`, background: "#7c3aed", height: "100%", borderRadius: "4px" }}></div>
+                    <div key={campaignId} className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 shadow-sm text-center">
+                      <p className="text-slate-400 text-sm mb-1">{campaign?.name || 'Unknown Campaign'} Balance</p>
+                      <p className="text-3xl font-extrabold text-brand-purple">{parseFloat(amount).toFixed(2)}</p>
+                      <p className="text-slate-400 text-xs mt-1">{campaign?.tokenSymbol || 'TOKEN'}</p>
+                      <div className="mt-2 w-full bg-slate-200 dark:bg-brand-border rounded h-2">
+                        <div
+                          className="bg-brand-purple h-2 rounded"
+                          style={{ width: `${Math.min((amount / (campaign?.totalSupply || 1000)) * 100, 100)}%` }}
+                        />
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="card" style={{ textAlign: "center" }}>
-                  <p style={{ color: "#94a3b8", marginBottom: "0.4rem" }}>
-                    No balances yet
-                  </p>
-                  <p style={{ fontSize: "1.5rem", color: "#7c3aed" }}>
-                    Start earning rewards!
-                  </p>
+                <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 shadow-sm text-center">
+                  <p className="text-slate-400 text-sm mb-1">No balances yet</p>
+                  <p className="text-xl text-brand-purple">Start earning rewards!</p>
                 </div>
               )}
 
               {/* Active campaigns */}
-              <div className="card">
-                <h2 style={{ marginBottom: "1rem" }}>Active Campaigns</h2>
+              <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 shadow-sm">
+                <h2 className="font-bold text-base dark:text-white mb-3">Active Campaigns</h2>
                 {campaigns && campaigns.length > 0 ? (
-                  <div>
+                  <ul className="divide-y divide-slate-100 dark:divide-brand-border">
                     {campaigns.slice(0, 5).map(campaign => (
-                      <div key={campaign.id} style={{ padding: "0.5rem 0", borderBottom: "1px solid #e5e7eb" }}>
-                        <p style={{ fontWeight: 600 }}>{campaign.name}</p>
-                        <p style={{ fontSize: "0.85rem", color: "#94a3b8" }}>{campaign.description}</p>
-                      </div>
+                      <li key={campaign.id} className="py-2">
+                        <p className="font-semibold text-sm dark:text-white">{campaign.name}</p>
+                        <p className="text-xs text-slate-400">{campaign.description}</p>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 ) : (
-                  <p style={{ color: "#94a3b8" }}>No active campaigns</p>
+                  <p className="text-slate-400 text-sm">No active campaigns</p>
                 )}
               </div>
 
               {/* Recent transactions */}
-              <div className="card">
-                <h2 style={{ marginBottom: "1rem" }}>Recent Transactions</h2>
+              <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 shadow-sm">
+                <h2 className="font-bold text-base dark:text-white mb-3">Recent Transactions</h2>
                 {txLoading ? (
-                  <p>Loading...</p>
+                  <p className="text-sm text-slate-400">Loading…</p>
                 ) : recentTransactions && recentTransactions.length > 0 ? (
-                  <div>
+                  <ul className="divide-y divide-slate-100 dark:divide-brand-border">
                     {recentTransactions.map((tx, i) => (
-                      <div key={tx.id || i} style={{ padding: "0.5rem 0", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between" }}>
+                      <li key={tx.id || i} className="py-2 flex justify-between items-start gap-2">
                         <div>
-                          <p style={{ fontWeight: 600 }}>{tx.type}</p>
-                          <p style={{ fontSize: "0.85rem", color: "#94a3b8" }}>{tx.amount} {tx.campaign?.tokenSymbol || 'TOKEN'}</p>
+                          <p className="font-semibold text-sm dark:text-white">{tx.type}</p>
+                          <p className="text-xs text-slate-400">{tx.amount} {tx.campaign?.tokenSymbol || 'TOKEN'}</p>
                         </div>
-                        <div style={{ textAlign: "right" }}>
-                          <p style={{ fontSize: "0.85rem" }}>{new Date(tx.createdAt).toLocaleDateString()}</p>
-                          <span className={`badge ${tx.status === 'confirmed' ? 'success' : 'pending'}`}>{tx.status}</span>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-slate-400">{new Date(tx.createdAt).toLocaleDateString()}</p>
+                          <span className={`text-xs font-semibold ${tx.status === 'confirmed' ? 'text-green-500' : 'text-yellow-500'}`}>{tx.status}</span>
                         </div>
-                      </div>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 ) : (
-                  <div style={{ textAlign: "center", padding: "1rem 0" }}>
-                    <p style={{ color: "#94a3b8", marginBottom: "0.75rem" }}>
-                      No transactions yet. Start earning rewards!
-                    </p>
-                    <a href="/merchant" style={{ color: "#7c3aed", fontWeight: 600 }}>
-                      Browse merchants →
-                    </a>
+                  <div className="text-center py-4">
+                    <p className="text-slate-400 text-sm mb-2">No transactions yet.</p>
+                    <a href="/merchant" className="text-brand-purple font-semibold text-sm">Browse merchants →</a>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="card">
-              <h2 style={{ marginBottom: "1rem" }}>Trustline</h2>
-              <TrustlineButton
-                walletAddress={publicKey}
-                onSuccess={() => refreshBalance()}
-              />
+            {/* Trustline */}
+            <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
+              <h2 className="font-bold text-base dark:text-white mb-3">Trustline</h2>
+              <TrustlineButton walletAddress={publicKey} onSuccess={() => refreshBalance()} />
             </div>
 
-            {/* Referral Link — Requirement 168 */}
             <ReferralLink userId={publicKey} />
 
-            {/* Staking Panel — gated by NEXT_PUBLIC_STAKING_ENABLED */}
-            <StakingPanel
-              walletAddress={publicKey}
-              balance={balance}
-              onSuccess={() => refreshBalance()}
-            />
-
-
             {/* Transfer */}
-            <div className="card">
-              <h2 style={{ marginBottom: "1rem" }}>Send NOVA</h2>
-              <TransferForm
-                senderPublicKey={publicKey}
-                senderBalance={balance}
-                onSuccess={() => refreshBalance()}
-              />
+            <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
+              <h2 className="font-bold text-base dark:text-white mb-3">Send NOVA</h2>
+              <TransferForm senderPublicKey={publicKey} senderBalance={balance} onSuccess={() => refreshBalance()} />
             </div>
 
             {/* Redeem */}
-            <div className="card">
-              <h2 style={{ marginBottom: "1rem" }}>Redeem NOVA</h2>
-              <RedeemForm
-                senderPublicKey={publicKey}
-                senderBalance={balance}
-                onSuccess={() => refreshBalance()}
-              />
+            <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
+              <h2 className="font-bold text-base dark:text-white mb-3">Redeem NOVA</h2>
+              <RedeemForm senderPublicKey={publicKey} senderBalance={balance} onSuccess={() => refreshBalance()} />
             </div>
           </>
         )}
       </div>
-      
-      {/* Stellar Drop Modal */}
-      <StellarDropModal 
-        ref={dropModalRef}
-        onClaimSuccess={handleDropClaimSuccess}
-      />
+
+      <StellarDropModal ref={dropModalRef} onClaimSuccess={handleDropClaimSuccess} />
     </DashboardLayout>
   );
 }

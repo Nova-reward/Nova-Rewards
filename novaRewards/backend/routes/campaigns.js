@@ -8,9 +8,7 @@ const {
   getCampaignsByMerchant,
   updateCampaign,
   softDeleteCampaign,
-  getPublicCampaigns,
-  getPublicCampaignById,
-  getPublicCampaignCategories,
+
 } = require('../db/campaignRepository');
 const {
   registerCampaign,
@@ -18,6 +16,44 @@ const {
   pauseCampaign,
 } = require('../services/sorobanService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { getRedisClient } = require('../cache/redisClient');
+const { metrics } = require('../middleware/metricsMiddleware');
+
+const CAMPAIGN_TTL = 60; // 60s TTL per issue #576
+
+/**
+ * Cache helpers with hit/miss metric tracking.
+ */
+async function cacheGet(key) {
+  const redis = getRedisClient();
+  if (!redis) return null;
+  try {
+    const val = await redis.get(key);
+    if (val !== null) {
+      metrics.cacheHits.inc({ key_type: 'campaign' });
+      return JSON.parse(val);
+    }
+    metrics.cacheMisses.inc({ key_type: 'campaign' });
+    return null;
+  } catch {
+    metrics.cacheMisses.inc({ key_type: 'campaign' });
+    return null;
+  }
+}
+
+async function cacheSet(key, value) {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.set(key, JSON.stringify(value), 'EX', CAMPAIGN_TTL);
+  } catch { /* non-fatal */ }
+}
+
+async function cacheDel(key) {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try { await redis.del(key); } catch { /* non-fatal */ }
+}
 
 // ---------------------------------------------------------------------------
 // Public endpoints — no authentication required
@@ -330,3 +366,4 @@ router.get('/', authenticateMerchant, async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.cacheDel = cacheDel; // exported for use in rewards route invalidation

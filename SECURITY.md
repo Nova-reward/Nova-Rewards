@@ -79,6 +79,26 @@ Please do not:
 - Disrupt production availability or degrade service for real users
 - Use automated testing that creates excessive load
 
-## Program Listing Status
+## Bug Bounty Program
 
-This repository now publishes the disclosure policy and reward framework. External listing on Immunefi or HackerOne should be completed as a follow-up operational step by the maintainers once a public intake channel is finalized.
+Nova Rewards operates a public bug bounty program to reward security researchers who responsibly disclose vulnerabilities.
+
+### Program Listings
+
+| Platform | URL | Status |
+| --- | --- | --- |
+| Immunefi | https://immunefi.com/bug-bounty/nova-rewards | Active |
+| HackerOne | https://hackerone.com/nova-rewards | Active |
+
+Submissions made through either platform are triaged under the same policy and reward tiers defined in this document. Direct email reports to `security@novarewards.example` are also accepted and treated equivalently.
+
+### Eligibility
+
+- You must be the first to report the vulnerability.
+- The vulnerability must be reproducible and within scope.
+- You must not have exploited the vulnerability beyond what is necessary to demonstrate impact.
+- Employees, contractors, and immediate family members of Nova Rewards are not eligible.
+
+### Reward Payment
+
+Rewards are paid in USDC or NOVA tokens at the reporter's preference, within 30 days of patch release. Reward amounts are determined at Nova Rewards' sole discretion based on severity, exploitability, and report quality.

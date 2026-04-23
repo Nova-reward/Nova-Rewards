@@ -3,16 +3,39 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import MobileCardList from './MobileCardList';
 
 const STATUS_LABEL = {
-  pending:   { text: 'Pending',   cls: 'badge-yellow' },
-  completed: { text: 'Completed', cls: 'badge-green'  },
-  failed:    { text: 'Failed',    cls: 'badge-red'    },
-  cancelled: { text: 'Cancelled', cls: 'badge-gray'   },
+  pending:   { text: 'Pending',   cls: 'text-yellow-600' },
+  completed: { text: 'Completed', cls: 'text-green-600'  },
+  failed:    { text: 'Failed',    cls: 'text-red-600'    },
+  cancelled: { text: 'Cancelled', cls: 'text-slate-400'  },
 };
+
+const COLUMNS = [
+  { key: 'reward_name',   label: 'Reward',  render: (v, r) => v || r.rewardName || '—' },
+  { key: 'points_spent',  label: 'Points',  render: (v, r) => `−${v ?? r.pointsSpent ?? r.cost ?? '?'}` },
+  {
+    key: 'status',
+    label: 'Status',
+    render: (v) => {
+      const { text, cls } = STATUS_LABEL[v] || { text: v, cls: 'text-slate-400' };
+      return <span className={`font-semibold ${cls}`}>{text}</span>;
+    },
+  },
+  { key: 'created_at', label: 'Date', render: (v) => v ? new Date(v).toLocaleDateString() : '—' },
+  {
+    key: 'tx_hash',
+    label: 'Tx',
+    render: (v) => v
+      ? <a href={`https://stellar.expert/explorer/testnet/tx/${v}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 font-medium" title={v}>{v.slice(0, 8)}…</a>
+      : '—',
+  },
+];
 
 /**
  * Displays paginated redemption history for the authenticated user.
+ * Uses MobileCardList for responsive table/card rendering.
  */
 export default function RedemptionHistory() {
   const { user } = useAuth();
@@ -46,83 +69,38 @@ export default function RedemptionHistory() {
     return () => { cancelled = true; };
   }, [user?.id, page]);
 
-  if (loading) {
-    return (
-      <div className="card">
-        <h2 style={{ marginBottom: '1rem' }}>📜 Redemption History</h2>
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="card">
-        <h2 style={{ marginBottom: '1rem' }}>📜 Redemption History</h2>
-        <p className="error">{error}</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="card">
-      <h2 style={{ marginBottom: '1rem' }}>📜 Redemption History</h2>
+    <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
+      <h2 className="text-base font-bold dark:text-white mb-4">📜 Redemption History</h2>
 
-      {redemptions.length === 0 ? (
-        <p style={{ color: 'var(--muted)' }}>No redemptions yet.</p>
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-16 rounded-lg bg-slate-100 dark:bg-brand-border animate-pulse" />
+          ))}
+        </div>
+      ) : error ? (
+        <p className="text-sm text-red-500">{error}</p>
       ) : (
         <>
-          <div className="redemption-history-table" role="table" aria-label="Redemption history">
-            <div className="rh-header" role="row">
-              <span role="columnheader">Reward</span>
-              <span role="columnheader">Points</span>
-              <span role="columnheader">Status</span>
-              <span role="columnheader">Date</span>
-              <span role="columnheader">Tx</span>
-            </div>
-
-            {redemptions.map((r) => {
-              const { text, cls } = STATUS_LABEL[r.status] || { text: r.status, cls: 'badge-gray' };
-              return (
-                <div key={r.id} className="rh-row" role="row">
-                  <span role="cell" className="rh-reward-name">{r.reward_name || r.rewardName || '—'}</span>
-                  <span role="cell" className="rh-points">−{r.points_spent ?? r.pointsSpent ?? r.cost ?? '?'}</span>
-                  <span role="cell">
-                    <span className={`badge ${cls}`}>{text}</span>
-                  </span>
-                  <span role="cell" className="rh-date">
-                    {r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}
-                  </span>
-                  <span role="cell">
-                    {r.tx_hash ? (
-                      <a
-                        href={`https://stellar.expert/explorer/testnet/tx/${r.tx_hash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="tx-hash-link"
-                        title={r.tx_hash}
-                      >
-                        {r.tx_hash.slice(0, 8)}…
-                      </a>
-                    ) : '—'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <MobileCardList
+            columns={COLUMNS}
+            data={redemptions}
+            emptyMessage="No redemptions yet."
+          />
 
           {totalPages > 1 && (
-            <div className="pagination">
+            <div className="flex items-center justify-center gap-3 mt-4">
               <button
-                className="btn btn-secondary"
+                className="touch-target px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card disabled:opacity-40"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
                 ← Prev
               </button>
-              <span className="pagination-info">Page {page} of {totalPages}</span>
+              <span className="text-sm text-slate-500">Page {page} of {totalPages}</span>
               <button
-                className="btn btn-secondary"
+                className="touch-target px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card disabled:opacity-40"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
               >

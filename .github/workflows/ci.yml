@@ -41,7 +41,10 @@ jobs:
         working-directory: novaRewards
 
       - run: npm run lint
+        working-directory: novaRewards
+
       - run: npm test
+        working-directory: novaRewards
 
       - uses: actions/upload-artifact@v4
         if: always()
