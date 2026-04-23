@@ -142,11 +142,26 @@ export default function CampaignManager({ merchantId, apiKey, onUpdate }) {
       )}
 
       {loading ? (
-        <p style={{ color: 'var(--muted)' }}>Loading campaigns…</p>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {[...Array(4)].map((_, i) => <SkeletonRow key={i} />)}
+        </div>
       ) : filtered.length === 0 ? (
-        <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '1rem 0' }}>
-          {campaigns.length === 0 ? 'No campaigns yet. Create one above.' : 'No campaigns match your filters.'}
-        </p>
+        campaigns.length === 0 ? (
+          <EmptyState
+            icon="campaigns"
+            title="No campaigns yet"
+            description="Create your first campaign to start issuing NOVA rewards to customers."
+            actionLabel="+ New Campaign"
+            onAction={openCreate}
+            variant="primary"
+          />
+        ) : (
+          <EmptyState
+            icon="search"
+            title="No matching campaigns"
+            description="Try adjusting your search or status filter."
+          />
+        )
       ) : (
         <div className="table-scroll">
           <table>

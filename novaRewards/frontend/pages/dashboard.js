@@ -8,7 +8,7 @@ import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
 import ReferralLink from "../components/ReferralLink";
-import LoadingSkeleton from "../components/LoadingSkeleton";
+import { SkeletonDashboard } from "../components/Skeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 import WalletConnect from "../components/WalletConnect";
 import { truncateAddress } from "../lib/truncateAddress";
@@ -102,7 +102,7 @@ function DashboardContent() {
         </div>
 
         {userLoading || campaignsLoading || balanceLoading ? (
-          <LoadingSkeleton />
+          <SkeletonDashboard />
         ) : (
           <>
             {/* Summary grid — 1 col mobile, 2 col md, 3 col lg */}

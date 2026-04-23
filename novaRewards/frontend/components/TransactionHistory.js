@@ -226,7 +226,9 @@ export default function TransactionHistory({ userId }) {
 
       {/* Transaction Table / Card List */}
       {isLoading ? (
-        <LoadingSkeleton rows={5} />
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {[...Array(5)].map((_, i) => <SkeletonRow key={i} />)}
+        </div>
       ) : transactions && transactions.length > 0 ? (
         <div className="mb-8">
           <MobileCardList
@@ -250,8 +252,9 @@ export default function TransactionHistory({ userId }) {
         </div>
       ) : (
         <EmptyState
-          title="No Transactions"
-          message="No transactions found matching your filters."
+          icon="transactions"
+          title="No transactions yet"
+          description="Your transaction history will appear here once you start earning or redeeming rewards."
         />
       )}
 
