@@ -1,3 +1,22 @@
+//! # Reward Pool Contract
+//!
+//! A shared liquidity pool that merchants deposit into and users withdraw from,
+//! subject to a configurable per-wallet daily withdrawal cap.
+//!
+//! ## Usage
+//! ```ignore
+//! // Admin initializes
+//! client.initialize(&admin);
+//!
+//! // Merchant deposits
+//! client.deposit(&merchant, &50_000);
+//!
+//! // Set a daily limit of 1 000 tokens per wallet
+//! client.set_daily_limit(&1_000);
+//!
+//! // User withdraws
+//! client.withdraw(&user, &500);
+//! ```
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, IntoVal,
@@ -39,19 +58,16 @@ pub struct RewardPoolContract;
 
 #[contractimpl]
 impl RewardPoolContract {
-    // -----------------------------------------------------------------------
-    // Initialization
-    // -----------------------------------------------------------------------
-
-    /// Initializes the reward pool with an admin and Nova token address.
+    /// Initializes the reward pool and stores the admin address.
+    ///
+    /// Sets the initial pool balance to `0` and the daily limit to `i128::MAX` (unlimited).
     ///
     /// # Parameters
-    /// * `admin` – privileged operator address authorized to withdraw funds.
-    /// * `nova_token_address` – address of the Nova token contract.
+    /// - `admin` – Address authorized to call [`set_daily_limit`](RewardPoolContract::set_daily_limit).
     ///
     /// # Panics
-    /// Panics if the contract has already been initialized.
-    pub fn initialize(env: Env, admin: Address, nova_token_address: Address) {
+    /// - `"already initialised"` if called more than once.
+    pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
@@ -177,44 +193,119 @@ impl RewardPoolContract {
         Ok(())
     }
 
-    // -----------------------------------------------------------------------
-    // Balance Query
-    // -----------------------------------------------------------------------
-
-    /// Returns the contract's current Nova token balance.
-    ///
-    /// # Returns
-    /// The number of Nova tokens held by this contract.
-    pub fn get_balance(env: Env) -> i128 {
-        let nova_token: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::NovaToken)
-            .expect("nova token not set");
-
-        env.invoke_contract(
-            &nova_token,
-            &Symbol::new(&env, "balance"),
-            soroban_sdk::vec![&env, env.current_contract_address().to_val()],
-        )
+    /// Returns `true` if the given address has already claimed.
+    pub fn is_claimed(env: Env, claimer: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get::<_, bool>(&DataKey::Claimed(claimer))
+            .unwrap_or(false)
     }
 
-    // -----------------------------------------------------------------------
-    // Lock Management
-    // -----------------------------------------------------------------------
-
-    /// Sets the unlock timestamp. Withdrawals are blocked until this time.
-    ///
-    /// # Parameters
-    /// * `unlock_time` – Unix timestamp (seconds) when withdrawals become allowed.
-    ///
-    /// # Panics
-    /// Panics if caller is not the admin.
-    pub fn set_locked_until(env: Env, unlock_time: u64) {
-        Self::require_admin(&env);
+    /// Returns the stored Merkle root.
+    pub fn get_merkle_root(env: Env) -> BytesN<32> {
         env.storage()
             .instance()
-            .set(&DataKey::LockedUntil, &unlock_time);
+            .get(&DataKey::MerkleRoot)
+            .expect("merkle root not set")
+    }
+
+    /// Deposits funds into the shared reward pool.
+    ///
+    /// # Parameters
+    /// - `from` – Address making the deposit (must authorize).
+    /// - `amount` – Amount to deposit (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `from` authorization.
+    ///
+    /// # Events
+    /// Emits `("rwd_pool", "deposited")` with data `(from: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
+    pub fn deposit(env: Env, from: Address, amount: i128) {
+        from.require_auth();
+        assert!(amount > 0, "amount must be positive");
+
+        let balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance, &(balance + amount));
+
+        env.events().publish(
+            (symbol_short!("rwd_pool"), symbol_short!("deposited")),
+            (from, amount),
+        );
+    }
+
+    /// Withdraws funds from the shared reward pool subject to the daily wallet limit.
+    ///
+    /// The 24-hour window resets automatically when 86 400 seconds have elapsed
+    /// since the wallet's last window start.
+    ///
+    /// # Parameters
+    /// - `to` – Recipient address (must authorize).
+    /// - `amount` – Amount to withdraw (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires `to` authorization.
+    ///
+    /// # Events
+    /// Emits `("rwd_pool", "withdrawn")` with data `(to: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
+    /// - `"insufficient pool balance"` if the pool holds fewer tokens than `amount`.
+    /// - `"daily withdrawal limit exceeded"` if the wallet's 24-hour usage would exceed the limit.
+    pub fn withdraw(env: Env, to: Address, amount: i128) {
+        to.require_auth();
+        assert!(amount > 0, "amount must be positive");
+
+        let balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
+        assert!(balance >= amount, "insufficient pool balance");
+
+        let limit: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::DailyLimit)
+            .unwrap_or(i128::MAX);
+        let mut usage = Self::current_usage(&env, &to);
+        assert!(
+            usage.amount + amount <= limit,
+            "daily withdrawal limit exceeded"
+        );
+
+        usage.amount += amount;
+        Self::set_usage(&env, &to, &usage);
+        env.storage()
+            .instance()
+            .set(&DataKey::Balance, &(balance - amount));
+
+        env.events().publish(
+            (symbol_short!("rwd_pool"), symbol_short!("withdrawn")),
+            (to, amount),
+        );
+    }
+
+    /// Updates the per-wallet daily withdrawal cap. Admin only.
+    ///
+    /// # Parameters
+    /// - `limit` – New daily cap in base units (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"limit must be positive"` if `limit <= 0`.
+    pub fn set_daily_limit(env: Env, limit: i128) {
+        Self::admin(&env).require_auth();
+        assert!(limit > 0, "limit must be positive");
+        env.storage().instance().set(&DataKey::DailyLimit, &limit);
+    }
+
+    /// Returns the total funds currently held by the reward pool (internal accounting).
+    pub fn get_balance(env: Env) -> i128 {
+        env.storage().instance().get(&DataKey::Balance).unwrap_or(0)
     }
 
     /// Returns the current unlock timestamp.

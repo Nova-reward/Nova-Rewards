@@ -18,6 +18,7 @@ const {
   metricsMiddleware,
   registry,
 } = require("./middleware/metricsMiddleware");
+const { tracingMiddleware } = require("./middleware/tracingMiddleware");
 
 const app = express();
 
@@ -74,10 +75,14 @@ app.use('/api/redemptions', require('./routes/redemptions'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/trustline', require('./routes/trustline'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/users', require('./routes/onboarding'));
 app.use('/api/contract-events', require('./routes/contractEvents'));
 app.use('/api/admin/email-logs', require('./routes/emailLogs'));
 app.use('/api/leaderboard', require('./routes/leaderboard'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/drops', require('./routes/drops'));
+app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/merchants", require("./routes/merchants"));
 app.use("/api/campaigns", require("./routes/campaigns"));
@@ -91,9 +96,16 @@ app.use("/api/contract-events", require("./routes/contractEvents"));
 app.use("/api/admin/email-logs", require("./routes/emailLogs"));
 app.use("/api/leaderboard", require("./routes/leaderboard"));
 app.use("/api/admin", require("./routes/admin"));
+
+// Bull Board UI (requires admin auth)
+// We will mount it using the serverAdapter from jobs/queues.js
+const { serverAdapter } = require('./jobs/queues');
+const { authenticateUser, requireAdmin } = require('./middleware/authenticateUser');
+app.use('/api/admin/queues', authenticateUser, requireAdmin, serverAdapter.getRouter());
 app.use("/api/drops", require("./routes/drops"));
 app.use("/api/search", require("./routes/search"));
 app.use("/api/webhooks", require("./routes/webhooks"));
+app.use("/api/merchants/:id/api-keys", require("./routes/merchantApiKeys"));
 
 // Swagger/OpenAPI docs
 const swaggerUi = require("swagger-ui-express");
@@ -122,6 +134,10 @@ if (require.main === module) {
     startWebhookRetryJob();
     // Register event listeners
     require("./services/redemptionEventListener").registerRedemptionEventListener();
+    // Initialize Webhook Worker
+    require("./jobs/webhookHandler");
+    // Initialize Reward Issuance Worker
+    require("./jobs/rewardIssuanceWorker");
     console.log(`NovaRewards backend running on port ${PORT}`);
   });
 }

@@ -1,4 +1,43 @@
 const { query } = require('./index');
+const { encrypt, decrypt } = require('../lib/encryption');
+
+// ---------------------------------------------------------------------------
+// Email encryption helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Encrypts an email address before storing it.
+ * Returns null/undefined unchanged.
+ */
+function encryptEmail(email) {
+  if (email === null || email === undefined) return email;
+  return encrypt(email.trim().toLowerCase());
+}
+
+/**
+ * Decrypts an email address after reading from the database.
+ * Safe to call on legacy plaintext values — decrypt() is a no-op for
+ * values that don't look like encrypted blobs.
+ */
+function decryptEmail(email) {
+  if (email === null || email === undefined) return email;
+  return decrypt(email);
+}
+
+/**
+ * Decrypts the email field on a user row (mutates in place).
+ */
+function decryptUserRow(row) {
+  if (!row) return row;
+  if (row.email !== undefined && row.email !== null) {
+    row.email = decryptEmail(row.email);
+  }
+  return row;
+}
+
+function decryptUserRows(rows) {
+  return rows.map(decryptUserRow);
+}
 
 // ---------------------------------------------------------------------------
 // Referral-related functions (Requirements: #181)
@@ -128,6 +167,9 @@ async function getPrivateProfile(id) {
 }
 
 async function updateUser(id, updates) {
+  // 'role' is intentionally excluded from allowedFields — per Requirements 5.3,
+  // the role column must never be updated through the general user-update path.
+  // Role changes are only permitted via the dedicated updateUserRole() function.
   const allowedFields = ['first_name', 'last_name', 'bio', 'stellar_public_key'];
   const fields = [];
   const values = [];
@@ -151,6 +193,29 @@ async function updateUser(id, updates) {
      RETURNING id, wallet_address, first_name, last_name, bio, stellar_public_key,
                role, created_at, updated_at`,
     [...values, id]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Updates only the `role` column for the given user.
+ *
+ * @param {number} userId - The user's ID
+ * @param {string} role   - The new role value ('user' | 'merchant')
+ * @param {object} [trx]  - Optional pg transaction client. When provided,
+ *                          `trx.query(sql, params)` is used so the update
+ *                          participates in the caller's transaction. Falls
+ *                          back to the shared pool `query` when omitted.
+ * @returns {Promise<object|null>} The updated row (id, role, updated_at) or null
+ */
+async function updateUserRole(userId, role, trx) {
+  const executor = trx ? (sql, params) => trx.query(sql, params) : query;
+  const result = await executor(
+    `UPDATE users
+     SET role = $1, updated_at = NOW()
+     WHERE id = $2 AND is_deleted = FALSE
+     RETURNING id, role, updated_at`,
+    [role, userId]
   );
   return result.rows[0] || null;
 }
@@ -193,7 +258,6 @@ async function listUsers({ search, page = 1, limit = 20 }) {
      FROM users
      WHERE is_deleted = FALSE
        AND (
-         email ILIKE $1 OR
          first_name ILIKE $1 OR
          last_name ILIKE $1 OR
          wallet_address ILIKE $1
@@ -208,7 +272,6 @@ async function listUsers({ search, page = 1, limit = 20 }) {
      FROM users
      WHERE is_deleted = FALSE
        AND (
-         email ILIKE $1 OR
          first_name ILIKE $1 OR
          last_name ILIKE $1 OR
          wallet_address ILIKE $1
@@ -217,7 +280,7 @@ async function listUsers({ search, page = 1, limit = 20 }) {
   );
 
   return {
-    users: result.rows,
+    users: decryptUserRows(result.rows),
     total: parseInt(countResult.rows[0].total, 10),
   };
 }
@@ -238,6 +301,7 @@ module.exports = {
   getPublicProfile,
   getPrivateProfile,
   update: updateUser,
+  updateUserRole,
   softDelete,
   exists,
   isAdmin,

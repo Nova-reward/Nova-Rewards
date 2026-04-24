@@ -2,20 +2,67 @@ const express = require('express');
 const router = express.Router();
 const { authenticateUser } = require('../middleware/authenticateUser');
 const { query } = require('../db');
+const {
+  getNotificationsForUser,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+} = require('../db/notificationRepository');
+
+/**
+ * GET /api/notifications
+ * Returns paginated in-app notifications for the authenticated user.
+ * Requirements: #582
+ */
+router.get('/', authenticateUser, async (req, res, next) => {
+  try {
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const result = await getNotificationsForUser(req.user.id, { page, limit });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * PATCH /api/notifications/:id/read
+ * Marks a single notification as read.
+ * Requirements: #582
+ */
+router.patch('/:id/read', authenticateUser, async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+    const notification = await markNotificationAsRead(id);
+    if (!notification) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'Notification not found' });
+    }
+    res.json({ success: true, data: notification });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /**
  * PATCH /api/notifications/read-all
- * Stateless acknowledgement — client resets unreadCount on 200.
+ * Marks all notifications as read for the authenticated user.
  */
-router.patch('/read-all', authenticateUser, (req, res) => {
-  res.json({ success: true });
+router.patch('/read-all', authenticateUser, async (req, res, next) => {
+  try {
+    await markAllNotificationsAsRead(req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
  * GET /api/notifications/preferences
- * Returns the user's email notification preferences.
+ * Returns the user's notification preferences.
  */
-router.get('/preferences', authenticateUser, async (req, res) => {
+router.get('/preferences', authenticateUser, async (req, res, next) => {
   try {
     const result = await query(
       'SELECT notification_preferences FROM users WHERE id = $1',
@@ -28,17 +75,17 @@ router.get('/preferences', authenticateUser, async (req, res) => {
       referrals: true,
       system: false,
     };
-    res.json(prefs);
+    res.json({ success: true, data: prefs });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch preferences' });
+    next(err);
   }
 });
 
 /**
  * PUT /api/notifications/preferences
- * Saves the user's email notification preferences.
+ * Saves the user's notification preferences.
  */
-router.put('/preferences', authenticateUser, async (req, res) => {
+router.put('/preferences', authenticateUser, async (req, res, next) => {
   const allowed = ['rewards', 'redemptions', 'campaigns', 'referrals', 'system'];
   const prefs = {};
   for (const key of allowed) {
@@ -51,7 +98,7 @@ router.put('/preferences', authenticateUser, async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to save preferences' });
+    next(err);
   }
 });
 

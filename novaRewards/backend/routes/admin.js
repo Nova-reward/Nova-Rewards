@@ -5,15 +5,17 @@ const {
   createReward, updateReward, deleteReward, getRewardById,
 } = require('../db/adminRepository');
 const {
+  getCampaignById,
+  softDeleteCampaign,
+} = require('../db/campaignRepository');
+const {
   buildRecoveryPlan,
   listBackups,
 } = require('../services/backupService');
 const { runBackupCycle } = require('../jobs/backupJob');
-const {
-  getAuditLogs,
-  exportAuditLogsCSV,
-  getAuditStats,
-} = require('../db/auditLogRepository');
+const AuditService = require('../services/auditService');
+const { query } = require('../db/index');
+const { unblock } = require('../middleware/abuseDetection');
 
 // All admin routes require a valid user token AND admin role
 router.use(authenticateUser, requireAdmin);
@@ -157,16 +159,15 @@ router.post('/rewards', async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'validation_error', message: 'name and cost are required' });
     }
     const reward = await createReward({ name, cost, stock, isActive });
-
-    logAudit({
+    
+    await AuditService.log({
       entityType: 'reward',
       entityId: reward.id,
-      action: 'admin_create_reward',
+      action: 'CREATE_REWARD',
       performedBy: req.user.id,
-      actorType: 'admin',
-      details: { name, cost, stock, isActive },
-      source: 'POST /api/admin/rewards',
-    }).catch((err) => console.error('[audit] admin_create_reward:', err.message));
+      afterState: reward,
+      source: 'admin_api'
+    });
 
     res.status(201).json({ success: true, data: reward });
   } catch (err) {
@@ -216,20 +217,22 @@ router.post('/rewards', async (req, res, next) => {
 router.patch('/rewards/:id', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
-    const reward = await updateReward(id, req.body);
-    if (!reward) {
+    const beforeState = await getRewardById(id);
+    if (!beforeState) {
       return res.status(404).json({ success: false, error: 'not_found', message: 'Reward not found' });
     }
 
-    logAudit({
+    const reward = await updateReward(id, req.body);
+    
+    await AuditService.log({
       entityType: 'reward',
-      entityId: id,
-      action: 'admin_update_reward',
+      entityId: reward.id,
+      action: 'UPDATE_REWARD',
       performedBy: req.user.id,
-      actorType: 'admin',
-      details: req.body,
-      source: `PATCH /api/admin/rewards/${id}`,
-    }).catch((err) => console.error('[audit] admin_update_reward:', err.message));
+      beforeState,
+      afterState: reward,
+      source: 'admin_api'
+    });
 
     res.json({ success: true, data: reward });
   } catch (err) {
@@ -268,20 +271,22 @@ router.patch('/rewards/:id', async (req, res, next) => {
  */
 router.delete('/rewards/:id', async (req, res, next) => {
   try {
-    const rewardId = parseInt(req.params.id);
-    const deleted = await deleteReward(rewardId);
+    const id = parseInt(req.params.id);
+    const beforeState = await getRewardById(id);
+    const deleted = await deleteReward(id);
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'not_found', message: 'Reward not found' });
     }
 
-    logAudit({
+    await AuditService.log({
       entityType: 'reward',
-      entityId: rewardId,
-      action: 'admin_delete_reward',
+      entityId: id,
+      action: 'DELETE_REWARD',
       performedBy: req.user.id,
-      actorType: 'admin',
-      source: `DELETE /api/admin/rewards/${rewardId}`,
-    }).catch((err) => console.error('[audit] admin_delete_reward:', err.message));
+      beforeState,
+      afterState: { is_deleted: true },
+      source: 'admin_api'
+    });
 
     res.json({ success: true, message: 'Reward deleted' });
   } catch (err) {
@@ -289,118 +294,109 @@ router.delete('/rewards/:id', async (req, res, next) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Audit Log Endpoints
-// ─────────────────────────────────────────────────────────────────────────────
-
 /**
  * @openapi
  * /admin/audit-logs:
  *   get:
  *     tags: [Admin]
- *     summary: Retrieve audit logs with filtering
- *     description: >
- *       Returns a paginated list of audit log entries. Supports filtering by
- *       entity, actor, action, date range, HTTP metadata, and IP address.
+ *     summary: Retrieve audit logs
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: entityType
- *         schema: { type: string, example: user }
+ *         schema: { type: string }
  *       - in: query
  *         name: entityId
- *         schema: { type: integer, example: 42 }
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: actor
+ *         schema: { type: integer }
  *       - in: query
  *         name: action
- *         schema: { type: string, example: login }
- *       - in: query
- *         name: performedBy
- *         schema: { type: integer, example: 7 }
- *       - in: query
- *         name: actorType
- *         schema: { type: string, enum: [user, admin, merchant, system] }
- *       - in: query
- *         name: merchantId
- *         schema: { type: integer, example: 3 }
+ *         schema: { type: string }
  *       - in: query
  *         name: startDate
- *         schema: { type: string, format: date-time, example: "2026-01-01T00:00:00Z" }
+ *         schema: { type: string, format: date-time }
  *       - in: query
  *         name: endDate
- *         schema: { type: string, format: date-time, example: "2026-12-31T23:59:59Z" }
- *       - in: query
- *         name: statusCode
- *         schema: { type: integer, example: 401 }
- *       - in: query
- *         name: httpMethod
- *         schema: { type: string, enum: [GET, POST, PUT, PATCH, DELETE] }
- *       - in: query
- *         name: endpoint
- *         schema: { type: string, example: "/api/auth" }
- *       - in: query
- *         name: ipAddress
- *         schema: { type: string, example: "192.168.1.1" }
+ *         schema: { type: string, format: date-time }
  *       - in: query
  *         name: page
  *         schema: { type: integer, default: 1 }
  *       - in: query
  *         name: limit
- *         schema: { type: integer, default: 50, maximum: 500 }
+ *         schema: { type: integer, default: 20 }
  *     responses:
  *       200:
- *         description: Paginated audit log entries.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data:
- *                   type: array
- *                   items: { $ref: '#/components/schemas/AuditLog' }
- *                 total: { type: integer, example: 1500 }
- *                 page: { type: integer, example: 1 }
- *                 limit: { type: integer, example: 50 }
+ *         description: Paginated audit logs.
+ *       401:
+ *         description: Unauthenticated.
  */
 router.get('/audit-logs', async (req, res, next) => {
   try {
-    const {
-      entityType,
-      entityId,
-      action,
-      performedBy,
-      actorType,
-      merchantId,
-      startDate,
-      endDate,
-      statusCode,
-      httpMethod,
-      endpoint,
-      ipAddress,
-    } = req.query;
+    const filters = {
+      entityType: req.query.entityType,
+      entityId: req.query.entityId ? parseInt(req.query.entityId) : null,
+      actor: req.query.actor ? parseInt(req.query.actor) : null,
+      action: req.query.action,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+      page: Math.max(1, parseInt(req.query.page) || 1),
+      limit: Math.min(100, parseInt(req.query.limit) || 20)
+    };
+    
+    const logs = await AuditService.getLogs(filters);
+    res.json({ success: true, data: logs });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    const page  = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit = Math.min(500, parseInt(req.query.limit) || 50);
+/**
+ * @openapi
+ * /admin/campaigns/{id}/pause:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Pause any campaign (admin override)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 3 }
+ *     responses:
+ *       200:
+ *         description: Campaign paused.
+ *       404:
+ *         description: Campaign not found.
+ */
+router.post('/campaigns/:id/pause', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
 
-    const result = await getAuditLogs({
-      entityType,
-      entityId:    entityId    ? parseInt(entityId, 10)    : undefined,
-      action,
-      performedBy: performedBy ? parseInt(performedBy, 10) : undefined,
-      actorType,
-      merchantId:  merchantId  ? parseInt(merchantId, 10)  : undefined,
-      startDate,
-      endDate,
-      statusCode:  statusCode  ? parseInt(statusCode, 10)  : undefined,
-      httpMethod,
-      endpoint,
-      ipAddress,
-      page,
-      limit,
+    const campaign = await getCampaignById(id);
+    if (!campaign) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'Campaign not found' });
+    }
+
+    const paused = await softDeleteCampaign(id, null);
+
+    await AuditService.log({
+      entityType: 'campaign',
+      entityId: id,
+      action: 'PAUSE_CAMPAIGN',
+      performedBy: req.user.id,
+      beforeState: campaign,
+      afterState: paused,
+      source: 'admin_api',
     });
 
-    res.json({ success: true, ...result });
+    res.json({ success: true, data: paused });
   } catch (err) {
     next(err);
   }
@@ -408,31 +404,38 @@ router.get('/audit-logs', async (req, res, next) => {
 
 /**
  * @openapi
- * /admin/audit-logs/stats:
+ * /admin/metrics:
  *   get:
  *     tags: [Admin]
- *     summary: Get audit log statistics for compliance reporting
+ *     summary: Platform KPIs — total rewards issued, active campaigns, redemption totals
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: startDate
- *         schema: { type: string, format: date-time }
- *       - in: query
- *         name: endDate
- *         schema: { type: string, format: date-time }
- *       - in: query
- *         name: actorType
- *         schema: { type: string, enum: [user, admin, merchant, system] }
  *     responses:
  *       200:
- *         description: Aggregated audit statistics.
+ *         description: Platform metrics.
  */
-router.get('/audit-logs/stats', async (req, res, next) => {
+router.get('/metrics', async (req, res, next) => {
   try {
-    const { startDate, endDate, actorType } = req.query;
-    const stats = await getAuditStats({ startDate, endDate, actorType });
-    res.json({ success: true, data: stats });
+    const { rows } = await query(`
+      SELECT
+        (SELECT COUNT(*)                          FROM users       WHERE is_deleted = FALSE)                          AS total_users,
+        (SELECT COUNT(*)                          FROM campaigns   WHERE deleted_at IS NULL AND is_active = TRUE)     AS active_campaigns,
+        (SELECT COUNT(*)                          FROM campaigns   WHERE deleted_at IS NULL)                          AS total_campaigns,
+        (SELECT COALESCE(SUM(amount), 0)          FROM point_transactions WHERE type = 'earned')                     AS total_rewards_issued,
+        (SELECT COUNT(*)                          FROM redemptions)                                                   AS total_redemptions,
+        (SELECT COALESCE(SUM(points_spent), 0)    FROM redemptions)                                                  AS total_points_redeemed,
+        (SELECT COUNT(*)                          FROM rewards     WHERE is_active = TRUE AND is_deleted = FALSE)     AS active_rewards
+    `);
+
+    await AuditService.log({
+      entityType: 'metrics',
+      entityId: null,
+      action: 'VIEW_METRICS',
+      performedBy: req.user.id,
+      source: 'admin_api',
+    });
+
+    res.json({ success: true, data: rows[0] });
   } catch (err) {
     next(err);
   }
@@ -440,49 +443,42 @@ router.get('/audit-logs/stats', async (req, res, next) => {
 
 /**
  * @openapi
- * /admin/audit-logs/export:
- *   get:
+ * /admin/abuse/unblock/{identifier}:
+ *   delete:
  *     tags: [Admin]
- *     summary: Export audit logs as CSV for compliance reporting
- *     description: >
- *       Streams a CSV file containing up to 10,000 audit log entries matching
- *       the provided filters. Suitable for regulatory compliance exports.
+ *     summary: Manually unblock an IP or wallet flagged by abuse detection
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: query
- *         name: startDate
- *         schema: { type: string, format: date-time }
- *       - in: query
- *         name: endDate
- *         schema: { type: string, format: date-time }
- *       - in: query
- *         name: actorType
- *         schema: { type: string, enum: [user, admin, merchant, system] }
- *       - in: query
- *         name: entityType
+ *       - in: path
+ *         name: identifier
+ *         required: true
  *         schema: { type: string }
- *       - in: query
- *         name: action
- *         schema: { type: string }
+ *         description: IP address or wallet public key to unblock
  *     responses:
  *       200:
- *         description: CSV file download.
- *         content:
- *           text/csv:
- *             schema:
- *               type: string
+ *         description: Identifier unblocked.
+ *       401:
+ *         description: Unauthenticated.
+ *       403:
+ *         description: Admin role required.
  */
-router.get('/audit-logs/export', async (req, res, next) => {
+router.delete('/abuse/unblock/:identifier', async (req, res, next) => {
   try {
-    const { startDate, endDate, actorType, entityType, action } = req.query;
-
-    const csv = await exportAuditLogsCSV({ startDate, endDate, actorType, entityType, action });
-
-    const filename = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(csv);
+    const { identifier } = req.params;
+    if (!identifier) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'identifier is required' });
+    }
+    await unblock(identifier);
+    await AuditService.log({
+      entityType: 'abuse_block',
+      entityId: null,
+      action: 'MANUAL_UNBLOCK',
+      performedBy: req.user.id,
+      afterState: { identifier, unblocked: true },
+      source: 'admin_api',
+    });
+    res.json({ success: true, message: `${identifier} has been unblocked` });
   } catch (err) {
     next(err);
   }

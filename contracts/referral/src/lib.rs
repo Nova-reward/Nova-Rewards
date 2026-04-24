@@ -1,3 +1,19 @@
+//! # Referral Contract
+//!
+//! Tracks one-time referral relationships and distributes rewards from a funded pool.
+//!
+//! ## Lifecycle
+//! 1. Admin calls [`fund_pool`](ReferralContract::fund_pool) to seed the reward pool.
+//! 2. A new user calls [`register_referral`](ReferralContract::register_referral) to link themselves to a referrer.
+//! 3. Admin calls [`credit_referrer`](ReferralContract::credit_referrer) to pay out the reward.
+//!
+//! ## Usage
+//! ```ignore
+//! client.initialize(&admin);
+//! client.fund_pool(&10_000);
+//! client.register_referral(&referrer, &new_user);
+//! client.credit_referrer(&new_user, &500);
+//! ```
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
@@ -20,6 +36,13 @@ pub struct ReferralContract;
 #[contractimpl]
 impl ReferralContract {
     /// Initializes the referral contract and resets the reward pool to zero.
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized to call [`fund_pool`](ReferralContract::fund_pool)
+    ///   and [`credit_referrer`](ReferralContract::credit_referrer).
+    ///
+    /// # Panics
+    /// - `"already initialised"` if called more than once.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
@@ -34,6 +57,15 @@ impl ReferralContract {
     }
 
     /// Adds tokens to the referral reward pool.
+    ///
+    /// # Parameters
+    /// - `amount` – Tokens to add (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"amount must be positive"` if `amount <= 0`.
     pub fn fund_pool(env: Env, amount: i128) {
         Self::admin(&env).require_auth();
         assert!(amount > 0, "amount must be positive");
@@ -48,6 +80,23 @@ impl ReferralContract {
     }
 
     /// Registers a one-time referral relationship for a wallet.
+    ///
+    /// Each wallet can only be referred once. The referred wallet must authorize
+    /// this call to prevent unauthorized referral registration.
+    ///
+    /// # Parameters
+    /// - `referrer` – Address that made the referral.
+    /// - `referred` – New user being referred (must authorize).
+    ///
+    /// # Authorization
+    /// Requires `referred` authorization.
+    ///
+    /// # Events
+    /// Emits `("referral", "ref_reg")` with data `(referrer: Address, referred: Address)`.
+    ///
+    /// # Panics
+    /// - `"cannot refer yourself"` if `referrer == referred`.
+    /// - `"already referred"` if `referred` already has a referrer registered.
     pub fn register_referral(env: Env, referrer: Address, referred: Address) {
         // referred wallet authorises the registration
         referred.require_auth();
@@ -77,6 +126,25 @@ impl ReferralContract {
     }
 
     /// Pays a referral reward from the pool to the stored referrer relationship.
+    ///
+    /// Deducts `reward_amount` from the pool and emits an on-chain credit event.
+    /// In production, the off-chain service listens for this event to trigger
+    /// the actual token transfer.
+    ///
+    /// # Parameters
+    /// - `referred` – The referred wallet whose referrer receives the reward.
+    /// - `reward_amount` – Amount to credit (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Events
+    /// Emits `("referral", "ref_cred")` with data `(referrer: Address, referred: Address, amount: i128)`.
+    ///
+    /// # Panics
+    /// - `"reward_amount must be positive"` if `reward_amount <= 0`.
+    /// - `"no referrer found"` if `referred` has no registered referrer.
+    /// - `"insufficient pool balance"` if the pool holds fewer tokens than `reward_amount`.
     pub fn credit_referrer(env: Env, referred: Address, reward_amount: i128) {
         Self::admin(&env).require_auth();
         assert!(reward_amount > 0, "reward_amount must be positive");

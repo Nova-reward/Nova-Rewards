@@ -1,105 +1,21 @@
 const { query } = require('./index');
 
-/**
- * Logs an audit event with full context.
- * 
- * @param {object} params
- * @param {string} params.entityType - Entity being acted upon (e.g. 'user', 'campaign', 'reward')
- * @param {number} [params.entityId] - ID of the entity
- * @param {string} params.action - Action performed (e.g. 'login', 'create', 'update', 'delete')
- * @param {number} [params.performedBy] - User ID who performed the action
- * @param {string} [params.actorType='user'] - 'user' | 'admin' | 'merchant' | 'system'
- * @param {number} [params.merchantId] - Merchant ID if action was by a merchant
- * @param {object} [params.details] - Additional context (will be JSON stringified)
- * @param {string} [params.source] - Source system/service
- * @param {string} [params.ipAddress] - Client IP address
- * @param {string} [params.userAgent] - Client user agent
- * @param {string} [params.httpMethod] - HTTP method (GET, POST, etc.)
- * @param {string} [params.endpoint] - API endpoint path
- * @param {number} [params.statusCode] - HTTP response status code
- * @param {number} [params.durationMs] - Request duration in milliseconds
- * @returns {Promise<object>} The inserted audit log row
- */
-async function logAudit({
-  entityType,
-  entityId = null,
-  action,
-  performedBy = null,
-  actorType = 'user',
-  merchantId = null,
-  details = null,
-  source = null,
-  ipAddress = null,
-  userAgent = null,
-  httpMethod = null,
-  endpoint = null,
-  statusCode = null,
-  durationMs = null,
-}) {
-  const result = await query(
-    `INSERT INTO audit_logs
-       (entity_type, entity_id, action, performed_by, actor_type, merchant_id,
-        details, source, ip_address, user_agent, http_method, endpoint,
-        status_code, duration_ms)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+async function logAudit({ entityType, entityId = null, action, performedBy = null, details = null, source = null, beforeState = null, afterState = null }) {
+     const result = await query(
+          `INSERT INTO audit_logs
+       (entity_type, entity_id, action, performed_by, details, source, before_state, after_state)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [
-      entityType,
-      entityId,
-      action,
-      performedBy,
-      actorType,
-      merchantId,
-      details ? JSON.stringify(details) : null,
-      source,
-      ipAddress,
-      userAgent,
-      httpMethod,
-      endpoint,
-      statusCode,
-      durationMs,
-    ]
-  );
-  return result.rows[0];
+          [entityType, entityId, action, performedBy, details ? JSON.stringify(details) : null, source, beforeState ? JSON.stringify(beforeState) : null, afterState ? JSON.stringify(afterState) : null]
+     );
+     return result.rows[0];
 }
 
-/**
- * Retrieves audit logs with comprehensive filtering.
- * 
- * @param {object} filters
- * @param {string} [filters.entityType] - Filter by entity type
- * @param {number} [filters.entityId] - Filter by entity ID
- * @param {string} [filters.action] - Filter by action
- * @param {number} [filters.performedBy] - Filter by user ID
- * @param {string} [filters.actorType] - Filter by actor type
- * @param {number} [filters.merchantId] - Filter by merchant ID
- * @param {string} [filters.startDate] - ISO date string (inclusive)
- * @param {string} [filters.endDate] - ISO date string (inclusive)
- * @param {number} [filters.statusCode] - Filter by HTTP status code
- * @param {string} [filters.httpMethod] - Filter by HTTP method
- * @param {string} [filters.endpoint] - Filter by endpoint (partial match)
- * @param {string} [filters.ipAddress] - Filter by IP address
- * @param {number} [filters.page=1] - Page number
- * @param {number} [filters.limit=50] - Items per page (max 500)
- * @returns {Promise<{ data: object[], total: number, page: number, limit: number }>}
- */
-async function getAuditLogs(filters = {}) {
-  const {
-    entityType,
-    entityId,
-    action,
-    performedBy,
-    actorType,
-    merchantId,
-    startDate,
-    endDate,
-    statusCode,
-    httpMethod,
-    endpoint,
-    ipAddress,
-    page = 1,
-    limit = 50,
-  } = filters;
+
+async function getAuditLogs({ entityType, entityId, actor, action, startDate, endDate, page = 1, limit = 20 } = {}) {
+     const conditions = [];
+     const params = [];
+     let i = 1;
 
   const conditions = [];
   const params = [];
@@ -110,10 +26,28 @@ async function getAuditLogs(filters = {}) {
     params.push(entityType);
   }
 
-  if (entityId != null) {
-    conditions.push(`entity_id = $${i++}`);
-    params.push(entityId);
-  }
+     if (actor != null) {
+          conditions.push(`performed_by = $${i++}`);
+          params.push(actor);
+     }
+
+     if (action) {
+          conditions.push(`action = $${i++}`);
+          params.push(action);
+     }
+
+     if (startDate) {
+          conditions.push(`created_at >= $${i++}`);
+          params.push(startDate);
+     }
+
+     if (endDate) {
+          conditions.push(`created_at <= $${i++}`);
+          params.push(endDate);
+     }
+
+     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+     const offset = (page - 1) * limit;
 
   if (action) {
     conditions.push(`action = $${i++}`);

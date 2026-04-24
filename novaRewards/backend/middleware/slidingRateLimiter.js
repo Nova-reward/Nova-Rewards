@@ -82,6 +82,9 @@ function slidingRateLimiter({ prefix, windowMs, max, keyBy = 'ip', message }) {
       identifier = `user:${req.user.id}`;
     } else if (keyBy === 'user-or-ip') {
       identifier = req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`;
+    } else if (keyBy === 'api-key') {
+      const apiKey = req.headers['x-api-key'] || req.merchant?.apiKey;
+      identifier = apiKey ? `apikey:${apiKey}` : `ip:${req.ip}`;
     } else {
       identifier = `ip:${req.ip}`;
     }

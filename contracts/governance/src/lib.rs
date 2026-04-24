@@ -1,3 +1,25 @@
+//! # Governance Contract
+//!
+//! On-chain governance for Nova Rewards protocol parameter changes.
+//!
+//! ## Lifecycle
+//! 1. Any address calls [`create_proposal`](GovernanceContract::create_proposal) to open a vote.
+//! 2. Token holders call [`vote`](GovernanceContract::vote) during the voting period (~7 days).
+//! 3. After the period ends, anyone calls [`finalise`](GovernanceContract::finalise) to tally votes.
+//! 4. The admin calls [`execute`](GovernanceContract::execute) to mark a passed proposal as executed.
+//!
+//! ## Constants
+//! - `VOTING_PERIOD`: 120 960 ledgers (~7 days at 5 s/ledger)
+//! - `QUORUM`: minimum 1 yes-vote required to pass
+//!
+//! ## Usage
+//! ```ignore
+//! let id = client.create_proposal(&proposer, &title, &description);
+//! client.vote(&voter, &id, &true);
+//! // advance ledger past voting period …
+//! client.finalise(&id);
+//! client.execute(&id); // admin only
+//! ```
 #![no_std]
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, Env, String,
@@ -53,6 +75,12 @@ pub struct GovernanceContract;
 #[contractimpl]
 impl GovernanceContract {
     /// Initialise with an admin address.
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized to call [`execute`](GovernanceContract::execute).
+    ///
+    /// # Panics
+    /// - `"already initialised"` if called more than once.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
@@ -90,7 +118,20 @@ impl GovernanceContract {
     // ── Proposal creation ─────────────────────────────────────────────────────
 
     /// Create a new governance proposal. Any address may propose.
-    /// Returns the new proposal id.
+    ///
+    /// # Parameters
+    /// - `proposer` – Address creating the proposal (must authorize).
+    /// - `title` – Short human-readable title (max ~32 chars recommended).
+    /// - `description` – Full proposal description.
+    ///
+    /// # Returns
+    /// The new proposal id (`u32`), starting at `1`.
+    ///
+    /// # Authorization
+    /// Requires `proposer` authorization.
+    ///
+    /// # Events
+    /// Emits `("gov", "proposed")` with data `(id: u32, proposer: Address, title: String)`.
     pub fn create_proposal(
         env: Env,
         proposer: Address,
@@ -128,7 +169,22 @@ impl GovernanceContract {
     // ── Voting ────────────────────────────────────────────────────────────────
 
     /// Cast a vote on an active proposal. Each address may vote once.
-    /// `support = true` → yes, `support = false` → no.
+    ///
+    /// # Parameters
+    /// - `voter` – Address casting the vote (must authorize).
+    /// - `proposal_id` – Id of the proposal to vote on.
+    /// - `support` – `true` for yes, `false` for no.
+    ///
+    /// # Authorization
+    /// Requires `voter` authorization.
+    ///
+    /// # Events
+    /// Emits `("gov", "voted")` with data `(proposal_id: u32, voter: Address, support: bool)`.
+    ///
+    /// # Panics
+    /// - `"already voted"` if the voter has already cast a vote on this proposal.
+    /// - `"proposal not active"` if the proposal is not in `Active` status.
+    /// - `"voting period ended"` if the current ledger sequence exceeds `end_ledger`.
     pub fn vote(env: Env, voter: Address, proposal_id: u32, support: bool) {
         voter.require_auth();
 
@@ -171,7 +227,19 @@ impl GovernanceContract {
     // ── Finalise ──────────────────────────────────────────────────────────────
 
     /// Finalise a proposal after its voting period ends.
-    /// Updates status to Passed or Rejected based on votes and quorum.
+    ///
+    /// Tallies votes and transitions the proposal to `Passed` or `Rejected`.
+    /// A proposal passes when `yes_votes >= QUORUM && yes_votes > no_votes`.
+    ///
+    /// # Parameters
+    /// - `proposal_id` – Id of the proposal to finalise.
+    ///
+    /// # Events
+    /// Emits `("gov", "finalised")` with data `(proposal_id: u32, passed: bool)`.
+    ///
+    /// # Panics
+    /// - `"proposal not active"` if the proposal is not in `Active` status.
+    /// - `"voting period not ended"` if the current ledger sequence is ≤ `end_ledger`.
     pub fn finalise(env: Env, proposal_id: u32) {
         let mut proposal = Self::load_proposal(&env, proposal_id);
         assert!(
@@ -203,7 +271,22 @@ impl GovernanceContract {
     // ── Execution ─────────────────────────────────────────────────────────────
 
     /// Execute a passed proposal. Admin-gated.
-    /// Marks the proposal as Executed and emits an executed event.
+    ///
+    /// Marks the proposal as `Executed` and emits an event. Actual on-chain
+    /// side-effects (e.g. parameter updates) must be implemented by the caller
+    /// after verifying the emitted event.
+    ///
+    /// # Parameters
+    /// - `proposal_id` – Id of the proposal to execute.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Events
+    /// Emits `("gov", "executed")` with data `(proposal_id: u32, proposer: Address)`.
+    ///
+    /// # Panics
+    /// - `"proposal not passed"` if the proposal status is not `Passed`.
     pub fn execute(env: Env, proposal_id: u32) {
         Self::admin(&env).require_auth();
 
@@ -225,14 +308,20 @@ impl GovernanceContract {
 
     // ── Read-only ─────────────────────────────────────────────────────────────
 
+    /// Returns the full [`Proposal`] struct for a given id.
+    ///
+    /// # Panics
+    /// - `"proposal not found"` if no proposal exists with the given id.
     pub fn get_proposal(env: Env, proposal_id: u32) -> Proposal {
         Self::load_proposal(&env, proposal_id)
     }
 
+    /// Returns the total number of proposals created.
     pub fn proposal_count(env: Env) -> u32 {
         Self::proposal_count(&env)
     }
 
+    /// Returns `true` if `voter` has already voted on `proposal_id`.
     pub fn has_voted(env: Env, proposal_id: u32, voter: Address) -> bool {
         env.storage()
             .persistent()

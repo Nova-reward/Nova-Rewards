@@ -4,7 +4,7 @@ const { query } = require('../db/index');
 const { signAccessToken, signRefreshToken } = require('../services/tokenService');
 const { validateRegisterDto } = require('../dtos/registerDto');
 const { validateLoginDto } = require('../dtos/loginDto');
-const { logAudit } = require('../db/auditLogRepository');
+const { checkIpBlock, recordFailedLogin } = require('../middleware/abuseDetection');
 
 const SALT_ROUNDS = 12;
 
@@ -66,7 +66,7 @@ router.post('/register', async (req, res, next) => {
         `INSERT INTO users (email, password_hash, first_name, last_name)
          VALUES ($1, $2, $3, $4)
          RETURNING id, email, first_name, last_name, role, created_at`,
-        [normalizedEmail, passwordHash, firstName.trim(), lastName.trim()]
+        [encryptedEmail, passwordHash, firstName.trim(), lastName.trim()]
       );
     } catch (dbErr) {
       if (dbErr.code === '23505') {
@@ -127,7 +127,7 @@ router.post('/register', async (req, res, next) => {
  *       401:
  *         description: Invalid credentials.
  */
-router.post('/login', async (req, res, next) => {
+router.post('/login', checkIpBlock, async (req, res, next) => {
   try {
     const validation = validateLoginDto(req.body);
     if (!validation.valid) {
@@ -141,15 +141,18 @@ router.post('/login', async (req, res, next) => {
 
     const { email, password } = req.body;
     const normalizedEmail = email.trim().toLowerCase();
+    const encryptedEmail  = encrypt(normalizedEmail);
 
     const result = await query(
       `SELECT id, email, password_hash, first_name, last_name, role
        FROM users
        WHERE email = $1 AND is_deleted = FALSE`,
-      [normalizedEmail]
+      [encryptedEmail]
     );
 
     const user = result.rows[0];
+    // Decrypt email for the response
+    if (user && user.email) user.email = decrypt(user.email);
 
     // Constant-time compare to prevent timing-based user enumeration
     const DUMMY_HASH = '$2b$12$invalidhashpaddingtomatchbcryptlength000000000000000000000';
@@ -158,15 +161,7 @@ router.post('/login', async (req, res, next) => {
       : await bcrypt.compare(password, DUMMY_HASH).then(() => false);
 
     if (!user || !passwordMatch) {
-      // Log failed login attempt
-      logAudit({
-        entityType: 'auth',
-        action: 'login_failed',
-        actorType: 'user',
-        details: { email: normalizedEmail, reason: 'invalid_credentials' },
-        source: 'POST /api/auth/login',
-      }).catch((err) => console.error('[audit] login_failed:', err.message));
-
+      await recordFailedLogin(req);
       return res.status(401).json({
         success: false,
         error: 'invalid_credentials',
