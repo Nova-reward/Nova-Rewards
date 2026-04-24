@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { connectWallet as connectFreighter, isFreighterInstalled, signTransaction as freighterSign } from '../lib/freighter';
+import { connectWallet as connectFreighter, isFreighterInstalled } from '../lib/freighter';
 import { getNOVABalance, getTransactionHistory } from '../lib/horizonClient';
 
 const WalletContext = createContext(null);

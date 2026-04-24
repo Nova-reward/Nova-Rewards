@@ -2,6 +2,7 @@
 
 pub mod array;
 pub mod conversion;
+pub mod events;
 pub mod math;
 pub mod string;
 pub mod time;
