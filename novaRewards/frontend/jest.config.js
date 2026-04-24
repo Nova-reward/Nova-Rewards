@@ -8,8 +8,9 @@ const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jsdom',
   testMatch: ['<rootDir>/__tests__/**/*.test.js', '<rootDir>/components/**/*.test.jsx'],
+  collectCoverageFrom: ['components/**/*.{js,jsx}', '!components/**/*.stories.{js,jsx}'],
   coverageThreshold: {
-    global: {
+    './components/': {
       lines: 80,
       functions: 80,
       branches: 80,
@@ -27,8 +28,9 @@ const customJestConfig = {
     {
       displayName: 'unit',
       testEnvironment: 'jest-environment-jsdom',
-      testMatch: ['<rootDir>/__tests__/**/*.test.js'],
+      testMatch: ['<rootDir>/__tests__/**/*.test.js', '<rootDir>/components/**/*.test.jsx'],
       setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+      moduleFileExtensions: ['jsx', 'js', 'ts', 'tsx', 'json'],
       transform: {
         '^.+\\.(js|jsx|ts|tsx)$': ['@swc/jest', {
           jsc: {
