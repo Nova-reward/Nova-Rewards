@@ -17,10 +17,7 @@ const customJestConfig = {
   },
   reporters: [
     'default',
-    ['jest-junit', {
-      outputDirectory: 'coverage',
-      outputName: 'junit.xml',
-    }],
+    ['jest-junit', { outputDirectory: 'coverage', outputName: 'junit.xml' }],
   ],
   projects: [
     {

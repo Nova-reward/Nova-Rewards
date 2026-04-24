@@ -30,6 +30,8 @@ use soroban_sdk::{
     Address, BytesN, Env, Symbol, Vec,
 };
 
+use crate::utils::events;
+
 // ---------------------------------------------------------------------------
 // Staking data structures
 // ---------------------------------------------------------------------------
@@ -354,6 +356,7 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::RecoveryAdmin, &admin);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
         env.storage().instance().set(&DataKey::Paused, &false);
+        events::emit_initialized(&env, &admin);
     }
 
     // -----------------------------------------------------------------------
@@ -476,10 +479,7 @@ impl NovaRewardsContract {
             .instance()
             .set(&DataKey::RecoveryAdmin, &recovery_admin);
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("operator")),
-            recovery_admin,
-        );
+        events::emit_recovery_admin_set(&env, &recovery_admin);
     }
 
     /// Pauses state-changing user operations and records the active procedure.
@@ -487,14 +487,8 @@ impl NovaRewardsContract {
         Self::require_admin(&env);
 
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.storage()
-            .instance()
-            .set(&DataKey::EmergencyProcedure, &procedure);
-
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("paused")),
-            (procedure, env.ledger().timestamp()),
-        );
+        env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
+        events::emit_paused(&env, procedure, env.ledger().timestamp());
     }
 
     /// Resumes normal contract operations after a recovery workflow.
@@ -504,10 +498,7 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().remove(&DataKey::EmergencyProcedure);
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("resumed")),
-            env.ledger().timestamp(),
-        );
+        events::emit_resumed(&env, env.ledger().timestamp());
     }
 
     pub fn is_paused(env: Env) -> bool {
@@ -600,10 +591,7 @@ impl NovaRewardsContract {
             panic!("slippage: received {} < min {}", xlm_received, min_xlm_out);
         }
 
-        env.events().publish(
-            (symbol_short!("swap"), user),
-            (nova_amount, xlm_received, path),
-        );
+        events::emit_swap(&env, &user, nova_amount, xlm_received, path);
 
         xlm_received
     }
@@ -692,18 +680,13 @@ impl NovaRewardsContract {
             .instance()
             .set(&DataKey::MigratedVersion, &migration_version);
 
-        // Retrieve the WASM hash stored by upgrade().
         let wasm_hash: BytesN<32> = env
             .storage()
             .instance()
             .get(&DataKey::PendingWasmHash)
             .expect("no pending wasm hash");
 
-        // Emit the upgraded event.
-        env.events().publish(
-            (symbol_short!("upgraded"),),
-            (wasm_hash, migration_version),
-        );
+        events::emit_upgraded(&env, wasm_hash, migration_version);
     }
 
     // -----------------------------------------------------------------------
@@ -717,6 +700,7 @@ impl NovaRewardsContract {
     /// - `amount` – New balance value.
     pub fn set_balance(env: Env, user: Address, amount: i128) {
         Self::write_balance(&env, &user, amount);
+        events::emit_balance_set(&env, &user, amount);
     }
 
     /// Returns the raw Nova balance recorded for a user.
@@ -771,6 +755,7 @@ impl NovaRewardsContract {
         }
         
         env.storage().instance().set(&DataKey::AnnualRate, &rate);
+        events::emit_rate_set(&env, rate);
     }
 
     /// Returns the configured annual staking rate in basis points.
@@ -821,10 +806,7 @@ impl NovaRewardsContract {
         Self::write_stake(&env, &staker, &stake_record);
         
         // Emit event
-        env.events().publish(
-            (symbol_short!("staked"), staker),
-            (amount, stake_record.staked_at),
-        );
+        events::emit_staked(&env, &staker, amount, stake_record.staked_at);
     }
 
     /// Unstake Nova tokens and receive accrued yield.
@@ -888,10 +870,7 @@ impl NovaRewardsContract {
         Self::clear_stake(&env, &staker);
         
         // Emit event
-        env.events().publish(
-            (symbol_short!("unstaked"), staker),
-            (stake_record.amount, yield_amount, current_time),
-        );
+        events::emit_unstaked(&env, &staker, stake_record.amount, yield_amount, current_time);
         
         total_return
     }
@@ -965,10 +944,7 @@ impl NovaRewardsContract {
             snapshot.balance,
         );
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("snapshot")),
-            (user, snapshot.balance, snapshot.captured_at),
-        );
+        events::emit_snapshot(&env, &user, snapshot.balance, snapshot.captured_at);
 
         snapshot
     }
@@ -1012,10 +988,7 @@ impl NovaRewardsContract {
             snapshot.balance,
         );
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("restore")),
-            (user, snapshot.balance, env.ledger().timestamp()),
-        );
+        events::emit_restore(&env, &user, snapshot.balance, env.ledger().timestamp());
 
         snapshot
     }
@@ -1051,10 +1024,7 @@ impl NovaRewardsContract {
             amount_delta,
         );
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("tx")),
-            (user, amount_delta, new_balance),
-        );
+        events::emit_recovery_tx(&env, &user, amount_delta, new_balance);
 
         new_balance
     }
@@ -1096,10 +1066,7 @@ impl NovaRewardsContract {
             amount,
         );
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("funds")),
-            (from, to, amount),
-        );
+        events::emit_recovery_funds(&env, &from, &to, amount);
     }
 
     pub fn get_recovery_operation(env: Env, operation_id: BytesN<32>) -> Option<RecoveryOperation> {

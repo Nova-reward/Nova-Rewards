@@ -11,7 +11,7 @@ const WalletContext = createContext(null);
  * Dynamically imports albedo-link to avoid SSR issues.
  */
 async function connectAlbedo() {
-  const albedo = (await import('albedo-link')).default;
+  const albedo = (await import('@albedo-link/intent')).default;
   const result = await albedo.publicKey({ require_existing: false });
   if (!result.pubkey) throw new Error('Albedo did not return a public key.');
   return result.pubkey;
