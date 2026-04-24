@@ -2,10 +2,34 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install",
+  "framework": "nextjs",
+  "installCommand": "npm ci",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
+  "env": [
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_HORIZON_URL",
+    "NEXT_PUBLIC_ISSUER_PUBLIC",
+    "NEXT_PUBLIC_STELLAR_NETWORK",
+    "NEXT_PUBLIC_MULTISIG_CONTRACT_ID"
+  ],
+  "build": {
+    "env": {
+      "NEXT_TELEMETRY_DISABLED": "1"
+    }
+  },
+  "analytics": {
+    "id": "nova-rewards"
+  },
+  "speedInsights": {
+    "id": "nova-rewards"
+  },
   "headers": [
     {
-      "source": "/static/(.*)",
+      "source": "/_next/static/:path*",
       "headers": [
         {
           "key": "Cache-Control",
@@ -14,13 +38,47 @@
       ]
     },
     {
-      "source": "/_next/static/(.*)",
+      "source": "/static/:path*",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
         }
       ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://api.nova-rewards.xyz/api/:path*"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/home",
+      "destination": "/",
+      "permanent": true
     }
   ]
 }

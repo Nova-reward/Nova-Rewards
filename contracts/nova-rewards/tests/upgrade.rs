@@ -1,15 +1,13 @@
 #![cfg(test)]
 
+mod test_helpers;
+
 use soroban_sdk::{
     testutils::{Address as _, Events},
     Address, BytesN, Env, IntoVal, Symbol,
 };
 
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient};
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+use nova_rewards::NovaRewardsContractClient;
 
 fn deploy(env: &Env) -> (NovaRewardsContractClient, Address) {
     let admin = Address::generate(env);

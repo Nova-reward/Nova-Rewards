@@ -1,59 +1,48 @@
-# Security Audit Reports
+# Smart Contract Audits
 
-This directory contains all security audit reports for the Nova Rewards project.
+ feat/define-constants
+This directory tracks all security audits for Nova Rewards smart contracts.
 
-## Audit Registry
+This directory tracks security audits for all Nova Rewards smart contracts.
+ main
 
-### Completed Audits
+## Audit Status
 
-| Date | Auditor | Scope | Status | Report |
-|------|---------|--------|--------|--------|
-| *No completed audits yet* | - | - | - | - |
+| Contract | Version | Auditor | Status | Date |
+|---|---|---|---|---|
+| nova-rewards | 0.1.0 | Scheduled | Scheduled | TBD |
+| nova_token | 0.1.0 | Scheduled | Scheduled | TBD |
+| reward_pool | 0.1.0 | Scheduled | Scheduled | TBD |
+| vesting | 0.1.0 | Scheduled | Scheduled | TBD |
+| referral | 0.1.0 | Scheduled | Scheduled | TBD |
+ feat/define-constants
+| distribution | 0.1.0 | Scheduled | Scheduled | TBD |
+| admin_roles | 0.1.0 | Scheduled | Scheduled | TBD |
+| governance | 0.1.0 | Scheduled | Scheduled | TBD |
 
-### Scheduled Audits
+## Process
 
-| Date | Auditor | Scope | Status | Report |
-|------|---------|--------|--------|--------|
-| *No scheduled audits yet* | - | - | - | - |
+1. New contracts must have an audit entry before production deployment.
+2. Use `TEMPLATE.md` to document findings consistently.
+3. Store PDF reports in `reports/`.
+4. Update status as audits progress: `Scheduled → In Progress → Complete`.
 
-## Severity Levels
+## Resources
 
-The following severity levels are used for audit findings:
+- [Audit Template](TEMPLATE.md)
+- [Security Guidelines](../security/)
 
-- 🔴 **Critical** - Vulnerabilities that can lead to loss of funds, contract compromise, or severe protocol damage
-- 🟠 **High** - Issues that can significantly impact security or functionality but have mitigations
-- 🟡 **Medium** - Problems that could cause minor issues or have low probability of exploitation
-- 🟢 **Low** - Minor issues, code quality improvements, or best practice recommendations
-- 🔵 **Informational** - General observations and suggestions for improvement
+| governance | 0.1.0 | Scheduled | Scheduled | TBD |
+| distribution | 0.1.0 | Scheduled | Scheduled | TBD |
+| admin_roles | 0.1.0 | Scheduled | Scheduled | TBD |
 
-## Report Structure
+## Reports
 
-Each audit report follows the standardized template defined in [TEMPLATE.md](./TEMPLATE.md).
+Audit PDF reports are stored in `docs/audits/reports/`.
 
-### PDF Reports
+## Process
 
-Official PDF reports are stored in the `reports/` subdirectory with the naming convention:
-```
-YYYY-MM-DD--{auditor-name}.pdf
-```
-
-Example: `2024-03-15--certik.pdf`
-
-## Audit Process
-
-1. **Scope Definition** - Clear definition of contracts and components to be audited
-2. **Audit Execution** - Comprehensive security analysis by independent auditor
-3. **Report Generation** - Detailed findings using the standard template
-4. **Remediation** - Address identified issues
-5. **Verification** - Auditor verification of fixes
-6. **Publication** - Final report publication in this directory
-
-## Links
-
-- [Main Project README](../README.md)
-- [Security Section in Main README](../README.md#security)
-- [Audit Template](./TEMPLATE.md)
-
----
-
-*Last updated: 2024-03-28*
+1. Use `TEMPLATE.md` to document each audit engagement.
+2. Store final PDF reports in `reports/`.
+3. Update the table above with results.
+ main

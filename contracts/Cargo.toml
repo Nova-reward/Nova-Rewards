@@ -6,10 +6,30 @@ members = [
     "admin_roles",
     "vesting",
     "referral",
+    "campaign",
+    "nova-rewards",
+    "redemption",
+    "escrow",
+    "contract_state",
+]
+default-members = [
+    "nova_token",
+    "reward_pool",
+    "admin_roles",
+    "vesting",
+    "referral",
+    "nova-rewards",
+    "redemption",
+    "escrow",
+    "contract_state",
 ]
 
+[workspace.package]
+edition = "2021"
+publish = false
+
 [workspace.dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+soroban-sdk = "25.3.1"
 
 [profile.release]
 opt-level = "z"
