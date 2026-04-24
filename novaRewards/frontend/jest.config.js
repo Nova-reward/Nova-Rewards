@@ -1,44 +1,13 @@
-module.exports = {
-  testEnvironment: 'jest-environment-jsdom',
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  testMatch: ['<rootDir>/__tests__/**/*.test.js'],
-  collectCoverageFrom: ['components/TransactionLink.js'],
-  coverageThreshold: {
-    './components/TransactionLink.js': {
-      branches: 100,
-      functions: 100,
-      lines: 100,
-      statements: 100,
-    },
-  },
-  transform: {
-    '^.+\\.(js|jsx)$': [
-      '@swc/jest',
-      {
-        jsc: {
-          parser: {
-            syntax: 'ecmascript',
-            jsx: true,
-          },
-          transform: {
-            react: {
-              runtime: 'automatic',
-            },
-          },
-        },
-      },
-    ],
-  },
-};
-const nextJest = require('next/jest')
+const nextJest = require('next/jest');
 
 const createJestConfig = nextJest({
   dir: './',
-})
+});
 
 const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jsdom',
+  testMatch: ['<rootDir>/__tests__/**/*.test.js', '<rootDir>/components/**/*.test.jsx'],
   coverageThreshold: {
     global: {
       lines: 80,
@@ -54,6 +23,35 @@ const customJestConfig = {
       outputName: 'junit.xml',
     }],
   ],
-}
+  projects: [
+    {
+      displayName: 'unit',
+      testEnvironment: 'jest-environment-jsdom',
+      testMatch: ['<rootDir>/__tests__/**/*.test.js'],
+      setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+      transform: {
+        '^.+\\.(js|jsx|ts|tsx)$': ['@swc/jest', {
+          jsc: {
+            parser: { syntax: 'ecmascript', jsx: true },
+            transform: { react: { runtime: 'automatic' } },
+          },
+        }],
+      },
+    },
+    {
+      displayName: 'pact',
+      testEnvironment: 'node',
+      testMatch: ['<rootDir>/pact/**/*.pact.test.js'],
+      transform: {
+        '^.+\\.(js|jsx)$': ['@swc/jest', {
+          jsc: {
+            parser: { syntax: 'ecmascript', jsx: true },
+            transform: { react: { runtime: 'automatic' } },
+          },
+        }],
+      },
+    },
+  ],
+};
 
-module.exports = createJestConfig(customJestConfig)
+module.exports = createJestConfig(customJestConfig);

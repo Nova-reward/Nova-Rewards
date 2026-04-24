@@ -8,7 +8,6 @@ const {
   getCampaignsByMerchant,
   updateCampaign,
   softDeleteCampaign,
-
 } = require('../db/campaignRepository');
 const {
   registerCampaign,
@@ -56,132 +55,6 @@ async function cacheDel(key) {
 }
 
 // ---------------------------------------------------------------------------
-// Public endpoints — no authentication required
-// ---------------------------------------------------------------------------
-
-/**
- * GET /campaigns/public
- * Returns a paginated list of campaigns for the public discovery page.
- *
- * Query params:
- *   page        number   (default 1)
- *   limit       number   (default 12, max 50)
- *   category    string
- *   rewardType  string
- *   status      active | paused | completed
- *   merchantId  number
- *   search      string   (matches campaign name or merchant name)
- *
- * @swagger
- * /campaigns/public:
- *   get:
- *     summary: Browse public campaigns
- *     tags: [Campaigns]
- *     parameters:
- *       - in: query
- *         name: page
- *         schema: { type: integer, default: 1 }
- *       - in: query
- *         name: limit
- *         schema: { type: integer, default: 12, maximum: 50 }
- *       - in: query
- *         name: category
- *         schema: { type: string }
- *       - in: query
- *         name: rewardType
- *         schema: { type: string }
- *       - in: query
- *         name: status
- *         schema: { type: string, enum: [active, paused, completed] }
- *       - in: query
- *         name: merchantId
- *         schema: { type: integer }
- *       - in: query
- *         name: search
- *         schema: { type: string }
- *     responses:
- *       200:
- *         description: Paginated campaign list
- */
-router.get('/public', async (req, res, next) => {
-  try {
-    const page  = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
-
-    const { category, rewardType, status, merchantId, search } = req.query;
-
-    const VALID_STATUSES = ['active', 'paused', 'completed'];
-    if (status && !VALID_STATUSES.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: `status must be one of: ${VALID_STATUSES.join(', ')}`,
-      });
-    }
-
-    const result = await getPublicCampaigns({
-      page,
-      limit,
-      category:   category   || undefined,
-      rewardType: rewardType || undefined,
-      status:     status     || undefined,
-      merchantId: merchantId ? parseInt(merchantId, 10) : undefined,
-      search:     search     || undefined,
-    });
-
-    res.json({
-      success: true,
-      data: result.campaigns,
-      total: result.total,
-      hasMore: result.hasMore,
-      page,
-      limit,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * GET /campaigns/categories
- * Returns distinct campaign categories for the filter sidebar.
- */
-router.get('/categories', async (req, res, next) => {
-  try {
-    const categories = await getPublicCampaignCategories();
-    res.json({ success: true, data: categories });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * GET /campaigns/public/:id
- * Returns a single campaign by ID for the detail modal (no auth required).
- */
-router.get('/public/:id', async (req, res, next) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (isNaN(id) || id <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: 'id must be a positive integer',
-      });
-    }
-
-    const campaign = await getPublicCampaignById(id);
-    if (!campaign) {
-      return res.status(404).json({ success: false, error: 'not_found', message: 'Campaign not found' });
-    }
-
-    res.json({ success: true, data: campaign });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ---------------------------------------------------------------------------
 // POST /campaigns — create campaign in DB then register on-chain
 // ---------------------------------------------------------------------------
 router.post('/', authenticateMerchant, async (req, res, next) => {
@@ -200,6 +73,9 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
 
     // 1. Persist to DB first (on_chain_status = 'pending')
     const campaign = await createCampaign({ merchantId, name: name.trim(), rewardRate, startDate, endDate });
+
+    // Invalidate merchant campaign list cache on creation
+    await cacheDel(`campaigns:merchant:${merchantId}`);
 
     // 2. Submit to Soroban; roll back (mark failed) on error
     let confirmed;
@@ -307,6 +183,7 @@ router.patch('/:id', authenticateMerchant, async (req, res, next) => {
     }
 
     const updated = await updateCampaign(id, { name, rewardRate, txHash });
+    await cacheDel(`campaigns:merchant:${req.merchant.id}`);
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
@@ -347,6 +224,7 @@ router.delete('/:id', authenticateMerchant, async (req, res, next) => {
     }
 
     await softDeleteCampaign(id, txHash);
+    await cacheDel(`campaigns:merchant:${req.merchant.id}`);
     res.json({ success: true, data: { id, deleted: true } });
   } catch (err) {
     next(err);
@@ -354,12 +232,20 @@ router.delete('/:id', authenticateMerchant, async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /campaigns — list all campaigns for the authenticated merchant
+// GET /campaigns — list all campaigns for the authenticated merchant (cached 60s)
 // ---------------------------------------------------------------------------
 router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
-    const campaigns = await getCampaignsByMerchant(req.merchant.id);
-    res.json({ success: true, data: campaigns });
+    const merchantId = req.merchant.id;
+    const cacheKey = `campaigns:merchant:${merchantId}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+
+    const campaigns = await getCampaignsByMerchant(merchantId);
+    await cacheSet(cacheKey, campaigns);
+
+    res.json({ success: true, data: campaigns, cached: false });
   } catch (err) {
     next(err);
   }
