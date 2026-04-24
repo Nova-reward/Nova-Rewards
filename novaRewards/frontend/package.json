@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@sentry/nextjs": "^8.0.0",
     "@stellar/freighter-api": "^2.0.0",
     "axios": "^1.7.2",
     "canvas-confetti": "^1.9.4",

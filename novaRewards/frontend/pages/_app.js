@@ -7,6 +7,7 @@ import { TourProvider } from '../context/TourContext';
 import { ModalProvider } from '../context/ModalContext';
 import { ToastProvider } from '../components/Toast';
 import { NotificationProvider } from '../context/NotificationContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 import Footer from '../components/Footer';
 import OnboardingModal from '../components/OnboardingModal';
 import { useOnboardingStore } from '../store/onboardingStore';
@@ -43,24 +44,26 @@ export default function App({ Component, pageProps }) {
   }, []);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <AuthProvider>
-        <ToastProvider>
-          <NotificationProvider>
-            <WalletProvider>
-              <TourProvider>
-                <ModalProvider>
-                  <OnboardingTrigger />
-                  <Component {...pageProps} />
-                  <Footer />
-                  <OnboardingModal />
-                  <OnboardingTour />
-                </ModalProvider>
-              </TourProvider>
-            </WalletProvider>
-          </NotificationProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <AuthProvider>
+          <ToastProvider>
+            <NotificationProvider>
+              <WalletProvider>
+                <TourProvider>
+                  <ModalProvider>
+                    <OnboardingTrigger />
+                    <Component {...pageProps} />
+                    <Footer />
+                    <OnboardingModal />
+                    <OnboardingTour />
+                  </ModalProvider>
+                </TourProvider>
+              </WalletProvider>
+            </NotificationProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
