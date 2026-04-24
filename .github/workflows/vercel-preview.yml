@@ -8,6 +8,8 @@ jobs:
   deploy-preview:
     name: Deploy Preview
     runs-on: ubuntu-latest
+    # Skip if Vercel secrets are not configured (e.g. forks)
+    if: ${{ secrets.VERCEL_TOKEN != '' }}
     permissions:
       pull-requests: write
 
