@@ -1,4 +1,3 @@
-import React from 'react';
 import { Alert, AlertTitle, AlertDescription } from './Alert';
 
 export default {
@@ -43,3 +42,20 @@ export const DescriptionOnly = (args) => (
   </Alert>
 );
 DescriptionOnly.args = { variant: 'default' };
+
+export const AllVariants = () => (
+  <div className="flex flex-col gap-3 w-96">
+    <Alert variant="default">
+      <AlertTitle>Info</AlertTitle>
+      <AlertDescription>This is an informational alert.</AlertDescription>
+    </Alert>
+    <Alert variant="success">
+      <AlertTitle>Success</AlertTitle>
+      <AlertDescription>Your changes have been saved.</AlertDescription>
+    </Alert>
+    <Alert variant="destructive">
+      <AlertTitle>Error</AlertTitle>
+      <AlertDescription>Something went wrong. Please try again.</AlertDescription>
+    </Alert>
+  </div>
+);

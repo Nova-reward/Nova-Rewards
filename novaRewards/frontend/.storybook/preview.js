@@ -10,13 +10,9 @@ const preview = {
       },
     },
     a11y: {
-      // Raise accessibility violations as errors
       config: {},
       options: {
-        runOnly: {
-          type: 'tag',
-          values: ['wcag2a', 'wcag2aa'],
-        },
+        runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] },
       },
     },
   },
