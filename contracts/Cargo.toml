@@ -8,6 +8,9 @@ members = [
     "referral",
     "campaign",
     "nova-rewards",
+    "redemption",
+    "escrow",
+    "contract_state",
 ]
 default-members = [
     "nova_token",
@@ -16,6 +19,9 @@ default-members = [
     "vesting",
     "referral",
     "nova-rewards",
+    "redemption",
+    "escrow",
+    "contract_state",
 ]
 
 [workspace.package]
