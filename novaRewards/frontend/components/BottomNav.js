@@ -9,9 +9,9 @@ import { useRouter } from 'next/router';
  */
 const NAV_ITEMS = [
   { href: '/dashboard',   icon: '📊', label: 'Home' },
+  { href: '/campaigns',   icon: '🎯', label: 'Campaigns' },
   { href: '/rewards',     icon: '🎁', label: 'Rewards' },
   { href: '/leaderboard', icon: '🏆', label: 'Ranks' },
-  { href: '/history',     icon: '📜', label: 'History' },
   { href: '/settings',    icon: '⚙️',  label: 'Settings' },
 ];
 

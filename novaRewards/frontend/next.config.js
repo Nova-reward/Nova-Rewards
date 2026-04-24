@@ -3,6 +3,11 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
+// Validate all required environment variables at build / dev-server startup.
+// If any variable is missing or invalid this throws with a clear error message
+// and the build is aborted before any code is compiled.
+require('./lib/env');
+
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';" },
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -52,6 +57,9 @@ const nextConfig = {
     NEXT_PUBLIC_ISSUER_PUBLIC: process.env.NEXT_PUBLIC_ISSUER_PUBLIC,
     NEXT_PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
     NEXT_PUBLIC_MULTISIG_CONTRACT_ID: process.env.NEXT_PUBLIC_MULTISIG_CONTRACT_ID,
+    // Feature flags — baked into the bundle at build time
+    NEXT_PUBLIC_STAKING_ENABLED: process.env.NEXT_PUBLIC_STAKING_ENABLED ?? 'false',
+    NEXT_PUBLIC_REFERRAL_ENABLED: process.env.NEXT_PUBLIC_REFERRAL_ENABLED ?? 'false',
   },
   publicRuntimeConfig: {
     NEXT_PUBLIC_HORIZON_URL: process.env.NEXT_PUBLIC_HORIZON_URL,
