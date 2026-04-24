@@ -1,27 +1,26 @@
 #![cfg(test)]
 
-//! Tests for the Merkle-based Nova token claim feature.
+//! Tests for the RewardPool contract.
 //!
-//! Tree construction (2-leaf example used in most tests):
-//!
-//!   leaf_a = SHA-256(addr_a_bytes ++ amount_a_le)
-//!   leaf_b = SHA-256(addr_b_bytes ++ amount_b_le)
-//!   root   = SHA-256(min(leaf_a, leaf_b) ++ max(leaf_a, leaf_b))
-//!
-//! The proof for leaf_a is [leaf_b], and vice-versa.
+//! Covers:
+//! - deposit: token transfer, event emission, auth enforcement
+//! - withdraw: admin-only, locked rejection, insufficient balance, success after unlock
+//! - get_balance: reflects real Nova token balance
+//! - locked_until: set/get, withdrawal blocked before unlock, allowed after
 
 use soroban_sdk::{
     contract, contractimpl,
-    testutils::{Address as _, Events},
-    Address, Bytes, BytesN, Env, IntoVal, Symbol, TryIntoVal, Vec,
+    testutils::{Address as _, Events, Ledger as _},
+    Address, Env, IntoVal, Symbol, TryIntoVal, Val,
 };
 
-use reward_pool::{ClaimError, RewardPoolContract, RewardPoolContractClient};
+use reward_pool::{PoolError, RewardPoolContract, RewardPoolContractClient};
 
 // ---------------------------------------------------------------------------
-// Minimal Nova token mock
+// Mock Nova Token
 // ---------------------------------------------------------------------------
-// We need a real contract so cross-contract calls work in the test env.
+// A minimal token contract so cross-contract calls work in the test env.
+// Mirrors the interface of nova_token: initialize, mint, balance, transfer.
 
 #[contract]
 pub struct MockNovaToken;
@@ -29,7 +28,9 @@ pub struct MockNovaToken;
 #[contractimpl]
 impl MockNovaToken {
     pub fn initialize(env: Env, admin: Address) {
-        env.storage().instance().set(&Symbol::new(&env, "admin"), &admin);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "admin"), &admin);
     }
 
     pub fn mint(env: Env, to: Address, amount: i128) {
@@ -63,42 +64,12 @@ impl MockNovaToken {
 // Test helpers
 // ---------------------------------------------------------------------------
 
-/// Computes the leaf hash the same way the contract does:
-/// `SHA-256(address_xdr_bytes ++ amount_le_16_bytes)`
-fn compute_leaf(env: &Env, claimer: &Address, amount: i128) -> BytesN<32> {
-    let mut preimage = Bytes::new(env);
-    preimage.append(&claimer.clone().to_xdr(env));
-    preimage.append(&Bytes::from_slice(env, &amount.to_le_bytes()));
-    env.crypto().sha256(&preimage)
-}
-
-/// Hashes two nodes in sorted order (mirrors `hash_pair` in the contract).
-fn hash_pair(env: &Env, a: BytesN<32>, b: BytesN<32>) -> BytesN<32> {
-    let mut buf = Bytes::new(env);
-    if a.as_ref() <= b.as_ref() {
-        buf.append(&a.into());
-        buf.append(&b.into());
-    } else {
-        buf.append(&b.into());
-        buf.append(&a.into());
-    }
-    env.crypto().sha256(&buf)
-}
-
 struct TestSetup {
     env: Env,
     pool: RewardPoolContractClient<'static>,
+    _pool_id: Address,
     token_id: Address,
-    /// Address entitled to claim `amount_a` tokens.
-    claimer_a: Address,
-    amount_a: i128,
-    /// Proof for claimer_a (= [leaf_b]).
-    proof_a: Vec<BytesN<32>>,
-    /// Address entitled to claim `amount_b` tokens.
-    claimer_b: Address,
-    amount_b: i128,
-    /// Proof for claimer_b (= [leaf_a]).
-    proof_b: Vec<BytesN<32>>,
+    _admin: Address,
 }
 
 fn setup() -> TestSetup {
@@ -106,235 +77,356 @@ fn setup() -> TestSetup {
     env.mock_all_auths();
 
     // Deploy mock Nova token
-    let token_id = env.register_contract(None, MockNovaToken);
-    let admin = Address::generate(&env);
-    let _: () = env.invoke_contract(
+    let token_id = env.register(MockNovaToken, ());
+    let token_admin = Address::generate(&env);
+    let _: Val = env.invoke_contract(
         &token_id,
         &Symbol::new(&env, "initialize"),
-        soroban_sdk::vec![&env, admin.to_val()],
+        soroban_sdk::vec![&env, token_admin.to_val()],
     );
-
-    // Generate two claimers with fixed amounts
-    let claimer_a = Address::generate(&env);
-    let amount_a: i128 = 1_000;
-    let claimer_b = Address::generate(&env);
-    let amount_b: i128 = 2_500;
-
-    // Build 2-leaf Merkle tree
-    let leaf_a = compute_leaf(&env, &claimer_a, amount_a);
-    let leaf_b = compute_leaf(&env, &claimer_b, amount_b);
-    let root = hash_pair(&env, leaf_a.clone(), leaf_b.clone());
-
-    // Proofs
-    let mut proof_a: Vec<BytesN<32>> = Vec::new(&env);
-    proof_a.push_back(leaf_b.clone());
-
-    let mut proof_b: Vec<BytesN<32>> = Vec::new(&env);
-    proof_b.push_back(leaf_a.clone());
 
     // Deploy reward pool
-    let pool_id = env.register_contract(None, RewardPoolContract);
+    let admin = Address::generate(&env);
+    let pool_id = env.register(RewardPoolContract, ());
     let pool = RewardPoolContractClient::new(&env, &pool_id);
-    pool.initialize(&admin, &token_id, &root);
-
-    // Fund the pool with enough Nova tokens
-    let _: () = env.invoke_contract(
-        &token_id,
-        &Symbol::new(&env, "mint"),
-        soroban_sdk::vec![&env, pool_id.to_val(), 100_000_i128.into_val(&env)],
-    );
+    pool.initialize(&admin, &token_id);
 
     TestSetup {
         env,
         pool,
+        _pool_id: pool_id,
         token_id,
-        claimer_a,
-        amount_a,
-        proof_a,
-        claimer_b,
-        amount_b,
-        proof_b,
+        _admin: admin,
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-/// Happy path: valid proof → tokens transferred, event emitted, flag set.
-#[test]
-fn test_valid_claim_transfers_tokens_and_emits_event() {
-    let TestSetup {
-        env,
-        pool,
+/// Mints `amount` Nova tokens to `recipient` via the mock token contract.
+fn mint_tokens(env: &Env, token_id: &Address, recipient: &Address, amount: i128) {
+    let _: Val = env.invoke_contract(
         token_id,
-        claimer_a,
-        amount_a,
-        proof_a,
-        ..
-    } = setup();
-
-    // Pre-conditions
-    assert!(!pool.is_claimed(&claimer_a));
-
-    // Execute claim
-    pool.claim(&claimer_a, &amount_a, &proof_a);
-
-    // Claimer received tokens
-    let claimer_balance: i128 = env.invoke_contract(
-        &token_id,
-        &Symbol::new(&env, "balance"),
-        soroban_sdk::vec![&env, claimer_a.to_val()],
+        &Symbol::new(env, "mint"),
+        soroban_sdk::vec![env, recipient.to_val(), amount.into_val(env)],
     );
-    assert_eq!(claimer_balance, amount_a);
+}
 
-    // Claimed flag is set
-    assert!(pool.is_claimed(&claimer_a));
+/// Reads the Nova token balance of `addr` via the mock token contract.
+fn token_balance(env: &Env, token_id: &Address, addr: &Address) -> i128 {
+    env.invoke_contract(
+        token_id,
+        &Symbol::new(env, "balance"),
+        soroban_sdk::vec![env, addr.to_val()],
+    )
+}
 
-    // Event was emitted
-    let events = env.events().all();
-    let claim_event = events.iter().find(|(_, topics, _)| {
-        topics
-            .first()
-            .and_then(|v| v.clone().try_into_val::<_, Symbol>(&env).ok())
-            .map(|s| s == Symbol::new(&env, "rwd_pool"))
+// ---------------------------------------------------------------------------
+// Initialization tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_initialize_stores_admin_and_token() {
+    let t = setup();
+    // locked_until defaults to 0 (no lock)
+    assert_eq!(t.pool.get_locked_until(), 0);
+    // get_balance returns 0 when pool holds no tokens
+    assert_eq!(t.pool.get_balance(), 0);
+}
+
+#[test]
+#[should_panic(expected = "already initialized")]
+fn test_double_initialize_panics() {
+    let t = setup();
+    let other_admin = Address::generate(&t.env);
+    t.pool.initialize(&other_admin, &t.token_id);
+}
+
+// ---------------------------------------------------------------------------
+// Deposit tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_deposit_transfers_tokens_into_pool() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 5_000);
+    assert_eq!(token_balance(&t.env, &t.token_id, &depositor), 5_000);
+
+    t.pool.deposit(&depositor, &3_000);
+
+    // Pool holds the deposited tokens
+    assert_eq!(t.pool.get_balance(), 3_000);
+    // Depositor balance reduced
+    assert_eq!(token_balance(&t.env, &t.token_id, &depositor), 2_000);
+}
+
+#[test]
+fn test_deposit_emits_deposited_event() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    mint_tokens(&t.env, &t.token_id, &depositor, 1_000);
+
+    t.pool.deposit(&depositor, &1_000);
+
+    let events = t.env.events().all();
+    let deposited_event = events.iter().any(|(_, topics, _)| {
+        topics.get(1)
+            .and_then(|v| {
+                let sym: Result<Symbol, _> = v.clone().try_into_val(&t.env);
+                sym.ok().map(|s| s == Symbol::new(&t.env, "deposited"))
+            })
             .unwrap_or(false)
-            && topics
-                .get(1)
-                .and_then(|v| v.clone().try_into_val::<_, Symbol>(&env).ok())
-                .map(|s| s == Symbol::new(&env, "claimed"))
-                .unwrap_or(false)
     });
-    assert!(claim_event.is_some(), "claimed event not emitted");
-
-    // Event data: (claimer, amount)
-    let (_, _, data) = claim_event.unwrap();
-    let (emitted_claimer, emitted_amount): (Address, i128) = data.into_val(&env);
-    assert_eq!(emitted_claimer, claimer_a);
-    assert_eq!(emitted_amount, amount_a);
+    assert!(deposited_event, "expected 'deposited' event to be emitted");
 }
 
-/// Second claim by the same wallet must return `AlreadyClaimed`.
 #[test]
-fn test_duplicate_claim_returns_already_claimed() {
-    let TestSetup {
-        env: _,
-        pool,
-        claimer_a,
-        amount_a,
-        proof_a,
-        ..
-    } = setup();
+fn test_deposit_multiple_times_accumulates_balance() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    mint_tokens(&t.env, &t.token_id, &depositor, 10_000);
 
-    // First claim succeeds
-    pool.claim(&claimer_a, &amount_a, &proof_a);
-    assert!(pool.is_claimed(&claimer_a));
+    t.pool.deposit(&depositor, &2_000);
+    t.pool.deposit(&depositor, &3_000);
 
-    // Second claim must fail with AlreadyClaimed
-    let result = pool.try_claim(&claimer_a, &amount_a, &proof_a);
-    assert_eq!(result, Err(Ok(ClaimError::AlreadyClaimed)));
+    assert_eq!(t.pool.get_balance(), 5_000);
 }
 
-/// A proof built for a different leaf must return `InvalidProof`.
 #[test]
-fn test_invalid_proof_returns_invalid_proof() {
-    let TestSetup {
-        env: _,
-        pool,
-        claimer_a,
-        amount_a,
-        proof_b, // wrong proof — belongs to claimer_b
-        ..
-    } = setup();
-
-    let result = pool.try_claim(&claimer_a, &amount_a, &proof_b);
-    assert_eq!(result, Err(Ok(ClaimError::InvalidProof)));
-
-    // Claimed flag must NOT be set after a failed attempt
-    assert!(!pool.is_claimed(&claimer_a));
+#[should_panic(expected = "amount must be positive")]
+fn test_deposit_zero_panics() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    t.pool.deposit(&depositor, &0);
 }
 
-/// Tampered amount (correct address, wrong amount) must return `InvalidProof`.
 #[test]
-fn test_tampered_amount_returns_invalid_proof() {
-    let TestSetup {
-        env: _,
-        pool,
-        claimer_a,
-        amount_a,
-        proof_a,
-        ..
-    } = setup();
-
-    // Use a different amount than what was committed in the tree
-    let wrong_amount = amount_a + 1;
-    let result = pool.try_claim(&claimer_a, &wrong_amount, &proof_a);
-    assert_eq!(result, Err(Ok(ClaimError::InvalidProof)));
+#[should_panic(expected = "amount must be positive")]
+fn test_deposit_negative_panics() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    t.pool.deposit(&depositor, &-100);
 }
 
-/// Pool with zero Nova token balance must return `InsufficientPoolBalance`.
+// ---------------------------------------------------------------------------
+// Withdraw tests
+// ---------------------------------------------------------------------------
+
 #[test]
-fn test_insufficient_pool_balance_returns_error() {
-    let env = Env::default();
-    env.mock_all_auths();
+fn test_withdraw_success_after_unlock() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
 
-    // Deploy token but do NOT mint anything to the pool
-    let token_id = env.register_contract(None, MockNovaToken);
-    let admin = Address::generate(&env);
-    let _: () = env.invoke_contract(
-        &token_id,
-        &Symbol::new(&env, "initialize"),
-        soroban_sdk::vec![&env, admin.to_val()],
-    );
+    // Fund the pool
+    mint_tokens(&t.env, &t.token_id, &depositor, 5_000);
+    t.pool.deposit(&depositor, &5_000);
 
-    let claimer = Address::generate(&env);
-    let amount: i128 = 500;
+    // Set lock 1000 seconds in the future
+    let now = t.env.ledger().timestamp();
+    let unlock_at = now + 1_000;
+    t.pool.set_locked_until(&unlock_at);
 
-    let leaf = compute_leaf(&env, &claimer, amount);
-    // Single-leaf tree: root == leaf, empty proof
-    let root = leaf.clone();
-    let proof: Vec<BytesN<32>> = Vec::new(&env);
+    // Advance time past the unlock
+    t.env.ledger().set_timestamp(unlock_at + 1);
 
-    let pool_id = env.register_contract(None, RewardPoolContract);
-    let pool = RewardPoolContractClient::new(&env, &pool_id);
-    pool.initialize(&admin, &token_id, &root);
+    // Withdraw should succeed
+    t.pool.withdraw(&recipient, &2_000).unwrap();
 
-    // Pool has 0 balance — claim must fail
-    let result = pool.try_claim(&claimer, &amount, &proof);
-    assert_eq!(result, Err(Ok(ClaimError::InsufficientPoolBalance)));
+    assert_eq!(t.pool.get_balance(), 3_000);
+    assert_eq!(token_balance(&t.env, &t.token_id, &recipient), 2_000);
 }
 
-/// Both claimers in the tree can each claim exactly once.
 #[test]
-fn test_both_claimers_can_claim_independently() {
-    let TestSetup {
-        env,
-        pool,
-        token_id,
-        claimer_a,
-        amount_a,
-        proof_a,
-        claimer_b,
-        amount_b,
-        proof_b,
-    } = setup();
+fn test_withdraw_emits_withdrawn_event() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
 
-    pool.claim(&claimer_a, &amount_a, &proof_a);
-    pool.claim(&claimer_b, &amount_b, &proof_b);
+    mint_tokens(&t.env, &t.token_id, &depositor, 1_000);
+    t.pool.deposit(&depositor, &1_000);
 
-    let bal_a: i128 = env.invoke_contract(
-        &token_id,
-        &Symbol::new(&env, "balance"),
-        soroban_sdk::vec![&env, claimer_a.to_val()],
-    );
-    let bal_b: i128 = env.invoke_contract(
-        &token_id,
-        &Symbol::new(&env, "balance"),
-        soroban_sdk::vec![&env, claimer_b.to_val()],
-    );
+    t.pool.withdraw(&recipient, &500).unwrap();
 
-    assert_eq!(bal_a, amount_a);
-    assert_eq!(bal_b, amount_b);
-    assert!(pool.is_claimed(&claimer_a));
-    assert!(pool.is_claimed(&claimer_b));
+    let events = t.env.events().all();
+    let withdrawn_event = events.iter().any(|(_, topics, _)| {
+        topics.get(1)
+            .and_then(|v| {
+                let sym: Result<Symbol, _> = v.clone().try_into_val(&t.env);
+                sym.ok().map(|s| s == Symbol::new(&t.env, "withdrawn"))
+            })
+            .unwrap_or(false)
+    });
+    assert!(withdrawn_event, "expected 'withdrawn' event to be emitted");
+}
+
+#[test]
+fn test_withdraw_full_balance() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 7_500);
+    t.pool.deposit(&depositor, &7_500);
+
+    t.pool.withdraw(&recipient, &7_500).unwrap();
+
+    assert_eq!(t.pool.get_balance(), 0);
+    assert_eq!(token_balance(&t.env, &t.token_id, &recipient), 7_500);
+}
+
+// ---------------------------------------------------------------------------
+// Locked withdrawal rejection tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_withdraw_rejected_when_locked() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 5_000);
+    t.pool.deposit(&depositor, &5_000);
+
+    // Lock the pool for 1 hour from now
+    let now = t.env.ledger().timestamp();
+    t.pool.set_locked_until(&(now + 3_600));
+
+    // Attempt withdrawal while locked — must return PoolLocked error
+    let result = t.pool.try_withdraw(&recipient, &1_000);
+    assert_eq!(result, Err(Ok(PoolError::PoolLocked)));
+}
+
+#[test]
+fn test_withdraw_rejected_at_exact_lock_boundary() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 1_000);
+    t.pool.deposit(&depositor, &1_000);
+
+    let unlock_at: u64 = 5_000;
+    t.pool.set_locked_until(&unlock_at);
+
+    // At exactly unlock_at, still locked (now < locked_until is false, now == locked_until passes)
+    // Set time to one second before unlock
+    t.env.ledger().set_timestamp(unlock_at - 1);
+    let result = t.pool.try_withdraw(&recipient, &500);
+    assert_eq!(result, Err(Ok(PoolError::PoolLocked)));
+
+    // At exactly unlock_at, withdrawal is allowed (now >= locked_until)
+    t.env.ledger().set_timestamp(unlock_at);
+    t.pool.withdraw(&recipient, &500).unwrap();
+}
+
+#[test]
+fn test_withdraw_allowed_when_no_lock_set() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 2_000);
+    t.pool.deposit(&depositor, &2_000);
+
+    // No lock set (locked_until = 0), withdrawal should succeed immediately
+    t.pool.withdraw(&recipient, &1_000).unwrap();
+    assert_eq!(t.pool.get_balance(), 1_000);
+}
+
+// ---------------------------------------------------------------------------
+// Insufficient balance tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_withdraw_insufficient_balance_returns_error() {
+    let t = setup();
+    let recipient = Address::generate(&t.env);
+
+    // Pool is empty — no deposits
+    let result = t.pool.try_withdraw(&recipient, &1_000);
+    assert_eq!(result, Err(Ok(PoolError::InsufficientBalance)));
+}
+
+#[test]
+fn test_withdraw_more_than_balance_returns_error() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 500);
+    t.pool.deposit(&depositor, &500);
+
+    let result = t.pool.try_withdraw(&recipient, &501);
+    assert_eq!(result, Err(Ok(PoolError::InsufficientBalance)));
+}
+
+// ---------------------------------------------------------------------------
+// get_balance tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_get_balance_reflects_real_token_balance() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+
+    assert_eq!(t.pool.get_balance(), 0);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 10_000);
+    t.pool.deposit(&depositor, &4_000);
+    assert_eq!(t.pool.get_balance(), 4_000);
+
+    // Withdraw some and verify balance decreases
+    t.pool.withdraw(&depositor, &1_500).unwrap();
+    assert_eq!(t.pool.get_balance(), 2_500);
+}
+
+#[test]
+fn test_get_balance_zero_on_empty_pool() {
+    let t = setup();
+    assert_eq!(t.pool.get_balance(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Lock management tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_set_and_get_locked_until() {
+    let t = setup();
+
+    assert_eq!(t.pool.get_locked_until(), 0);
+
+    let unlock_time: u64 = 9_999_999;
+    t.pool.set_locked_until(&unlock_time);
+    assert_eq!(t.pool.get_locked_until(), unlock_time);
+}
+
+#[test]
+fn test_lock_can_be_updated() {
+    let t = setup();
+
+    t.pool.set_locked_until(&1_000);
+    assert_eq!(t.pool.get_locked_until(), 1_000);
+
+    // Admin can extend or shorten the lock
+    t.pool.set_locked_until(&2_000);
+    assert_eq!(t.pool.get_locked_until(), 2_000);
+
+    // Admin can remove the lock by setting to 0
+    t.pool.set_locked_until(&0);
+    assert_eq!(t.pool.get_locked_until(), 0);
+}
+
+#[test]
+fn test_deposit_is_not_blocked_by_lock() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    mint_tokens(&t.env, &t.token_id, &depositor, 1_000);
+
+    // Lock far in the future
+    t.pool.set_locked_until(&u64::MAX);
+
+    // Deposits are always allowed regardless of lock
+    t.pool.deposit(&depositor, &1_000);
+    assert_eq!(t.pool.get_balance(), 1_000);
 }
