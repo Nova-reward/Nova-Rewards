@@ -9,10 +9,6 @@ on:
 jobs:
   build-and-deploy-preview:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
     if: github.event.pull_request.draft == false
 
     steps:
@@ -106,7 +102,7 @@ jobs:
 
       - name: Post deployment comment
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -142,9 +138,6 @@ jobs:
 
   cleanup-preview:
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      issues: write
     if: github.event.action == 'closed'
 
     steps:
@@ -156,7 +149,7 @@ jobs:
           heroku apps:destroy "${PREVIEW_APP}" --confirm "${PREVIEW_APP}" || true
 
       - name: Post cleanup comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             github.rest.issues.createComment({
