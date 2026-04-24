@@ -203,7 +203,7 @@ router.get('/stats', async (req, res, next) => {
     };
 
     // Breakdown by type
-    validTypes = ['issuance', 'redemption', 'transfer'];
+    const validTypes = ['issuance', 'redemption', 'transfer'];
     validTypes.forEach(type => {
       const typeTransactions = transactions.filter(t => t.type === type);
       stats.breakdown.byType[type] = {

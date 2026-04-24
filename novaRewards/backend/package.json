@@ -13,7 +13,12 @@
     "migrate": "node ../database/migrate.js",
     "migrate:rollback": "node ../database/migrate.js --rollback",
     "db:migrate": "node ../database/migrate.js",
-    "generate:openapi": "node -e \"const fs=require('fs'); const swagger=require('./swagger'); fs.mkdirSync('../..//docs', { recursive: true}); fs.writeFileSync('../../docs/openapi.json', JSON.stringify(swagger, null, 2)); console.log('docs/openapi.json generated');\""
+    "generate:openapi": "node -e \"const fs=require('fs'); const swagger=require('./swagger'); fs.mkdirSync('../..//docs', { recursive: true}); fs.writeFileSync('../../docs/openapi.json', JSON.stringify(swagger, null, 2)); console.log('docs/openapi.json generated');\"",
+    "load:webhook": "k6 run -e BASE_URL=${BASE_URL:-http://localhost:3001} -e WEBHOOK_SECRET=${WEBHOOK_SECRET:-test_secret} --out json=test-results/load/webhook-actions-raw.json tests/load/scenarios/webhook-actions.js",
+    "load:balance": "k6 run -e BASE_URL=${BASE_URL:-http://localhost:3001} -e USER_TOKEN=${USER_TOKEN} -e USER_ID_MIN=${USER_ID_MIN:-1} -e USER_ID_MAX=${USER_ID_MAX:-100} --out json=test-results/load/user-balance-raw.json tests/load/scenarios/user-balance.js",
+    "load:campaigns": "k6 run -e BASE_URL=${BASE_URL:-http://localhost:3001} -e MERCHANT_API_KEYS=${MERCHANT_API_KEYS} --out json=test-results/load/campaigns-list-raw.json tests/load/scenarios/campaigns-list.js",
+    "load:all": "k6 run -e BASE_URL=${BASE_URL:-http://localhost:3001} -e WEBHOOK_SECRET=${WEBHOOK_SECRET:-test_secret} -e USER_TOKEN=${USER_TOKEN} -e USER_ID_MIN=${USER_ID_MIN:-1} -e USER_ID_MAX=${USER_ID_MAX:-100} -e MERCHANT_API_KEYS=${MERCHANT_API_KEYS} --out json=test-results/load/full-suite-raw.json tests/load/full-suite.js",
+    "load:seed": "node tests/load/seed.js"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.0.0",
