@@ -1,1 +1,62 @@
-const { faker } = require('@faker-js/faker');\n\n/**\n * Test Data Factory using Faker.js\n * Usage: const data = factories.user();\n */\n\nconst factories = {\n  user: () => ({\n    id: faker.number.int(),\n    email: faker.internet.email(),\n    name: faker.person.fullName(),\n    referral_code: faker.string.alphanumeric({ length: { min: 6, max: 8 } }).toUpperCase(),\n    referred_by: null,\n    balance: faker.number.int({ min: 0, max: 10000 }),\n    token: faker.string.jwt(),\n    created_at: faker.date.recent(),\n  }),\n\n  merchant: () => ({\n    id: faker.number.int(),\n    name: faker.company.name(),\n    api_key: faker.string.uuid(),\n    created_at: faker.date.recent(),\n  }),\n\n  campaign: () => ({\n    id: faker.number.int(),\n    merchant_id: faker.number.int({ min: 1, max: 10 }),\n    name: faker.commerce.productName(),\n    points_per_dollar: parseFloat(faker.number.float({ min: 0.5, max: 2.0, precision: 0.01 })),\n    active: faker.datatype.boolean(),\n    created_at: faker.date.recent(),\n  }),\n\n  transaction: () => ({\n    id: faker.number.int(),\n    user_id: faker.number.int({ min: 1 }),\n    campaign_id: faker.number.int({ min: 1 }),\n    amount: parseFloat(faker.number.float({ min: 1, max: 100, precision: 0.01 })),\n    points_earned: faker.number.int({ min: 1, max: 100 }),\n    tx_hash: faker.string.uuid(),\n    status: faker.helpers.shuffle(['pending', 'confirmed', 'failed'])[0],\n    created_at: faker.date.recent(),\n  }),\n\n  // Security test payloads\n  sqliPayload: () => faker.helpers.arrayElement([\n    \"'; DROP TABLE users; --\",\n    \"' OR 1=1--\",\n    \"'; SELECT * FROM users WHERE id = 1--\",\n    \"' UNION SELECT username, password FROM users--\",\n  ]),\n\n  xssPayload: () => faker.helpers.arrayElement([\n    \"<script>alert('XSS')</script>\",\n    \"<img src=x onerror=alert('XSS')>\",\n    \"\\\" onclick=alert('XSS')>\",\n  ]),\n};\n\nmodule.exports = { factories };
+const { faker } = require('@faker-js/faker');
+
+/**
+ * Test Data Factory using Faker.js
+ * Usage: const data = factories.user();
+ */
+
+const factories = {
+  user: () => ({
+    id: faker.number.int(),
+    email: faker.internet.email(),
+    name: faker.person.fullName(),
+    referral_code: faker.string.alphanumeric({ length: { min: 6, max: 8 } }).toUpperCase(),
+    referred_by: null,
+    balance: faker.number.int({ min: 0, max: 10000 }),
+    token: faker.string.jwt(),
+    created_at: faker.date.recent(),
+  }),
+
+  merchant: () => ({
+    id: faker.number.int(),
+    name: faker.company.name(),
+    api_key: faker.string.uuid(),
+    created_at: faker.date.recent(),
+  }),
+
+  campaign: () => ({
+    id: faker.number.int(),
+    merchant_id: faker.number.int({ min: 1, max: 10 }),
+    name: faker.commerce.productName(),
+    points_per_dollar: parseFloat(faker.number.float({ min: 0.5, max: 2.0, precision: 0.01 })),
+    active: faker.datatype.boolean(),
+    created_at: faker.date.recent(),
+  }),
+
+  transaction: () => ({
+    id: faker.number.int(),
+    user_id: faker.number.int({ min: 1 }),
+    campaign_id: faker.number.int({ min: 1 }),
+    amount: parseFloat(faker.number.float({ min: 1, max: 100, precision: 0.01 })),
+    points_earned: faker.number.int({ min: 1, max: 100 }),
+    tx_hash: faker.string.uuid(),
+    status: faker.helpers.shuffle(['pending', 'confirmed', 'failed'])[0],
+    created_at: faker.date.recent(),
+  }),
+
+  // Security test payloads
+  sqliPayload: () => faker.helpers.arrayElement([
+    "'; DROP TABLE users; --",
+    "' OR 1=1--",
+    "'; SELECT * FROM users WHERE id = 1--",
+    "' UNION SELECT username, password FROM users--",
+  ]),
+
+  xssPayload: () => faker.helpers.arrayElement([
+    "<script>alert('XSS')</script>",
+    "<img src=x onerror=alert('XSS')>",
+    "\" onclick=alert('XSS')>",
+  ]),
+};
+
+module.exports = { factories };

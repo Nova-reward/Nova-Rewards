@@ -54,6 +54,137 @@ jobs:
           name: backend-coverage
           path: novaRewards/backend/coverage
 
+  load-test:
+    name: Load Tests (k6)
+    runs-on: ubuntu-latest
+    # Run after unit tests pass; only on pushes to main/develop (not every PR)
+    # to avoid hammering a real environment on every branch push.
+    needs: test
+    if: github.event_name == 'push'
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: nova
+          POSTGRES_DB: nova_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://nova:nova@localhost:5432/nova_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-load-test-secret
+      INBOUND_WEBHOOK_SECRET: ${{ secrets.LOAD_TEST_WEBHOOK_SECRET || 'ci-webhook-secret' }}
+      HORIZON_URL: https://horizon-testnet.stellar.org
+      STELLAR_NETWORK: testnet
+      ISSUER_PUBLIC: GDQGIY5T5QULPD7V54LJODKC5CMKPNGTWVEMYBQH4LV6STKI6IGO543K
+      # Raise rate limits so load-test traffic isn't throttled
+      RL_WEBHOOK_MAX: 600
+      RL_USER_MAX: 1200
+      RL_GLOBAL_MAX: 600
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend dependencies
+        run: npm install
+        working-directory: novaRewards
+
+      - name: Run DB migrations
+        run: npm run db:migrate
+        working-directory: novaRewards/backend
+
+      - name: Create results directory
+        run: mkdir -p novaRewards/backend/test-results/load
+
+      - name: Seed load-test fixtures
+        # seed.js writes test-results/load/seed-env.sh with USER_TOKEN and MERCHANT_KEYS
+        run: node tests/load/seed.js
+        working-directory: novaRewards/backend
+
+      - name: Start backend server
+        run: node server.js &
+        working-directory: novaRewards/backend
+        env:
+          PORT: 3001
+
+      - name: Wait for backend to be ready
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3001/health && break
+            echo "Waiting for backend... ($i/30)"
+            sleep 2
+          done
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -qq
+          sudo apt-get install -y k6
+
+      - name: k6 — POST /api/webhooks/actions
+        run: |
+          k6 run \
+            -e BASE_URL=http://localhost:3001 \
+            -e WEBHOOK_SECRET=ci-webhook-secret \
+            --out json=test-results/load/webhook-actions-raw.json \
+            tests/load/scenarios/webhook-actions.js
+        working-directory: novaRewards/backend
+
+      - name: k6 — GET /api/users/:id/balance
+        run: |
+          source test-results/load/seed-env.sh
+          k6 run \
+            -e BASE_URL=http://localhost:3001 \
+            -e USER_TOKEN="$LOAD_TEST_USER_TOKEN" \
+            -e USER_ID_MIN=1 \
+            -e USER_ID_MAX=100 \
+            --out json=test-results/load/user-balance-raw.json \
+            tests/load/scenarios/user-balance.js
+        working-directory: novaRewards/backend
+
+      - name: k6 — GET /api/campaigns
+        run: |
+          source test-results/load/seed-env.sh
+          k6 run \
+            -e BASE_URL=http://localhost:3001 \
+            -e MERCHANT_API_KEYS="$LOAD_TEST_MERCHANT_KEYS" \
+            --out json=test-results/load/campaigns-list-raw.json \
+            tests/load/scenarios/campaigns-list.js
+        working-directory: novaRewards/backend
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-test-results
+          path: novaRewards/backend/test-results/load/
+          retention-days: 30
+
   frontend:
     name: Frontend – Build
     runs-on: ubuntu-latest

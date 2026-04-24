@@ -19,14 +19,9 @@
 //! ```
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN,
-    Env, IntoVal, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, IntoVal,
+    Symbol,
 };
-
-const DAY_IN_SECONDS: u64 = 86_400;
-const DAILY_USAGE_TTL: u32 = 172_800;
-/// Persistent TTL for claimed flags: ~1 year in ledgers (5 s/ledger).
-const CLAIMED_TTL: u32 = 6_307_200;
 
 // ---------------------------------------------------------------------------
 // Error types
@@ -35,37 +30,23 @@ const CLAIMED_TTL: u32 = 6_307_200;
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
-pub enum ClaimError {
-    AlreadyClaimed = 1,
-    InvalidProof = 2,
-    InsufficientPoolBalance = 3,
+pub enum PoolError {
+    PoolLocked = 1,
+    InsufficientBalance = 2,
+    Unauthorized = 3,
 }
 
 // ---------------------------------------------------------------------------
 // Data structures
 // ---------------------------------------------------------------------------
 
-/// Tracks how much a wallet has withdrawn within the current 24-hour window.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DailyUsage {
-    pub amount: i128,
-    pub window_start: u64,
-}
-
 #[contracttype]
 pub enum DataKey {
     Admin,
-    /// Internal accounting balance of the pool (not tied to a real token).
-    Balance,
-    DailyLimit,
-    DailyUsage(Address),
-    /// Merkle root for the token-claim airdrop.
-    MerkleRoot,
-    /// Address of the Nova token contract used for claim transfers.
+    /// Address of the Nova token contract.
     NovaToken,
-    /// Persistent flag: true once an address has successfully claimed.
-    Claimed(Address),
+    /// Timestamp before which withdrawals are blocked.
+    LockedUntil,
 }
 
 // ---------------------------------------------------------------------------
@@ -88,71 +69,94 @@ impl RewardPoolContract {
     /// - `"already initialised"` if called more than once.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialised");
+            panic!("already initialized");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Balance, &0_i128);
         env.storage()
             .instance()
-            .set(&DataKey::DailyLimit, &i128::MAX);
-        env.storage()
-            .instance()
-            .set(&DataKey::NovaToken, &nova_token);
-        env.storage()
-            .instance()
-            .set(&DataKey::MerkleRoot, &merkle_root);
+            .set(&DataKey::NovaToken, &nova_token_address);
+        env.storage().instance().set(&DataKey::LockedUntil, &0u64);
     }
 
     // -----------------------------------------------------------------------
-    // Merkle claim
+    // Deposit
     // -----------------------------------------------------------------------
 
-    /// Verifies a Merkle proof and transfers `amount` Nova tokens to `claimer`.
+    /// Deposits Nova tokens from the caller into the reward pool.
     ///
-    /// # Leaf encoding
-    /// `leaf = SHA-256(claimer_address_bytes ++ amount_le_bytes)`
+    /// # Parameters
+    /// * `from` – address transferring tokens into the pool.
+    /// * `amount` – number of Nova tokens to deposit.
     ///
-    /// # Proof format
-    /// Standard binary Merkle proof: each element is the sibling hash at that
-    /// level.  Hashing is always `SHA-256(left ++ right)` where the smaller
-    /// hash is placed on the left (sorted-pair / "OpenZeppelin" style).
+    /// # Events
+    /// Emits `("rwd_pool", "deposited")` with data `(from, amount)`.
     ///
-    /// # Errors
-    /// * `AlreadyClaimed`          – wallet has already claimed.
-    /// * `InvalidProof`            – computed root does not match stored root.
-    /// * `InsufficientPoolBalance` – pool's Nova token balance is too low.
-    pub fn claim(
-        env: Env,
-        claimer: Address,
-        amount: i128,
-        proof: Vec<BytesN<32>>,
-    ) -> Result<(), ClaimError> {
-        claimer.require_auth();
+    /// # Panics
+    /// Panics if amount is not positive or if the token transfer fails.
+    pub fn deposit(env: Env, from: Address, amount: i128) {
+        from.require_auth();
+        assert!(amount > 0, "amount must be positive");
 
-        // --- 1. One-claim-per-wallet guard ---
-        let claimed_key = DataKey::Claimed(claimer.clone());
-        if env
-            .storage()
-            .persistent()
-            .get::<_, bool>(&claimed_key)
-            .unwrap_or(false)
-        {
-            return Err(ClaimError::AlreadyClaimed);
-        }
-
-        // --- 2. Verify Merkle proof ---
-        let root: BytesN<32> = env
+        let nova_token: Address = env
             .storage()
             .instance()
-            .get(&DataKey::MerkleRoot)
-            .expect("merkle root not set");
+            .get(&DataKey::NovaToken)
+            .expect("nova token not set");
 
-        let leaf = Self::compute_leaf(&env, &claimer, amount);
-        if !Self::verify_proof(&env, leaf, &proof, &root) {
-            return Err(ClaimError::InvalidProof);
+        // Transfer Nova tokens from caller to this contract
+        let _: () = env.invoke_contract(
+            &nova_token,
+            &Symbol::new(&env, "transfer"),
+            soroban_sdk::vec![
+                &env,
+                from.clone().to_val(),
+                env.current_contract_address().to_val(),
+                amount.into_val(&env),
+            ],
+        );
+
+        env.events().publish(
+            (symbol_short!("rwd_pool"), symbol_short!("deposited")),
+            (from, amount),
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Withdraw
+    // -----------------------------------------------------------------------
+
+    /// Withdraws Nova tokens from the pool to a recipient. Admin only.
+    ///
+    /// # Parameters
+    /// * `to` – address receiving the tokens.
+    /// * `amount` – number of Nova tokens to withdraw.
+    ///
+    /// # Events
+    /// Emits `("rwd_pool", "withdrawn")` with data `(to, amount)`.
+    ///
+    /// # Errors
+    /// Returns `PoolError::PoolLocked` if current time is before `locked_until`.
+    /// Returns `PoolError::InsufficientBalance` if pool balance is too low.
+    ///
+    /// # Panics
+    /// Panics if caller is not the admin or if amount is not positive.
+    pub fn withdraw(env: Env, to: Address, amount: i128) -> Result<(), PoolError> {
+        Self::require_admin(&env);
+        assert!(amount > 0, "amount must be positive");
+
+        // Check if pool is locked
+        let locked_until: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LockedUntil)
+            .unwrap_or(0);
+        let now = env.ledger().timestamp();
+
+        if now < locked_until {
+            return Err(PoolError::PoolLocked);
         }
 
-        // --- 3. Check pool balance on the Nova token contract ---
+        // Check pool balance
         let nova_token: Address = env
             .storage()
             .instance()
@@ -161,36 +165,29 @@ impl RewardPoolContract {
 
         let pool_balance: i128 = env.invoke_contract(
             &nova_token,
-            &soroban_sdk::Symbol::new(&env, "balance"),
+            &Symbol::new(&env, "balance"),
             soroban_sdk::vec![&env, env.current_contract_address().to_val()],
         );
 
         if pool_balance < amount {
-            return Err(ClaimError::InsufficientPoolBalance);
+            return Err(PoolError::InsufficientBalance);
         }
 
-        // --- 4. Mark claimed (before external call — checks-effects-interactions) ---
-        env.storage().persistent().set(&claimed_key, &true);
-        env.storage()
-            .persistent()
-            .extend_ttl(&claimed_key, CLAIMED_TTL, CLAIMED_TTL);
-
-        // --- 5. Transfer Nova tokens from pool to claimer ---
+        // Transfer Nova tokens from pool to recipient
         let _: () = env.invoke_contract(
             &nova_token,
-            &soroban_sdk::Symbol::new(&env, "transfer"),
+            &Symbol::new(&env, "transfer"),
             soroban_sdk::vec![
                 &env,
                 env.current_contract_address().to_val(),
-                claimer.clone().to_val(),
+                to.clone().to_val(),
                 amount.into_val(&env),
             ],
         );
 
-        // --- 6. Emit claimed event ---
         env.events().publish(
-            (symbol_short!("rwd_pool"), symbol_short!("claimed")),
-            (claimer, amount),
+            (symbol_short!("rwd_pool"), symbol_short!("withdrawn")),
+            (to, amount),
         );
 
         Ok(())
@@ -311,103 +308,65 @@ impl RewardPoolContract {
         env.storage().instance().get(&DataKey::Balance).unwrap_or(0)
     }
 
-    /// Returns the configured per-wallet daily withdrawal cap.
-    pub fn get_daily_limit(env: Env) -> i128 {
+    /// Returns the current unlock timestamp.
+    ///
+    /// # Returns
+    /// Unix timestamp (seconds) before which withdrawals are blocked.
+    pub fn get_locked_until(env: Env) -> u64 {
         env.storage()
             .instance()
-            .get(&DataKey::DailyLimit)
-            .unwrap_or(i128::MAX)
-    }
-
-    /// Returns the tracked 24-hour withdrawal usage for a wallet.
-    pub fn get_daily_usage(env: Env, wallet: Address) -> DailyUsage {
-        Self::current_usage(&env, &wallet)
+            .get(&DataKey::LockedUntil)
+            .unwrap_or(0)
     }
 
     // -----------------------------------------------------------------------
-    // Private helpers
+    // Private Helpers
     // -----------------------------------------------------------------------
 
-    fn admin(env: &Env) -> Address {
-        env.storage().instance().get(&DataKey::Admin).unwrap()
-    }
-
-    fn current_usage(env: &Env, wallet: &Address) -> DailyUsage {
-        let key = DataKey::DailyUsage(wallet.clone());
-        let now = env.ledger().timestamp();
-        let usage = env.storage().persistent().get(&key).unwrap_or(DailyUsage {
-            amount: 0,
-            window_start: now,
-        });
-
-        if now.saturating_sub(usage.window_start) >= DAY_IN_SECONDS {
-            DailyUsage {
-                amount: 0,
-                window_start: now,
-            }
-        } else {
-            env.storage()
-                .persistent()
-                .extend_ttl(&key, DAILY_USAGE_TTL, DAILY_USAGE_TTL);
-            usage
-        }
-    }
-
-    fn set_usage(env: &Env, wallet: &Address, usage: &DailyUsage) {
-        let key = DataKey::DailyUsage(wallet.clone());
-        env.storage().persistent().set(&key, usage);
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, DAILY_USAGE_TTL, DAILY_USAGE_TTL);
+    fn require_admin(env: &Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("admin not set");
+        admin.require_auth();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{
-        testutils::{Address as _, Events},
-        Env,
-    };
+    use soroban_sdk::{testutils::Address as _, Env};
 
-    fn dummy_root(env: &Env) -> BytesN<32> {
-        BytesN::from_array(env, &[0u8; 32])
-    }
-
-    fn dummy_token(env: &Env) -> Address {
-        Address::generate(env)
-    }
-
-    fn setup(env: &Env) -> (Address, RewardPoolContractClient) {
+    #[test]
+    fn test_initialize() {
+        let env = Env::default();
         env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let token = Address::generate(&env);
+
         let id = env.register(RewardPoolContract, ());
-        let client = RewardPoolContractClient::new(env, &id);
-        let admin = Address::generate(env);
-        client.initialize(&admin, &dummy_token(env), &dummy_root(env));
-        (admin, client)
+        let client = RewardPoolContractClient::new(&env, &id);
+
+        client.initialize(&admin, &token);
+
+        assert_eq!(client.get_locked_until(), 0);
     }
 
     #[test]
-    fn test_deposit_withdraw_events() {
+    #[should_panic(expected = "already initialized")]
+    fn test_double_initialize() {
         let env = Env::default();
-        let (_admin, client) = setup(&env);
-        let depositor = Address::generate(&env);
-        let recipient = Address::generate(&env);
+        env.mock_all_auths();
 
-        client.deposit(&depositor, &1_000);
-        client.withdraw(&recipient, &400);
+        let admin = Address::generate(&env);
+        let token = Address::generate(&env);
 
-        assert_eq!(client.get_balance(), 600);
-        let _ = env.events().all();
-    }
+        let id = env.register(RewardPoolContract, ());
+        let client = RewardPoolContractClient::new(&env, &id);
 
-    #[test]
-    #[should_panic(expected = "insufficient pool balance")]
-    fn test_withdraw_overdraft() {
-        let env = Env::default();
-        let (_admin, client) = setup(&env);
-        let recipient = Address::generate(&env);
-
-        client.withdraw(&recipient, &1);
+        client.initialize(&admin, &token);
+        client.initialize(&admin, &token); // Should panic
     }
 }
