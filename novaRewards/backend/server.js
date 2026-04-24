@@ -90,6 +90,7 @@ app.use("/api/campaigns", require("./routes/campaigns"));
 app.use("/api/rewards", require("./routes/rewards"));
 app.use("/api/redemptions", require("./routes/redemptions"));
 app.use("/api/transactions", require("./routes/transactions"));
+app.use("/api/transactions", require("./routes/stellarTransaction"));
 app.use("/api/trustline", require("./routes/trustline"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/wallet", require("./routes/wallet"));
