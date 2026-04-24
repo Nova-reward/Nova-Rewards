@@ -101,7 +101,7 @@ pub fn emit_resumed(env: &Env, timestamp: u64) {
 /// Emitted when an emergency pause with auto-expiry is set.
 pub fn emit_emergency_pause(env: &Env, expiry: u64) {
     env.events().publish(
-        (symbol_short!(CONTRACT), symbol_short!("emrg_pause")),
+        (symbol_short!(CONTRACT), symbol_short!("emrg_paus")),
         expiry,
     );
 }

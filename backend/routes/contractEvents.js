@@ -6,10 +6,10 @@
  *
  * Routes:
  *   GET  /api/contract-events            – paginated event history with filters
- *   GET  /api/contract-events/:id        – single event by DB id
  *   GET  /api/contract-events/types      – list of known event types
- *   POST /api/contract-events/index      – manually trigger indexing from a ledger
  *   GET  /api/contract-events/monitor    – SSE stream for real-time monitoring
+ *   GET  /api/contract-events/:id        – single event by DB id
+ *   POST /api/contract-events/index      – manually trigger indexing from a ledger
  */
 
 const express = require('express');
@@ -22,14 +22,11 @@ const pool = new Pool({
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// Soroban RPC client for event streaming
 const rpc = new StellarSdk.SorobanRpc.Server(
     process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org'
 );
 
-// All known contract event topic signatures (topic0 + topic1)
 const EVENT_TYPES = {
-    // nova-rewards contract
     'nova_rwd:init':       { contract: 'nova-rewards', description: 'Contract initialised' },
     'nova_rwd:bal_set':    { contract: 'nova-rewards', description: 'Balance set by admin' },
     'nova_rwd:staked':     { contract: 'nova-rewards', description: 'Tokens staked' },
@@ -38,45 +35,36 @@ const EVENT_TYPES = {
     'nova_rwd:swap':       { contract: 'nova-rewards', description: 'Nova swapped for XLM' },
     'nova_rwd:paused':     { contract: 'nova-rewards', description: 'Contract paused' },
     'nova_rwd:resumed':    { contract: 'nova-rewards', description: 'Contract resumed' },
-    'nova_rwd:emrg_pause': { contract: 'nova-rewards', description: 'Emergency pause set' },
+    'nova_rwd:emrg_paus': { contract: 'nova-rewards', description: 'Emergency pause set' },
     'nova_rwd:rec_op':     { contract: 'nova-rewards', description: 'Recovery admin assigned' },
     'nova_rwd:snap':       { contract: 'nova-rewards', description: 'Account snapshot taken' },
     'nova_rwd:restore':    { contract: 'nova-rewards', description: 'Account snapshot restored' },
     'nova_rwd:rec_tx':     { contract: 'nova-rewards', description: 'Recovery transaction applied' },
     'nova_rwd:rec_funds':  { contract: 'nova-rewards', description: 'Recovery fund transfer' },
     'nova_rwd:upgraded':   { contract: 'nova-rewards', description: 'Contract WASM upgraded' },
-    // nova_token contract
-    'nova_tok:mint':       { contract: 'nova_token', description: 'Tokens minted' },
-    'nova_tok:burn':       { contract: 'nova_token', description: 'Tokens burned' },
-    'nova_tok:transfer':   { contract: 'nova_token', description: 'Token transfer' },
-    'nova_tok:approve':    { contract: 'nova_token', description: 'Allowance approved' },
-    // reward_pool contract
-    'rwd_pool:deposited':  { contract: 'reward_pool', description: 'Pool deposit' },
-    'rwd_pool:withdrawn':  { contract: 'reward_pool', description: 'Pool withdrawal' },
-    // vesting contract
-    'vesting:tok_rel':     { contract: 'vesting', description: 'Vested tokens released' },
-    // referral contract
-    'referral:ref_reg':    { contract: 'referral', description: 'Referral registered' },
-    'referral:ref_cred':   { contract: 'referral', description: 'Referrer credited' },
-    // governance contract
-    'gov:proposed':        { contract: 'governance', description: 'Proposal created' },
-    'gov:voted':           { contract: 'governance', description: 'Vote cast' },
-    'gov:finalised':       { contract: 'governance', description: 'Proposal finalised' },
-    'gov:executed':        { contract: 'governance', description: 'Proposal executed' },
-    // distribution contract
+    'nova_tok:mint':       { contract: 'nova_token',   description: 'Tokens minted' },
+    'nova_tok:burn':       { contract: 'nova_token',   description: 'Tokens burned' },
+    'nova_tok:transfer':   { contract: 'nova_token',   description: 'Token transfer' },
+    'nova_tok:approve':    { contract: 'nova_token',   description: 'Allowance approved' },
+    'rwd_pool:deposited':  { contract: 'reward_pool',  description: 'Pool deposit' },
+    'rwd_pool:withdrawn':  { contract: 'reward_pool',  description: 'Pool withdrawal' },
+    'vesting:tok_rel':     { contract: 'vesting',      description: 'Vested tokens released' },
+    'referral:ref_reg':    { contract: 'referral',     description: 'Referral registered' },
+    'referral:ref_cred':   { contract: 'referral',     description: 'Referrer credited' },
+    'gov:proposed':        { contract: 'governance',   description: 'Proposal created' },
+    'gov:voted':           { contract: 'governance',   description: 'Vote cast' },
+    'gov:finalised':       { contract: 'governance',   description: 'Proposal finalised' },
+    'gov:executed':        { contract: 'governance',   description: 'Proposal executed' },
     'dist:distributed':    { contract: 'distribution', description: 'Tokens distributed' },
     'clawback:clawback':   { contract: 'distribution', description: 'Distribution clawed back' },
-    // admin_roles contract
-    'adm_roles:adm_prop':  { contract: 'admin_roles', description: 'Admin transfer proposed' },
-    'adm_roles:adm_xfer':  { contract: 'admin_roles', description: 'Admin transfer completed' },
+    'adm_roles:adm_prop':  { contract: 'admin_roles',  description: 'Admin transfer proposed' },
+    'adm_roles:adm_xfer':  { contract: 'admin_roles',  description: 'Admin transfer completed' },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * Build a WHERE clause and params array from query filters.
- * Supported filters: contract, event_type, account, ledger_from, ledger_to,
- *                    date_from, date_to, tx_hash
  */
 function buildFilter(query) {
     const conditions = [];
@@ -84,40 +72,41 @@ function buildFilter(query) {
     let idx = 1;
 
     if (query.contract) {
-        conditions.push(`contract_name = $${idx++}`);
+        conditions.push('contract_name = $' + idx++);
         params.push(query.contract);
     }
     if (query.event_type) {
-        conditions.push(`event_type = $${idx++}`);
+        conditions.push('event_type = $' + idx++);
         params.push(query.event_type);
     }
     if (query.account) {
-        conditions.push(`(data->>'account' = $${idx} OR data->>'staker' = $${idx} OR data->>'user' = $${idx})`);
+        const p = '$' + idx;
+        conditions.push("(data->>'account' = " + p + " OR data->>'staker' = " + p + " OR data->>'user' = " + p + ')');
         params.push(query.account);
         idx++;
     }
     if (query.ledger_from) {
-        conditions.push(`ledger_sequence >= $${idx++}`);
+        conditions.push('ledger_sequence >= $' + idx++);
         params.push(parseInt(query.ledger_from));
     }
     if (query.ledger_to) {
-        conditions.push(`ledger_sequence <= $${idx++}`);
+        conditions.push('ledger_sequence <= $' + idx++);
         params.push(parseInt(query.ledger_to));
     }
     if (query.date_from) {
-        conditions.push(`created_at >= $${idx++}`);
+        conditions.push('created_at >= $' + idx++);
         params.push(new Date(query.date_from));
     }
     if (query.date_to) {
-        conditions.push(`created_at <= $${idx++}`);
+        conditions.push('created_at <= $' + idx++);
         params.push(new Date(query.date_to));
     }
     if (query.tx_hash) {
-        conditions.push(`tx_hash = $${idx++}`);
+        conditions.push('tx_hash = $' + idx++);
         params.push(query.tx_hash);
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
     return { where, params, nextIdx: idx };
 }
 
@@ -126,27 +115,24 @@ function buildFilter(query) {
 /**
  * GET /api/contract-events
  * Paginated, filterable event history.
- *
- * Query params: contract, event_type, account, ledger_from, ledger_to,
- *               date_from, date_to, tx_hash, limit (max 200), offset
  */
 router.get('/', async (req, res) => {
     try {
-        let limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
         const offset = Math.max(parseInt(req.query.offset) || 0, 0);
 
         const { where, params, nextIdx } = buildFilter(req.query);
 
         const countResult = await pool.query(
-            `SELECT COUNT(*) FROM contract_events ${where}`,
+            'SELECT COUNT(*) FROM contract_events ' + where,
             params
         );
         const total = parseInt(countResult.rows[0].count);
 
         const dataResult = await pool.query(
-            `SELECT * FROM contract_events ${where}
-             ORDER BY ledger_sequence DESC, id DESC
-             LIMIT $${nextIdx} OFFSET $${nextIdx + 1}`,
+            'SELECT * FROM contract_events ' + where +
+            ' ORDER BY ledger_sequence DESC, id DESC' +
+            ' LIMIT $' + nextIdx + ' OFFSET $' + (nextIdx + 1),
             [...params, limit, offset]
         );
 
@@ -173,6 +159,49 @@ router.get('/', async (req, res) => {
  */
 router.get('/types', (_req, res) => {
     res.json({ success: true, data: EVENT_TYPES });
+});
+
+/**
+ * GET /api/contract-events/monitor
+ * SSE stream for real-time contract event monitoring.
+ */
+router.get('/monitor', async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const { where, params } = buildFilter(req.query);
+    let lastId = 0;
+
+    res.write('event: connected\ndata: {}\n\n');
+
+    const poll = setInterval(async () => {
+        try {
+            const allParams = [...params, lastId];
+            const idPlaceholder = '$' + (params.length + 1);
+            const whereClause = where
+                ? where + ' AND id > ' + idPlaceholder
+                : 'WHERE id > ' + idPlaceholder;
+
+            const result = await pool.query(
+                'SELECT * FROM contract_events ' + whereClause + ' ORDER BY id ASC LIMIT 50',
+                allParams
+            );
+
+            for (const row of result.rows) {
+                res.write('event: contract_event\ndata: ' + JSON.stringify(row) + '\n\n');
+                lastId = row.id;
+            }
+        } catch (err) {
+            res.write('event: error\ndata: ' + JSON.stringify({ message: err.message }) + '\n\n');
+        }
+    }, 3000);
+
+    req.on('close', () => {
+        clearInterval(poll);
+        res.end();
+    });
 });
 
 /**
@@ -220,23 +249,16 @@ router.post('/index', async (req, res) => {
         for (const event of eventsResponse.events) {
             const topic0 = event.topic[0]?.value ?? '';
             const topic1 = event.topic[1]?.value ?? '';
-            const eventType = `${topic0}:${topic1}`;
+            const eventType = topic0 + ':' + topic1;
             const contractName = EVENT_TYPES[eventType]?.contract ?? 'unknown';
 
             const result = await pool.query(
-                `INSERT INTO contract_events
-                   (contract_id, contract_name, event_type, tx_hash, ledger_sequence, data, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, NOW())
-                 ON CONFLICT (tx_hash, event_type) DO NOTHING
-                 RETURNING id`,
-                [
-                    contractId,
-                    contractName,
-                    eventType,
-                    event.txHash,
-                    event.ledger,
-                    JSON.stringify(event.value),
-                ]
+                'INSERT INTO contract_events' +
+                ' (contract_id, contract_name, event_type, tx_hash, ledger_sequence, data, created_at)' +
+                ' VALUES ($1, $2, $3, $4, $5, $6, NOW())' +
+                ' ON CONFLICT (tx_hash, event_type) DO NOTHING' +
+                ' RETURNING id',
+                [contractId, contractName, eventType, event.txHash, event.ledger, JSON.stringify(event.value)]
             );
             if (result.rows.length) indexed.push(result.rows[0].id);
         }
@@ -246,52 +268,6 @@ router.post('/index', async (req, res) => {
         console.error('contract-events/index error:', err);
         res.status(500).json({ error: 'Indexing failed', details: err.message });
     }
-});
-
-/**
- * GET /api/contract-events/monitor
- * Server-Sent Events stream for real-time contract event monitoring.
- * Query params: contract, event_type (optional filters)
- *
- * Polls the database every 3 seconds and pushes new events to the client.
- */
-router.get('/monitor', async (req, res) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
-
-    const { where, params } = buildFilter(req.query);
-    let lastId = 0;
-
-    // Send initial heartbeat
-    res.write('event: connected\ndata: {}\n\n');
-
-    const poll = setInterval(async () => {
-        try {
-            const conditions = [`id > $${params.length + 1}`];
-            const allParams = [...params, lastId];
-
-            const result = await pool.query(
-                `SELECT * FROM contract_events
-                 ${where ? where + ' AND' : 'WHERE'} id > $${params.length + 1}
-                 ORDER BY id ASC LIMIT 50`,
-                allParams
-            );
-
-            for (const row of result.rows) {
-                res.write(`event: contract_event\ndata: ${JSON.stringify(row)}\n\n`);
-                lastId = row.id;
-            }
-        } catch (err) {
-            res.write(`event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`);
-        }
-    }, 3000);
-
-    req.on('close', () => {
-        clearInterval(poll);
-        res.end();
-    });
 });
 
 module.exports = router;
