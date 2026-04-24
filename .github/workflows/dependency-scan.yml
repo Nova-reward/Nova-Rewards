@@ -68,6 +68,7 @@ jobs:
         working-directory: novaRewards/frontend
 
       - name: Post PR comment
+        continue-on-error: true
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v9
         with:
@@ -152,6 +153,7 @@ jobs:
         working-directory: contracts
 
       - name: Post PR comment (cargo)
+        continue-on-error: true
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v9
         with:

@@ -35,6 +35,17 @@ const nextConfig = {
       ...cacheHeaders,
     ];
   },
+  webpack(config, { isServer }) {
+    // These packages are loaded dynamically at runtime only; exclude from bundle
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        'albedo-link': false,
+        '@creit.tech/stellar-wallets-kit': false,
+      };
+    }
+    return config;
+  },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_HORIZON_URL: process.env.NEXT_PUBLIC_HORIZON_URL,
@@ -49,7 +60,6 @@ const nextConfig = {
   },
   compress: true,
   poweredByHeader: false,
-  swcMinify: true,
   images: {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],

@@ -23,7 +23,7 @@ function Toast({ toast, onRemove }) {
       <button
         className="toast-close"
         onClick={() => onRemove(toast.id)}
-        aria-label="Dismiss notification"
+        aria-label="Close notification"
       >
         ✕
       </button>

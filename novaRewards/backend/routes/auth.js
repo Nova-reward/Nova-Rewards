@@ -5,6 +5,7 @@ const { signAccessToken, signRefreshToken } = require('../services/tokenService'
 const { validateRegisterDto } = require('../dtos/registerDto');
 const { validateLoginDto } = require('../dtos/loginDto');
 const { checkIpBlock, recordFailedLogin } = require('../middleware/abuseDetection');
+const { logAudit } = require('../db/auditLogRepository');
 
 const SALT_ROUNDS = 12;
 

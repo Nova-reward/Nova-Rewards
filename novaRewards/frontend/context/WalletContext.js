@@ -11,7 +11,7 @@ const WalletContext = createContext(null);
  * Dynamically imports albedo-link to avoid SSR issues.
  */
 async function connectAlbedo() {
-  const albedo = (await import('albedo-link')).default;
+  const albedo = (await import(/* webpackIgnore: true */ 'albedo-link')).default;
   const result = await albedo.publicKey({ require_existing: false });
   if (!result.pubkey) throw new Error('Albedo did not return a public key.');
   return result.pubkey;
@@ -33,9 +33,7 @@ async function connectXBull() {
  * Returns { publicKey, session } so the session can be stored for signing.
  */
 async function connectWalletConnect() {
-  const { StellarWalletsKit, WalletNetwork, WalletType } = await import(
-    '@creit.tech/stellar-wallets-kit'
-  );
+  const { StellarWalletsKit, WalletNetwork, WalletType } = await import(/* webpackIgnore: true */ '@creit.tech/stellar-wallets-kit');
   const network =
     process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'mainnet'
       ? WalletNetwork.PUBLIC
@@ -173,7 +171,7 @@ export function WalletProvider({ children }) {
     }
 
     if (walletType === 'albedo') {
-      const albedo = (await import('albedo-link')).default;
+      const albedo = (await import(/* webpackIgnore: true */ 'albedo-link')).default;
       const result = await albedo.tx({ xdr, submit: false });
       return result.signed_envelope_xdr;
     }
