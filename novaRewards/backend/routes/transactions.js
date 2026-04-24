@@ -10,6 +10,7 @@ const {
   reconcileMerchantTransactions,
   getMerchantTransactionReport,
 } = require('../services/transactionService');
+const { MAX_PAGE_SIZE } = require('../config/constants');
 
 /**
  * POST /api/transactions/record
@@ -302,7 +303,7 @@ router.post('/reconcile', authenticateMerchant, async (req, res, next) => {
             .payments()
             .forAccount(walletAddress)
             .order('desc')
-            .limit(100)
+            .limit(MAX_PAGE_SIZE)
             .call();
 
           while (page.records.length > 0) {
