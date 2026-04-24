@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './Card';
 import { Button } from './Button';
 
