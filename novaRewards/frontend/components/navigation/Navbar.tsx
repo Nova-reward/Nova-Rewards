@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Menu, Wallet, Star } from 'lucide-react';
-import { useWalletStore } from '../../store/walletStore';
-import { truncateAddress } from '../../lib/truncateAddress';
+import { Menu, Star } from 'lucide-react';
+import WalletConnectButton from '../WalletConnectButton';
 import { useNavigation } from '../../hooks/useNavigation';
 
 export interface NavItem {
@@ -25,7 +24,6 @@ interface NavbarProps {
 
 export default function Navbar({ items = NAV_ITEMS }: NavbarProps) {
   const router   = useRouter();
-  const { publicKey, balance, connect, disconnect, isLoading } = useWalletStore();
   const { toggleDrawer } = useNavigation();
 
   return (
@@ -69,37 +67,10 @@ export default function Navbar({ items = NAV_ITEMS }: NavbarProps) {
 
         {/* Wallet + hamburger */}
         <div className="flex items-center gap-2">
-          {/* Wallet info / connect button */}
-          {publicKey ? (
-            <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-1.5 dark:border-brand-border dark:bg-brand-dark">
-              <Wallet className="h-4 w-4 text-primary-600" aria-hidden="true" />
-              <div className="hidden sm:flex flex-col leading-none">
-                <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
-                  {truncateAddress(publicKey)}
-                </span>
-                <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
-                  {parseFloat(balance).toLocaleString()} NOVA
-                </span>
-              </div>
-              <button
-                onClick={disconnect}
-                aria-label="Disconnect wallet"
-                className="ml-1 hidden sm:block text-xs text-neutral-400 hover:text-error-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 rounded"
-              >
-                ✕
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => connect()}
-              disabled={isLoading}
-              aria-label="Connect wallet"
-              className="hidden sm:flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2"
-            >
-              <Wallet className="h-4 w-4" aria-hidden="true" />
-              {isLoading ? 'Connecting…' : 'Connect Wallet'}
-            </button>
-          )}
+          {/* Wallet connect button — handles all states */}
+          <div className="hidden sm:block">
+            <WalletConnectButton />
+          </div>
 
           {/* Hamburger — mobile only */}
           <button
