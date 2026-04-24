@@ -16,11 +16,14 @@ module.exports = {
   testEnvironment: 'node',
 
   // ── Discovery ────────────────────────────────────────────────────────────
+  // Pact tests live under pact/ and are excluded here so `npm test` does not
+  // run them. Use `npx jest --testPathPattern="pact/"` to run them explicitly.
   testMatch: ['**/tests/**/*.test.js'],
   testPathIgnorePatterns: [
     '/node_modules/',
     '/coverage/',
     '/tests/load/',   // k6 / artillery load scripts are not Jest tests
+    '/pact/',         // Pact provider tests — run via the pact project only
   ],
 
   // ── Setup ─────────────────────────────────────────────────────────────────
@@ -50,6 +53,7 @@ module.exports = {
   collectCoverageFrom: [
     'routes/**/*.js',
     'db/**/*.js',
+    'lib/**/*.js',
     'middleware/**/*.js',
     'services/**/*.js',
     'src/**/*.js',
@@ -82,5 +86,36 @@ module.exports = {
       outputDirectory: 'coverage',
       outputName: 'junit.xml',
     }],
+  ],
+
+  // ── Projects ──────────────────────────────────────────────────────────────
+  // The `pact` project is defined here so it can be targeted explicitly with
+  // `npx jest --selectProjects pact` or `--testPathPattern="pact/"`.
+  // It is NOT included in the default test run (`npm test`) because the default
+  // testMatch above excludes the pact/ directory.
+  projects: [
+    {
+      displayName: 'unit',
+      testEnvironment: 'node',
+      testMatch: ['<rootDir>/tests/**/*.test.js'],
+      testPathIgnorePatterns: [
+        '/node_modules/',
+        '/coverage/',
+        '/tests/load/',
+      ],
+      globalSetup: '<rootDir>/jest.global-setup.js',
+      setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+      clearMocks: true,
+      restoreMocks: true,
+      forceExit: true,
+      testTimeout: 15000,
+    },
+    {
+      displayName: 'pact',
+      testEnvironment: 'node',
+      testMatch: ['<rootDir>/pact/**/*.pact.test.js'],
+      testTimeout: 30000,
+      forceExit: true,
+    },
   ],
 };

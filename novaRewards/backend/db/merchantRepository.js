@@ -1,7 +1,9 @@
 'use strict';
 const { PrismaClient } = require('@prisma/client');
+const { encryptionMiddleware } = require('../lib/prismaEncryptionMiddleware');
 
 const prisma = new PrismaClient();
+prisma.$use(encryptionMiddleware);
 
 /**
  * Creates a new merchant.

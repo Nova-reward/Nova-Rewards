@@ -6,12 +6,8 @@ const {
   markOnChainFailed,
   getCampaignById,
   getCampaignsByMerchant,
-<<<<<<< feature/576-redis-caching-layer
-  getCampaignById,
-=======
   updateCampaign,
   softDeleteCampaign,
->>>>>>> main
 } = require('../db/campaignRepository');
 const {
   registerCampaign,
@@ -58,21 +54,9 @@ async function cacheDel(key) {
   try { await redis.del(key); } catch { /* non-fatal */ }
 }
 
-<<<<<<< feature/576-redis-caching-layer
-/**
- * @openapi
- * /campaigns:
- *   post:
- *     tags: [Campaigns]
- *     summary: Create a reward campaign
- *     security:
- *       - merchantApiKey: []
- */
-=======
 // ---------------------------------------------------------------------------
 // POST /campaigns — create campaign in DB then register on-chain
 // ---------------------------------------------------------------------------
->>>>>>> main
 router.post('/', authenticateMerchant, async (req, res, next) => {
   try {
     const { name, rewardRate, startDate, endDate } = req.body;
@@ -85,18 +69,13 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
     const { valid, errors } = validateCampaign({ rewardRate, startDate, endDate });
     if (!valid) {
       return res.status(400).json({ success: false, error: 'validation_error', message: errors.join('; ') });
-<<<<<<< feature/576-redis-caching-layer
-    }
-
-    const campaign = await createCampaign({ merchantId, name: name.trim(), rewardRate, startDate, endDate });
-
-    // Invalidate merchant campaign list cache on creation
-    await cacheDel(`campaigns:merchant:${merchantId}`);
-=======
     }
 
     // 1. Persist to DB first (on_chain_status = 'pending')
     const campaign = await createCampaign({ merchantId, name: name.trim(), rewardRate, startDate, endDate });
+
+    // Invalidate merchant campaign list cache on creation
+    await cacheDel(`campaigns:merchant:${merchantId}`);
 
     // 2. Submit to Soroban; roll back (mark failed) on error
     let confirmed;
@@ -138,7 +117,6 @@ router.get('/:id', authenticateMerchant, async (req, res, next) => {
     if (!campaign) {
       return res.status(404).json({ success: false, error: 'not_found', message: 'Campaign not found' });
     }
->>>>>>> main
 
     // Merchants may only read their own campaigns
     if (campaign.merchant_id !== req.merchant.id) {
@@ -151,29 +129,6 @@ router.get('/:id', authenticateMerchant, async (req, res, next) => {
   }
 });
 
-<<<<<<< feature/576-redis-caching-layer
-/**
- * @openapi
- * /campaigns:
- *   get:
- *     tags: [Campaigns]
- *     summary: List campaigns for the authenticated merchant (cached 60s)
- *     security:
- *       - merchantApiKey: []
- */
-router.get('/', authenticateMerchant, async (req, res, next) => {
-  try {
-    const merchantId = req.merchant.id;
-    const cacheKey = `campaigns:merchant:${merchantId}`;
-
-    const cached = await cacheGet(cacheKey);
-    if (cached) return res.json({ success: true, data: cached, cached: true });
-
-    const campaigns = await getCampaignsByMerchant(merchantId);
-    await cacheSet(cacheKey, campaigns);
-
-    res.json({ success: true, data: campaigns, cached: false });
-=======
 // ---------------------------------------------------------------------------
 // PATCH /campaigns/:id — update mutable fields + on-chain update
 // ---------------------------------------------------------------------------
@@ -228,37 +183,13 @@ router.patch('/:id', authenticateMerchant, async (req, res, next) => {
     }
 
     const updated = await updateCampaign(id, { name, rewardRate, txHash });
+    await cacheDel(`campaigns:merchant:${req.merchant.id}`);
     res.json({ success: true, data: updated });
->>>>>>> main
   } catch (err) {
     next(err);
   }
 });
 
-<<<<<<< feature/576-redis-caching-layer
-/**
- * @openapi
- * /campaigns/{merchantId}:
- *   get:
- *     tags: [Campaigns]
- *     summary: List campaigns for a given merchant ID (cached 60s)
- */
-router.get('/:merchantId', async (req, res, next) => {
-  try {
-    const merchantId = parseInt(req.params.merchantId, 10);
-    if (isNaN(merchantId) || merchantId <= 0) {
-      return res.status(400).json({ success: false, error: 'validation_error', message: 'merchantId must be a positive integer' });
-    }
-
-    const cacheKey = `campaigns:merchant:${merchantId}`;
-    const cached = await cacheGet(cacheKey);
-    if (cached) return res.json({ success: true, data: cached, cached: true });
-
-    const campaigns = await getCampaignsByMerchant(merchantId);
-    await cacheSet(cacheKey, campaigns);
-
-    res.json({ success: true, data: campaigns, cached: false });
-=======
 // ---------------------------------------------------------------------------
 // DELETE /campaigns/:id — pause on-chain then soft-delete in DB
 // ---------------------------------------------------------------------------
@@ -293,6 +224,7 @@ router.delete('/:id', authenticateMerchant, async (req, res, next) => {
     }
 
     await softDeleteCampaign(id, txHash);
+    await cacheDel(`campaigns:merchant:${req.merchant.id}`);
     res.json({ success: true, data: { id, deleted: true } });
   } catch (err) {
     next(err);
@@ -300,13 +232,20 @@ router.delete('/:id', authenticateMerchant, async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /campaigns — list all campaigns for the authenticated merchant
+// GET /campaigns — list all campaigns for the authenticated merchant (cached 60s)
 // ---------------------------------------------------------------------------
 router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
-    const campaigns = await getCampaignsByMerchant(req.merchant.id);
-    res.json({ success: true, data: campaigns });
->>>>>>> main
+    const merchantId = req.merchant.id;
+    const cacheKey = `campaigns:merchant:${merchantId}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+
+    const campaigns = await getCampaignsByMerchant(merchantId);
+    await cacheSet(cacheKey, campaigns);
+
+    res.json({ success: true, data: campaigns, cached: false });
   } catch (err) {
     next(err);
   }

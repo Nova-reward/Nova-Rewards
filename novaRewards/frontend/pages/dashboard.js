@@ -10,6 +10,7 @@ import RedeemForm from "../components/RedeemForm";
 import ReferralLink from "../components/ReferralLink";
 import { SkeletonDashboard } from "../components/Skeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
+import WalletGuard from "../components/WalletGuard";
 import WalletConnect from "../components/WalletConnect";
 import { truncateAddress } from "../lib/truncateAddress";
 
@@ -209,7 +210,9 @@ function DashboardContent() {
 export default function Dashboard() {
   return (
     <ErrorBoundary>
-      <DashboardContent />
+      <WalletGuard>
+        <DashboardContent />
+      </WalletGuard>
     </ErrorBoundary>
   );
 }

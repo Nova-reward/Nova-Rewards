@@ -42,4 +42,8 @@ module.exports = async function globalSetup() {
   // ── Optional / feature flags ─────────────────────────────────────────────
   process.env.REFERRAL_BONUS_POINTS = '100';
   process.env.DAILY_BONUS_POINTS    = '10';
+
+  // ── Field-level encryption (#651) ────────────────────────────────────────
+  // Test key: 64 hex chars = 32 bytes. NOT for production use.
+  process.env.FIELD_ENCRYPTION_KEY  = '0000000000000000000000000000000000000000000000000000000000000001';
 };
