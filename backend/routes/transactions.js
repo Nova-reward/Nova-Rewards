@@ -3,6 +3,11 @@ const router = express.Router();
 const { Pool } = require('pg');
 const StellarSdk = require('@stellar/stellar-sdk');
 const { PrismaClient } = require('@prisma/client');
+const {
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+  MIN_PAGE_SIZE,
+} = require('../../novaRewards/backend/config/constants');
 
 const prisma = new PrismaClient();
 
@@ -28,12 +33,12 @@ router.get('/transactions/:walletAddress', async (req, res) => {
         const { walletAddress } = req.params;
         
         // Parse pagination parameters with defaults and validation
-        let limit = parseInt(req.query.limit) || 20;
+        let limit = parseInt(req.query.limit) || DEFAULT_PAGE_SIZE;
         const offset = parseInt(req.query.offset) || 0;
-        
-        // Validate limit (between 1 and 100)
-        if (limit < 1) limit = 1;
-        if (limit > 100) limit = 100;
+
+        // Validate limit (between MIN_PAGE_SIZE and MAX_PAGE_SIZE)
+        if (limit < MIN_PAGE_SIZE) limit = MIN_PAGE_SIZE;
+        if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
         
         // Validate offset (can't be negative)
         if (offset < 0) {
@@ -270,7 +275,7 @@ router.post('/transactions/record', async (req, res) => {
 router.get('/users/:userId/transactions', async (req, res) => {
     try {
         const { userId } = req.params;
-        const { limit = 20, offset = 0, type, dateFrom, dateTo, campaignId } = req.query;
+        const { limit = DEFAULT_PAGE_SIZE, offset = 0, type, dateFrom, dateTo, campaignId } = req.query;
 
         const where = { userId };
         if (type) where.type = type;

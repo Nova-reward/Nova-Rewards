@@ -10,6 +10,20 @@ const {
   reconcileMerchantTransactions,
   getMerchantTransactionReport,
 } = require('../services/transactionService');
+ feat/define-constants
+const { MAX_PAGE_SIZE } = require('../config/constants');
+
+/**
+ * POST /api/transactions/record
+ * Verifies a Stellar transaction on Horizon, validates the payload,
+ * and stores the canonical database record.
+ */
+router.post('/record', async (req, res, next) => {
+  try {
+    const transaction = await recordTransaction(req.body);
+    res.status(201).json({ success: true, data: transaction });
+
+ main
 const { getUserByWallet } = require('../db/userRepository');
 const circuitBreakerService = require('../services/circuitBreakerService');
 const { logSpan } = require('../middleware/tracingMiddleware');
@@ -101,7 +115,66 @@ router.post('/reconcile', authenticateMerchant, async (req, res, next) => {
   try {
     const reconciliation = await reconcileMerchantTransactions(req.merchant.id, req.body || {});
     res.json({ success: true, data: reconciliation });
+ feat/define-constants
+    const { walletAddress } = req.params;
+
+    if (!isValidStellarAddress(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'walletAddress must be a valid Stellar public key',
+      });
+    }
+
+    try {
+      // Fetch all NOVA payments from Horizon with pagination
+      const transactions = await circuitBreakerService.execute(
+        'horizon_payments',
+        async () => {
+          const results = [];
+          let page = await server
+            .payments()
+            .forAccount(walletAddress)
+            .order('desc')
+            .limit(MAX_PAGE_SIZE)
+            .call();
+
+          while (page.records.length > 0) {
+            const novaPayments = page.records.filter(
+              (r) =>
+                r.type === 'payment' &&
+                r.asset_code === NOVA.code &&
+                r.asset_issuer === NOVA.issuer
+            );
+            results.push(...novaPayments);
+
+            // Stop after 500 records to avoid runaway pagination
+            if (results.length >= 500) break;
+            page = await page.next();
+          }
+          return results;
+        }
+      );
+
+      logSpan(req, 'horizon_payments_fetch', { walletAddress, success: true });
+      return res.json({ success: true, data: transactions, source: 'horizon' });
+    } catch (err) {
+      // Horizon unavailable — fall back to PostgreSQL records
+      logSpan(req, 'horizon_payments_fetch', { walletAddress, success: false, error: err.message, fallback: true });
+      const result = await query(
+        `SELECT * FROM transactions
+         WHERE from_wallet = $1 OR to_wallet = $1
+         ORDER BY created_at DESC`,
+        [walletAddress]
+      );
+      return res.json({ success: true, data: result.rows, source: 'database' });
+    }
+  } catch (err) {
+    next(err);
+  }
+
   } catch (err) { next(err); }
+ main
 });
 
 router.get('/user/history', async (req, res, next) => {

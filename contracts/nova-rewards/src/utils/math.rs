@@ -1,6 +1,7 @@
 //! Math utilities for fixed-point arithmetic and safe numeric operations.
 
 use crate::SCALE_FACTOR;
+use crate::utils::constants::BASIS_POINTS_DIVISOR;
 
 /// Multiplies two fixed-point values (both scaled by SCALE_FACTOR).
 /// Returns result scaled by SCALE_FACTOR.
@@ -30,11 +31,11 @@ pub fn fp_div(a: i128, b: i128) -> i128 {
 }
 
 /// Converts basis points (e.g. 500 = 5%) to a SCALE_FACTOR-scaled fraction.
-/// Result = bps * SCALE_FACTOR / 10_000
+/// Result = bps * SCALE_FACTOR / BASIS_POINTS_DIVISOR
 pub fn bps_to_fp(bps: i128) -> i128 {
     bps.checked_mul(SCALE_FACTOR)
         .expect("bps_to_fp: overflow")
-        .checked_div(10_000)
+        .checked_div(BASIS_POINTS_DIVISOR)
         .expect("bps_to_fp: division error")
 }
 
