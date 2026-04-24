@@ -27,11 +27,11 @@ Destructive.args = { variant: 'destructive' };
 export const Outline = Template.bind({});
 Outline.args = { variant: 'outline' };
 
-export const LongLabel = (args) => <Badge {...args}>Long Badge Label Text</Badge>;
-LongLabel.args = { variant: 'default' };
+export const LongLabel = Template.bind({});
+LongLabel.args = { variant: 'default', children: 'Long Badge Label' };
 
 export const AllVariants = () => (
-  <div className="flex gap-2 flex-wrap">
+  <div className="flex flex-wrap gap-2">
     <Badge variant="default">Default</Badge>
     <Badge variant="secondary">Secondary</Badge>
     <Badge variant="destructive">Destructive</Badge>
