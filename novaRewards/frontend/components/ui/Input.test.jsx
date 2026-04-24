@@ -1,25 +1,59 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { axe } from 'jest-axe';
 import { Input } from './Input';
-import '@testing-library/jest-dom';
 
-describe('Input component', () => {
-  it('renders correctly', () => {
+describe('Input', () => {
+  it('renders input element', () => {
     render(<Input placeholder="Enter text" />);
-    const input = screen.getByPlaceholderText(/enter text/i);
-    expect(input).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/enter text/i)).toBeInTheDocument();
   });
 
-  it('displays an error message when error prop is passed', () => {
-    render(<Input error="This field is required" />);
-    const errorMessage = screen.getByText(/this field is required/i);
-    expect(errorMessage).toBeInTheDocument();
-    expect(errorMessage).toHaveClass('text-red-500');
+  it('renders label and associates it with input', () => {
+    render(<Input id="email" label="Email" />);
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+  });
+
+  it('shows error message with role="alert"', () => {
+    render(<Input error="Required" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Required');
+  });
+
+  it('sets aria-invalid when error is present', () => {
+    render(<Input error="Bad value" placeholder="x" />);
+    expect(screen.getByPlaceholderText('x')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('applies error border class when error is present', () => {
+    render(<Input error="Oops" placeholder="x" />);
+    expect(screen.getByPlaceholderText('x')).toHaveClass('border-red-500');
   });
 
   it('is disabled when disabled prop is passed', () => {
     render(<Input disabled placeholder="Disabled" />);
-    const input = screen.getByPlaceholderText(/disabled/i);
-    expect(input).toBeDisabled();
+    expect(screen.getByPlaceholderText('Disabled')).toBeDisabled();
+  });
+
+  it('accepts typed input', async () => {
+    const user = userEvent.setup();
+    render(<Input placeholder="Type here" />);
+    const input = screen.getByPlaceholderText('Type here');
+    await user.type(input, 'hello');
+    expect(input).toHaveValue('hello');
+  });
+
+  it('clears value on clear', async () => {
+    const user = userEvent.setup();
+    render(<Input placeholder="Type here" />);
+    const input = screen.getByPlaceholderText('Type here');
+    await user.type(input, 'hello');
+    await user.clear(input);
+    expect(input).toHaveValue('');
+  });
+
+  it('has no accessibility violations', async () => {
+    const { container } = render(<Input id="a11y" label="Name" />);
+    expect(await axe(container)).toHaveNoViolations();
   });
 });
