@@ -15,6 +15,44 @@ const {
   pauseCampaign,
 } = require('../services/sorobanService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { getRedisClient } = require('../cache/redisClient');
+const { metrics } = require('../middleware/metricsMiddleware');
+
+const CAMPAIGN_TTL = 60; // 60s TTL per issue #576
+
+/**
+ * Cache helpers with hit/miss metric tracking.
+ */
+async function cacheGet(key) {
+  const redis = getRedisClient();
+  if (!redis) return null;
+  try {
+    const val = await redis.get(key);
+    if (val !== null) {
+      metrics.cacheHits.inc({ key_type: 'campaign' });
+      return JSON.parse(val);
+    }
+    metrics.cacheMisses.inc({ key_type: 'campaign' });
+    return null;
+  } catch {
+    metrics.cacheMisses.inc({ key_type: 'campaign' });
+    return null;
+  }
+}
+
+async function cacheSet(key, value) {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.set(key, JSON.stringify(value), 'EX', CAMPAIGN_TTL);
+  } catch { /* non-fatal */ }
+}
+
+async function cacheDel(key) {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try { await redis.del(key); } catch { /* non-fatal */ }
+}
 
 // ---------------------------------------------------------------------------
 // POST /campaigns — create campaign in DB then register on-chain
@@ -35,6 +73,9 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
 
     // 1. Persist to DB first (on_chain_status = 'pending')
     const campaign = await createCampaign({ merchantId, name: name.trim(), rewardRate, startDate, endDate });
+
+    // Invalidate merchant campaign list cache on creation
+    await cacheDel(`campaigns:merchant:${merchantId}`);
 
     // 2. Submit to Soroban; roll back (mark failed) on error
     let confirmed;
@@ -142,6 +183,7 @@ router.patch('/:id', authenticateMerchant, async (req, res, next) => {
     }
 
     const updated = await updateCampaign(id, { name, rewardRate, txHash });
+    await cacheDel(`campaigns:merchant:${req.merchant.id}`);
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
@@ -182,6 +224,7 @@ router.delete('/:id', authenticateMerchant, async (req, res, next) => {
     }
 
     await softDeleteCampaign(id, txHash);
+    await cacheDel(`campaigns:merchant:${req.merchant.id}`);
     res.json({ success: true, data: { id, deleted: true } });
   } catch (err) {
     next(err);
@@ -189,15 +232,24 @@ router.delete('/:id', authenticateMerchant, async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /campaigns — list all campaigns for the authenticated merchant
+// GET /campaigns — list all campaigns for the authenticated merchant (cached 60s)
 // ---------------------------------------------------------------------------
 router.get('/', authenticateMerchant, async (req, res, next) => {
   try {
-    const campaigns = await getCampaignsByMerchant(req.merchant.id);
-    res.json({ success: true, data: campaigns });
+    const merchantId = req.merchant.id;
+    const cacheKey = `campaigns:merchant:${merchantId}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+
+    const campaigns = await getCampaignsByMerchant(merchantId);
+    await cacheSet(cacheKey, campaigns);
+
+    res.json({ success: true, data: campaigns, cached: false });
   } catch (err) {
     next(err);
   }
 });
 
 module.exports = router;
+module.exports.cacheDel = cacheDel; // exported for use in rewards route invalidation

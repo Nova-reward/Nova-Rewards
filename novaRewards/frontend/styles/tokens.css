@@ -1,0 +1,132 @@
+/**
+ * Nova Rewards Design Tokens
+ * CSS custom properties for use outside Tailwind (plain CSS, inline styles, etc.)
+ * Mirrors the values in tailwind.config.ts.
+ *
+ * Usage:
+ *   color: var(--color-primary-600);
+ *   font-size: var(--text-lg);
+ *   margin: var(--space-4);
+ */
+
+:root {
+  /* ─── Primary (violet) ─────────────────────────────────────── */
+  --color-primary-50:  #f5f3ff;
+  --color-primary-100: #ede9fe;
+  --color-primary-200: #ddd6fe;
+  --color-primary-300: #c4b5fd;
+  --color-primary-400: #a78bfa;
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #7c3aed;
+  --color-primary-700: #6d28d9;
+  --color-primary-800: #5b21b6;
+  --color-primary-900: #4c1d95;
+  --color-primary-950: #2e1065;
+
+  /* ─── Secondary (indigo) ───────────────────────────────────── */
+  --color-secondary-50:  #eef2ff;
+  --color-secondary-100: #e0e7ff;
+  --color-secondary-200: #c7d2fe;
+  --color-secondary-300: #a5b4fc;
+  --color-secondary-400: #818cf8;
+  --color-secondary-500: #6366f1;
+  --color-secondary-600: #4f46e5;
+  --color-secondary-700: #4338ca;
+  --color-secondary-800: #3730a3;
+  --color-secondary-900: #312e81;
+  --color-secondary-950: #1e1b4b;
+
+  /* ─── Neutral ──────────────────────────────────────────────── */
+  --color-neutral-50:  #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #020617;
+
+  /* ─── Semantic ─────────────────────────────────────────────── */
+  --color-success-50:  #f0fdf4;
+  --color-success-500: #22c55e;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+
+  --color-warning-50:  #fffbeb;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+
+  --color-error-50:  #fef2f2;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
+
+  --color-info-50:  #eff6ff;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+  --color-info-700: #1d4ed8;
+
+  /* ─── Typography ───────────────────────────────────────────── */
+  --font-sans:  'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Merriweather', ui-serif, Georgia, serif;
+  --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --text-xs:   0.75rem;   /* 12px */
+  --text-sm:   0.875rem;  /* 14px */
+  --text-base: 1rem;      /* 16px */
+  --text-lg:   1.125rem;  /* 18px */
+  --text-xl:   1.25rem;   /* 20px */
+  --text-2xl:  1.5rem;    /* 24px */
+  --text-3xl:  1.875rem;  /* 30px */
+  --text-4xl:  2.25rem;   /* 36px */
+
+  --font-light:    300;
+  --font-normal:   400;
+  --font-medium:   500;
+  --font-semibold: 600;
+  --font-bold:     700;
+
+  --leading-tight:   1.25;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.75;
+
+  /* ─── Spacing (4px base unit) ──────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+  --space-40: 160px;
+  --space-48: 192px;
+  --space-64: 256px;
+
+  /* ─── Semantic aliases (light mode defaults) ───────────────── */
+  --color-bg:          var(--color-neutral-50);
+  --color-surface:     #ffffff;
+  --color-border:      var(--color-neutral-200);
+  --color-text:        var(--color-neutral-900);
+  --color-text-muted:  var(--color-neutral-500);
+  --color-accent:      var(--color-primary-600);
+}
+
+/* ─── Dark mode overrides ──────────────────────────────────────── */
+.dark {
+  --color-bg:         #0f0f1a;
+  --color-surface:    #1a1a2e;
+  --color-border:     #2d2d4e;
+  --color-text:       var(--color-neutral-100);
+  --color-text-muted: var(--color-neutral-400);
+  --color-accent:     var(--color-primary-400);
+}
