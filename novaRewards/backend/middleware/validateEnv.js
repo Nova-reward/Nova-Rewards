@@ -12,6 +12,7 @@ const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
   'REDIS_URL',
   'JWT_SECRET',
+  'FIELD_ENCRYPTION_KEY',  // AES-256-GCM key for field-level encryption (#651)
 ];
 
 const BACKUP_ENV_VARS = [
