@@ -108,11 +108,19 @@ pub enum DataKey {
 // Fixed-point arithmetic (Issue #205)
 // ---------------------------------------------------------------------------
 
-/// Scale factor for 6 decimal places of precision.
-pub const SCALE_FACTOR: i128 = 1_000_000;
-
-/// Seconds per year for staking yield calculations.
-pub const SECONDS_PER_YEAR: u64 = 31_536_000; // 365 * 24 * 60 * 60
+// Re-export shared constants so existing code that references them from the
+// crate root continues to compile without changes.
+pub use crate::utils::constants::{
+    SCALE_FACTOR,
+    SECONDS_PER_YEAR,
+    BASIS_POINTS_DIVISOR,
+    MAX_ANNUAL_RATE_BPS,
+    MIN_ANNUAL_RATE_BPS,
+    SECONDS_PER_DAY,
+    DAILY_LIMIT_WINDOW_SECS,
+    DAILY_USAGE_TTL_SECS,
+    MAX_SWAP_PATH_HOPS,
+};
 
 /// Computes the reward payout for a given balance and rate using fixed-point
 /// arithmetic to eliminate rounding errors and dust accumulation.
@@ -196,15 +204,15 @@ fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
     // Extend TTL for persistent storage
     env.storage()
         .persistent()
-        .extend_ttl(&usage_key, 31_536_000, 31_536_000);
+        .extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
 
-    // Check if window has expired (24 hours = 86,400 seconds)
-    if now - usage.window_start >= 86_400 {
+    // Check if window has expired (24 hours)
+    if now - usage.window_start >= DAILY_LIMIT_WINDOW_SECS {
         usage.amount_used = 0;
         usage.window_start = now;
         env.storage().persistent().set(&usage_key, &usage);
-        // Set TTL for persistent storage (365 days)
-        env.storage().persistent().extend_ttl(&usage_key, 31_536_000, 31_536_000);
+        // Set TTL for persistent storage
+        env.storage().persistent().extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
     }
 
     // Check limit
@@ -215,8 +223,8 @@ fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
     // Update usage
     usage.amount_used += requested_amount;
     env.storage().persistent().set(&usage_key, &usage);
-    // Set TTL for persistent storage (365 days)
-    env.storage().persistent().extend_ttl(&usage_key, 31_536_000, 31_536_000);
+    // Set TTL for persistent storage
+    env.storage().persistent().extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
 }
 
 // ---------------------------------------------------------------------------
@@ -567,7 +575,7 @@ impl NovaRewardsContract {
         if min_xlm_out < 0 {
             panic!("min_xlm_out must be non-negative");
         }
-        if path.len() > 5 {
+        if path.len() > MAX_SWAP_PATH_HOPS as usize {
             panic!("path exceeds maximum of 5 hops");
         }
 
@@ -766,7 +774,7 @@ impl NovaRewardsContract {
     pub fn set_annual_rate(env: Env, rate: i128) {
         Self::require_admin(&env);
         
-        if rate < 0 || rate > 10000 {
+        if rate < 0 || rate > MAX_ANNUAL_RATE_BPS {
             panic!("rate must be between 0 and 10000 basis points");
         }
         
@@ -862,17 +870,15 @@ impl NovaRewardsContract {
         
         // Calculate yield: amount × rate × (now - staked_at) / SECONDS_PER_YEAR
         let yield_amount = if annual_rate > 0 && time_elapsed > 0 {
-            // Convert annual rate from basis points to decimal (rate / 10000)
-            // Then apply time factor: (time_elapsed / SECONDS_PER_YEAR)
-            // Formula: amount × (annual_rate / 10000) × (time_elapsed / SECONDS_PER_YEAR)
-            // Simplified: amount × annual_rate × time_elapsed / (10000 × SECONDS_PER_YEAR)
+            // Formula: amount × (annual_rate / BASIS_POINTS_DIVISOR) × (time_elapsed / SECONDS_PER_YEAR)
+            // Simplified: amount × annual_rate × time_elapsed / (BASIS_POINTS_DIVISOR × SECONDS_PER_YEAR)
             stake_record
                 .amount
                 .checked_mul(annual_rate)
                 .expect("overflow in amount * annual_rate")
                 .checked_mul(time_elapsed as i128)
                 .expect("overflow in * time_elapsed")
-                .checked_div(10000 * SECONDS_PER_YEAR as i128)
+                .checked_div(BASIS_POINTS_DIVISOR * SECONDS_PER_YEAR as i128)
                 .expect("overflow in division")
         } else {
             0
@@ -927,7 +933,7 @@ impl NovaRewardsContract {
                 .expect("overflow in amount * annual_rate")
                 .checked_mul(time_elapsed as i128)
                 .expect("overflow in * time_elapsed")
-                .checked_div(10000 * SECONDS_PER_YEAR as i128)
+                .checked_div(BASIS_POINTS_DIVISOR * SECONDS_PER_YEAR as i128)
                 .expect("overflow in division")
         } else {
             0
