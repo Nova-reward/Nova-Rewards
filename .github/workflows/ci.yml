@@ -90,6 +90,13 @@ jobs:
           name: backend-coverage
           path: novaRewards/backend/coverage
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: novaRewards/backend/coverage/lcov.info
+          flags: backend
+          fail_ci_if_error: false
+
   load-test:
     name: Load Tests (k6)
     runs-on: ubuntu-latest
@@ -275,7 +282,7 @@ jobs:
           DATABASE_URL: postgresql://nova:test_password@localhost:5432/nova_rewards_test
 
       - name: Run integration tests
-        run: npx jest --selectProjects integration --runInBand --forceExit
+        run: npx vitest run tests/integration --reporter=verbose
         env:
           DATABASE_URL: postgresql://nova:test_password@localhost:5432/nova_rewards_test
 
@@ -382,7 +389,7 @@ jobs:
         working-directory: novaRewards
 
       - name: Run provider Pact verification
-        run: npx jest --selectProjects pact --runInBand --testTimeout=60000
+        run: npx vitest run pact --reporter=verbose
         working-directory: novaRewards/backend
         env:
           PACT_BROKER_URL: ${{ secrets.PACT_BROKER_URL }}
