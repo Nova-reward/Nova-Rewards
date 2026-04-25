@@ -99,10 +99,9 @@ graph TD
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Node.js | ≥ 20 | [nodejs.org](https://nodejs.org) |
-| Rust (stable) | see `rust-toolchain.toml` | [rustup.rs](https://rustup.rs) |
-| Stellar CLI | latest | [developers.stellar.org](https://developers.stellar.org/docs/tools/cli/install-cli) |
 | Docker Desktop | latest | [docker.com](https://www.docker.com/products/docker-desktop) |
+| Node.js | ≥ 20 | [nodejs.org](https://nodejs.org) (for running tests outside Docker) |
+| Rust (stable) | see `rust-toolchain.toml` | [rustup.rs](https://rustup.rs) (for contract development) |
 | Freighter wallet | latest | [freighter.app](https://www.freighter.app) |
 
 ### 1 — Clone
@@ -112,24 +111,54 @@ git clone https://github.com/barry01-hash/Nova-Rewards.git
 cd Nova-Rewards
 ```
 
-### 2 — Start infrastructure (Postgres + Redis + Backend + Frontend)
+### 2 — Configure environment
 
 ```bash
 cd novaRewards
-cp .env.example .env          # fill in secrets — see Environment Setup below
+cp .env.example .env   # fill in secrets — see Environment Setup below
+```
+
+### 3 — Start the full stack
+
+```bash
 docker compose up --build
 ```
 
-Services come up at:
-- Frontend → http://localhost:3000
-- Backend API → http://localhost:3001
-- Nginx gateway → http://localhost:8080
+This single command starts all services:
 
-### 3 — Set up Soroban contracts
+| Service | URL | Description |
+|---------|-----|-------------|
+| Frontend | http://localhost:3000 | Next.js PWA (hot reload via `next dev`) |
+| Backend API | http://localhost:3001 | Express API (hot reload via nodemon) |
+| Nginx gateway | http://localhost:8080 | Reverse proxy |
+| PostgreSQL | localhost:5432 | Primary database (data persisted in `postgres_data` volume) |
+| Redis | localhost:6379 | Cache & rate limiting (data persisted in `redis_data` volume) |
+| Stellar standalone | http://localhost:8000 | Local Soroban/Stellar node (RPC at `/rpc`) |
 
-**POSIX:**
+Database migrations run automatically before the backend starts. Hot reload is active for both backend (nodemon) and frontend (Next.js dev server) — saving a file triggers an instant reload with no container restart needed.
+
+To run only the infrastructure services (no app):
+
 ```bash
-./scripts/setup-soroban-dev.sh   # installs wasm32v1-none target, adds local network
+docker compose up postgres redis stellar
+```
+
+To stop and remove containers (volumes are preserved):
+
+```bash
+docker compose down
+```
+
+To also wipe persisted data:
+
+```bash
+docker compose down -v
+```
+
+### 4 — Set up Soroban contracts
+
+```bash
+./scripts/setup-soroban-dev.sh   # installs wasm32v1-none target, registers local network
 ./scripts/build-contracts.sh     # compiles all contracts to WASM
 ./scripts/test-contracts.sh      # runs contract test suite
 ```
@@ -139,16 +168,6 @@ Services come up at:
 ./scripts/setup-soroban-dev.ps1
 ./scripts/build-contracts.ps1
 ./scripts/test-contracts.ps1
-```
-
-### 4 — (Optional) Local Stellar testnet
-
-```bash
-./scripts/start-local-testnet.sh      # starts a standalone Soroban/Stellar node
-```
-
-```powershell
-./scripts/start-local-testnet.ps1
 ```
 
 ### 5 — Run application tests
