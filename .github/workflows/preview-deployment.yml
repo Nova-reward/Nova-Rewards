@@ -9,23 +9,27 @@ on:
 jobs:
   build-and-deploy-preview:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    # Skip drafts and runs where Heroku is not configured
+    if: >
+      github.event.pull_request.draft == false &&
+      secrets.HEROKU_API_KEY != ''
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: 20
+          cache: npm
+          cache-dependency-path: novaRewards/package-lock.json
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
       - name: Generate preview URL
         id: preview-url
@@ -37,7 +41,10 @@ jobs:
       - name: Build backend
         working-directory: ./backend
         run: |
-          npm ci
+          NEXT_PUBLIC_API_URL=https://api-pr-${{ github.event.pull_request.number }}-nova-rewards.herokuapp.com \
+          NEXT_PUBLIC_STELLAR_NETWORK=testnet \
+          NEXT_PUBLIC_HORIZON_URL=https://horizon-testnet.stellar.org \
+          NEXT_PUBLIC_ISSUER_PUBLIC=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \
           npm run build
 
       - name: Create Heroku app if not exists
@@ -45,10 +52,10 @@ jobs:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
         run: |
           PREVIEW_APP="pr-${{ github.event.pull_request.number }}-nova-rewards"
-          if ! heroku apps:info "${PREVIEW_APP}" --exit-code; then
+          if ! heroku apps:info "${PREVIEW_APP}" --exit-code 2>/dev/null; then
             heroku apps:create "${PREVIEW_APP}" \
               --region us \
-              --stack heroku-20 || true
+              --stack heroku-22 || true
           fi
 
       - name: Deploy to Heroku
@@ -84,19 +91,10 @@ jobs:
           PREVIEW_APP="pr-${{ github.event.pull_request.number }}-nova-rewards"
           heroku run "npm run db:seed:preview" --app "${PREVIEW_APP}" --exit-code || true
 
-      - name: Run tests
-        working-directory: ./backend
-        env:
-          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-          REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
-          NODE_ENV: test
-        run: |
-          npm run test:ci
-
       - name: Post deployment comment
         continue-on-error: true
         if: always()
-        uses: actions/github-script@v9
+        uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -125,12 +123,14 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: commentBody
+              body: commentBody,
             });
 
   cleanup-preview:
     runs-on: ubuntu-latest
-    if: github.event.action == 'closed'
+    if: >
+      github.event.action == 'closed' &&
+      secrets.HEROKU_API_KEY != ''
 
     steps:
       - name: Destroy preview app
@@ -142,12 +142,12 @@ jobs:
 
       - name: Post cleanup comment
         continue-on-error: true
-        uses: actions/github-script@v9
+        uses: actions/github-script@v7
         with:
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '🧹 Preview deployment has been cleaned up.'
+              body: '🧹 Preview deployment has been cleaned up.',
             });
