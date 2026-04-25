@@ -224,6 +224,8 @@ See [LICENSE](LICENSE) for terms, or contact the maintainers for licensing inqui
 |----------|-------------|
 | [docs/PRD.md](docs/PRD.md) | Product requirements and roadmap |
 | [docs/architecture.md](docs/architecture.md) | Detailed system architecture |
+| [docs/system-design.md](docs/system-design.md) | Mermaid component, data-flow, contract interaction, and deployment topology diagrams |
+| [docs/adr/README.md](docs/adr/README.md) | Architecture decision records for key system design choices |
 | [docs/contracts.md](docs/contracts.md) | Contract addresses, deploy & upgrade instructions |
 | [docs/abi-reference.md](docs/abi-reference.md) | Full ABI — function signatures, events, integration examples |
 | [docs/error-codes.md](docs/error-codes.md) | Contract error codes and remediation |
