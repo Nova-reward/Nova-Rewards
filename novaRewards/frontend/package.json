@@ -28,6 +28,7 @@
     "react-dom": "^18.3.1",
     "react-joyride": "^2.9.3",
     "stellar-sdk": "^12.3.0",
+    "swr": "^2.2.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {

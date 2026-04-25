@@ -3,12 +3,46 @@ const router = express.Router();
 const { authenticateUser } = require('../middleware/authenticateUser');
 const { query } = require('../db');
 
+const { getNotificationsForUser, markAllNotificationsAsRead, markNotificationAsRead } = require('../db/notificationRepository');
+
+/**
+ * GET /api/notifications
+ * Returns the user's notifications.
+ */
+router.get('/', authenticateUser, async (req, res) => {
+  try {
+    const { page, limit } = req.query;
+    const notifications = await getNotificationsForUser(req.user.id, { page: page || 1, limit: limit || 50 });
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
 /**
  * PATCH /api/notifications/read-all
- * Stateless acknowledgement — client resets unreadCount on 200.
+ * Mark all notifications as read.
  */
-router.patch('/read-all', authenticateUser, (req, res) => {
-  res.json({ success: true });
+router.patch('/read-all', authenticateUser, async (req, res) => {
+  try {
+    await markAllNotificationsAsRead(req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to mark all as read' });
+  }
+});
+
+/**
+ * PATCH /api/notifications/:id/read
+ * Mark a single notification as read.
+ */
+router.patch('/:id/read', authenticateUser, async (req, res) => {
+  try {
+    await markNotificationAsRead(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
 });
 
 /**
