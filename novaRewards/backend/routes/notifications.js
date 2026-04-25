@@ -45,6 +45,22 @@ router.patch('/:id/read', authenticateUser, async (req, res, next) => {
   }
 });
 
+const { getNotificationsForUser, markAllNotificationsAsRead, markNotificationAsRead } = require('../db/notificationRepository');
+
+/**
+ * GET /api/notifications
+ * Returns the user's notifications.
+ */
+router.get('/', authenticateUser, async (req, res) => {
+  try {
+    const { page, limit } = req.query;
+    const notifications = await getNotificationsForUser(req.user.id, { page: page || 1, limit: limit || 50 });
+    res.json(notifications);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
 /**
  * PATCH /api/notifications/read-all
  * Marks all notifications as read for the authenticated user.
