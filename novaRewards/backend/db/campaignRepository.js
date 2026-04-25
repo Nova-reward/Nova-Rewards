@@ -163,6 +163,159 @@ async function softDeleteCampaign(id, txHash) {
   return result.rows[0] || null;
 }
 
+/**
+ * Returns a paginated list of public (non-deleted) campaigns joined with
+ * merchant name, with optional server-side filtering.
+ *
+ * Supports filtering by: category, rewardType, status, merchantId, search.
+ * Status is derived from is_active + end_date at query time.
+ *
+ * @param {{
+ *   page?: number,
+ *   limit?: number,
+ *   category?: string,
+ *   rewardType?: string,
+ *   status?: 'active'|'paused'|'completed',
+ *   merchantId?: number,
+ *   search?: string,
+ * }} params
+ * @returns {Promise<{ campaigns: object[], total: number, hasMore: boolean }>}
+ */
+async function getPublicCampaigns({
+  page = 1,
+  limit = 12,
+  category,
+  rewardType,
+  status,
+  merchantId,
+  search,
+} = {}) {
+  const offset = (Math.max(1, page) - 1) * limit;
+  const conditions = ['c.deleted_at IS NULL'];
+  const values = [];
+  let i = 1;
+
+  if (category) {
+    conditions.push(`c.category = $${i++}`);
+    values.push(category);
+  }
+  if (rewardType) {
+    conditions.push(`c.reward_type = $${i++}`);
+    values.push(rewardType);
+  }
+  if (merchantId) {
+    conditions.push(`c.merchant_id = $${i++}`);
+    values.push(merchantId);
+  }
+  if (search) {
+    conditions.push(`(c.name ILIKE $${i} OR m.name ILIKE $${i})`);
+    values.push(`%${search}%`);
+    i++;
+  }
+
+  // Status filter: derive from DB columns
+  if (status === 'active') {
+    conditions.push(`c.is_active = TRUE AND c.end_date >= CURRENT_DATE`);
+  } else if (status === 'paused') {
+    conditions.push(`c.is_active = FALSE AND c.end_date >= CURRENT_DATE`);
+  } else if (status === 'completed') {
+    conditions.push(`c.end_date < CURRENT_DATE`);
+  }
+
+  const where = `WHERE ${conditions.join(' AND ')}`;
+
+  // Count query (no LIMIT/OFFSET)
+  const countResult = await query(
+    `SELECT COUNT(*) AS total
+     FROM campaigns c
+     JOIN merchants m ON m.id = c.merchant_id
+     ${where}`,
+    values
+  );
+  const total = parseInt(countResult.rows[0].total, 10);
+
+  // Data query
+  const dataResult = await query(
+    `SELECT
+       c.id,
+       c.name,
+       c.description,
+       c.category,
+       c.reward_type,
+       c.reward_rate,
+       c.start_date,
+       c.end_date,
+       c.is_active,
+       c.participant_count,
+       c.eligibility_rules,
+       c.tags,
+       c.merchant_id,
+       m.name        AS merchant_name,
+       m.logo_url    AS merchant_logo
+     FROM campaigns c
+     JOIN merchants m ON m.id = c.merchant_id
+     ${where}
+     ORDER BY
+       CASE WHEN c.is_active = TRUE AND c.end_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+       c.created_at DESC
+     LIMIT $${i++} OFFSET $${i++}`,
+    [...values, limit, offset]
+  );
+
+  return {
+    campaigns: dataResult.rows,
+    total,
+    hasMore: offset + dataResult.rows.length < total,
+  };
+}
+
+/**
+ * Returns a single public campaign by ID (no auth required).
+ * Returns null if not found or soft-deleted.
+ *
+ * @param {number} id
+ * @returns {Promise<object|null>}
+ */
+async function getPublicCampaignById(id) {
+  const result = await query(
+    `SELECT
+       c.id,
+       c.name,
+       c.description,
+       c.category,
+       c.reward_type,
+       c.reward_rate,
+       c.start_date,
+       c.end_date,
+       c.is_active,
+       c.participant_count,
+       c.eligibility_rules,
+       c.tags,
+       c.merchant_id,
+       m.name     AS merchant_name,
+       m.logo_url AS merchant_logo
+     FROM campaigns c
+     JOIN merchants m ON m.id = c.merchant_id
+     WHERE c.id = $1 AND c.deleted_at IS NULL`,
+    [id]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Returns the distinct non-null categories across all non-deleted campaigns.
+ * @returns {Promise<string[]>}
+ */
+async function getPublicCampaignCategories() {
+  const result = await query(
+    `SELECT DISTINCT category
+     FROM campaigns
+     WHERE category IS NOT NULL AND deleted_at IS NULL
+     ORDER BY category ASC`
+  );
+  return result.rows.map((r) => r.category);
+}
+
 module.exports = {
   validateCampaign,
   createCampaign,
@@ -173,4 +326,7 @@ module.exports = {
   getActiveCampaign,
   updateCampaign,
   softDeleteCampaign,
+  getPublicCampaigns,
+  getPublicCampaignById,
+  getPublicCampaignCategories,
 };

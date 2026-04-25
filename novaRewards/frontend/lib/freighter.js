@@ -55,6 +55,44 @@ export async function connectWallet() {
 }
 
 /**
+ * Returns the current network passphrase based on NEXT_PUBLIC_STELLAR_NETWORK.
+ * Requirements: 8.1
+ *
+ * @returns {string} Network passphrase (PUBLIC or TESTNET)
+ */
+export function getNetworkPassphrase() {
+  return NETWORK_PASSPHRASE;
+}
+
+/**
+ * Signs an XDR transaction with Freighter without submitting.
+ * Returns the signed XDR for the caller to submit.
+ * Requirements: 8.2
+ *
+ * @param {string} xdr - Unsigned transaction XDR string
+ * @returns {Promise<string>} Signed transaction XDR
+ * @throws {Error} if signing fails or user rejects
+ */
+export async function sign(xdr) {
+  try {
+    const signResult = await signTransaction(xdr, {
+      networkPassphrase: NETWORK_PASSPHRASE,
+    });
+
+    if (signResult.error) {
+      throw new Error(`Transaction signing failed: ${signResult.error}`);
+    }
+
+    return signResult.signedTxXdr;
+  } catch (err) {
+    if (err.message?.includes('User rejected')) {
+      throw new Error('You rejected the signing request. Please try again.');
+    }
+    throw new Error(err.message || 'Failed to sign transaction. Please try again.');
+  }
+}
+
+/**
  * Signs an XDR transaction with Freighter and submits it to Horizon.
  * Requirements: 8.2
  *

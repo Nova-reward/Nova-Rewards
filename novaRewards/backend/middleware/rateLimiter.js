@@ -19,6 +19,18 @@ const rateLimit   = require('express-rate-limit');
 const { RedisStore } = require('rate-limit-redis');
 const { client: redisClient } = require('../lib/redis');
 const { slidingRateLimiter } = require('./slidingRateLimiter');
+const {
+  RATE_LIMIT_WINDOW_MS,
+  RATE_LIMIT_RETRY_AFTER_SECS,
+  RL_GLOBAL_MAX,
+  RL_AUTH_MAX,
+  RL_USER_MAX,
+  RL_SEARCH_MAX,
+  RL_WEBHOOK_MAX,
+  RL_WEBHOOK_API_KEY_MAX,
+  RL_REWARDS_MAX,
+  RL_ADMIN_MAX,
+} = require('../config/constants');
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -42,11 +54,11 @@ function makeStore(prefix) {
 }
 
 function onLimitReached(req, res) {
-  res.setHeader('Retry-After', '60');
+  res.setHeader('Retry-After', String(RATE_LIMIT_RETRY_AFTER_SECS));
   res.status(429).json({
     success: false,
     error:   'too_many_requests',
-    message: 'Rate limit exceeded. Please retry after 60 seconds.',
+    message: `Rate limit exceeded. Please retry after ${RATE_LIMIT_RETRY_AFTER_SECS} seconds.`,
   });
 }
 
@@ -55,8 +67,8 @@ function onLimitReached(req, res) {
 // ---------------------------------------------------------------------------
 
 const globalLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 100,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RL_GLOBAL_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   skip,
@@ -65,8 +77,8 @@ const globalLimiter = rateLimit({
 });
 
 const authLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 5,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RL_AUTH_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   skip,
@@ -82,52 +94,63 @@ const w = (s) => s * 1000; // seconds → ms helper
 
 const slidingGlobal = slidingRateLimiter({
   prefix:   'sw:global',
-  windowMs: w(60),
-  max:      parseInt(process.env.RL_GLOBAL_MAX)  || 100,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_GLOBAL_MAX)  || RL_GLOBAL_MAX,
   keyBy:    'ip',
 });
 
 const slidingAuth = slidingRateLimiter({
   prefix:   'sw:auth',
-  windowMs: w(60),
-  max:      parseInt(process.env.RL_AUTH_MAX)    || 5,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_AUTH_MAX)    || RL_AUTH_MAX,
   keyBy:    'ip',
-  message:  'Too many authentication attempts. Retry after 60 seconds.',
+  message:  `Too many authentication attempts. Retry after ${RATE_LIMIT_RETRY_AFTER_SECS} seconds.`,
 });
 
 const slidingUser = slidingRateLimiter({
   prefix:   'sw:user',
-  windowMs: w(60),
-  max:      parseInt(process.env.RL_USER_MAX)    || 200,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_USER_MAX)    || RL_USER_MAX,
   keyBy:    'user-or-ip',
 });
 
 const slidingSearch = slidingRateLimiter({
   prefix:   'sw:search',
-  windowMs: w(60),
-  max:      parseInt(process.env.RL_SEARCH_MAX)  || 30,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_SEARCH_MAX)  || RL_SEARCH_MAX,
   keyBy:    'user-or-ip',
-  message:  'Search rate limit exceeded. Retry after 60 seconds.',
+  message:  `Search rate limit exceeded. Retry after ${RATE_LIMIT_RETRY_AFTER_SECS} seconds.`,
 });
 
 const slidingWebhook = slidingRateLimiter({
   prefix:   'sw:webhook',
-  windowMs: w(60),
-  max:      parseInt(process.env.RL_WEBHOOK_MAX) || 60,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_WEBHOOK_MAX) || RL_WEBHOOK_MAX,
   keyBy:    'ip',
+});
+
+/**
+ * Webhook endpoint limiter keyed by merchant API key.
+ * Falls back to IP if no x-api-key header is present.
+ */
+const webhookApiKeyLimiter = slidingRateLimiter({
+  prefix:   'sw:webhook-apikey',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_WEBHOOK_API_KEY_MAX) || RL_WEBHOOK_API_KEY_MAX,
+  keyBy:    'api-key',
 });
 
 const slidingRewards = slidingRateLimiter({
   prefix:   'sw:rewards',
-  windowMs: w(60),
-  max:      parseInt(process.env.RL_REWARDS_MAX) || 20,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_REWARDS_MAX) || RL_REWARDS_MAX,
   keyBy:    'ip',
 });
 
 const slidingAdmin = slidingRateLimiter({
   prefix:   'sw:admin',
-  windowMs: w(60),
-  max:      parseInt(process.env.RL_ADMIN_MAX)   || 120,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_ADMIN_MAX)   || RL_ADMIN_MAX,
   keyBy:    'user',
 });
 
@@ -141,6 +164,7 @@ module.exports = {
   slidingUser,
   slidingSearch,
   slidingWebhook,
+  webhookApiKeyLimiter,
   slidingRewards,
   slidingAdmin,
 };
