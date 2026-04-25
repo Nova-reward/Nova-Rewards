@@ -50,7 +50,9 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
+    "@faker-js/faker": "^9.8.0",
     "fast-check": "^4.7.0",
+    "fishery": "^2.2.2",
     "jest": "^30.3.0",
     "jest-junit": "^16.0.0",
     "nodemon": "^3.1.14",
