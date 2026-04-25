@@ -1,23 +1,20 @@
-const { createSpy } = require('./spies');
+import { vi } from 'vitest';
 
-function createMockFunction(impl) {
-  const fn = createSpy();
-  if (impl) {
-    fn.mockImplementation(impl);
-  }
+export function createMockFunction(impl) {
+  const fn = vi.fn();
+  if (impl) fn.mockImplementation(impl);
   return fn;
 }
 
-function createMockModule(shape) {
+export function createMockModule(shape) {
   const mock = {};
-  Object.keys(shape).forEach((key) => {
-    const value = shape[key];
+  for (const [key, value] of Object.entries(shape)) {
     mock[key] = typeof value === 'function' ? createMockFunction(value) : value;
-  });
+  }
   return mock;
 }
 
-function createRequest({ body = {}, params = {}, query = {}, headers = {} } = {}) {
+export function createRequest({ body = {}, params = {}, query = {}, headers = {} } = {}) {
   return {
     body,
     params,
@@ -29,18 +26,14 @@ function createRequest({ body = {}, params = {}, query = {}, headers = {} } = {}
   };
 }
 
-function createResponse() {
+export function createResponse() {
   const res = {};
-  res.status = jest.fn(() => res);
-  res.json = jest.fn(() => res);
-  res.send = jest.fn(() => res);
-  res.set = jest.fn(() => res);
+  res.status = vi.fn(() => res);
+  res.json = vi.fn(() => res);
+  res.send = vi.fn(() => res);
+  res.set = vi.fn(() => res);
   return res;
 }
 
-module.exports = {
-  createMockFunction,
-  createMockModule,
-  createRequest,
-  createResponse,
-};
+// CommonJS interop for tests that still use require()
+module.exports = { createMockFunction, createMockModule, createRequest, createResponse };

@@ -1,0 +1,15 @@
+[package]
+name = "integration_tests"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+nova-rewards = { path = "../nova-rewards" }
+nova_token = { path = "../nova_token" }
+escrow = { path = "../escrow" }
+reward_pool = { path = "../reward_pool" }

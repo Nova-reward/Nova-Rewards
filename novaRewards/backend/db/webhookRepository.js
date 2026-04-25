@@ -1,4 +1,31 @@
 const { query } = require('./index');
+const { encrypt, decrypt } = require('../lib/encryption');
+
+// ---------------------------------------------------------------------------
+// Encryption helpers for the webhooks.secret column
+// ---------------------------------------------------------------------------
+
+/** Encrypts the secret field of a webhook row before persisting. */
+function encryptWebhookSecret(secret) {
+  return encrypt(secret);
+}
+
+/**
+ * Decrypts the secret field of a webhook row after reading.
+ * Safe to call on already-plaintext values (legacy rows) — decrypt() is
+ * a no-op for values that don't look like encrypted blobs.
+ */
+function decryptWebhookRow(row) {
+  if (!row) return row;
+  if (row.secret !== undefined && row.secret !== null) {
+    row.secret = decrypt(row.secret);
+  }
+  return row;
+}
+
+function decryptWebhookRows(rows) {
+  return rows.map(decryptWebhookRow);
+}
 
 // ---------------------------------------------------------------------------
 // Webhooks
@@ -9,8 +36,9 @@ async function createWebhook({ merchantId, url, secret, events }) {
     `INSERT INTO webhooks (merchant_id, url, secret, events)
      VALUES ($1, $2, $3, $4)
      RETURNING id, merchant_id, url, events, is_active, created_at`,
-    [merchantId, url, secret, events]
+    [merchantId, url, encryptWebhookSecret(secret), events]
   );
+  // secret is not returned in the listing query — only on creation via the route
   return rows[0];
 }
 
@@ -28,7 +56,7 @@ async function getWebhookById(id) {
     `SELECT * FROM webhooks WHERE id = $1`,
     [id]
   );
-  return rows[0] || null;
+  return decryptWebhookRow(rows[0] || null);
 }
 
 async function updateWebhook(id, merchantId, { url, events, isActive }) {
@@ -64,6 +92,7 @@ async function deleteWebhook(id, merchantId) {
 
 /**
  * Returns all active webhooks subscribed to a given event type.
+ * Decrypts the secret so it can be used for HMAC signing.
  */
 async function getActiveWebhooksForEvent(eventType) {
   const { rows } = await query(
@@ -71,7 +100,7 @@ async function getActiveWebhooksForEvent(eventType) {
      WHERE is_active = TRUE AND ($1 = ANY(events) OR '*' = ANY(events))`,
     [eventType]
   );
-  return rows;
+  return decryptWebhookRows(rows);
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +152,7 @@ async function getDeliveriesByWebhook(webhookId, { page = 1, limit = 20 } = {}) 
 
 /**
  * Returns failed deliveries whose next_retry_at is due.
+ * Decrypts the webhook secret so it can be used for HMAC signing on retry.
  */
 async function getDueRetries(maxAttempts = 5) {
   const { rows } = await query(
@@ -135,7 +165,7 @@ async function getDueRetries(maxAttempts = 5) {
        AND w.is_active = TRUE`,
     [maxAttempts]
   );
-  return rows;
+  return decryptWebhookRows(rows);
 }
 
 module.exports = {

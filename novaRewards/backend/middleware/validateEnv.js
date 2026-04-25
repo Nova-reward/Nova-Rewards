@@ -12,6 +12,11 @@ const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
   'REDIS_URL',
   'JWT_SECRET',
+  'FIELD_ENCRYPTION_KEY',  // AES-256-GCM key for field-level encryption (#651)
+];
+
+const BACKUP_ENV_VARS = [
+  'BACKUP_PASSPHRASE',
 ];
 
 /**
@@ -24,9 +29,17 @@ const REQUIRED_ENV_VARS = [
 function validateEnv() {
   const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 
-  // In production, ALLOWED_ORIGIN is also required for CORS security
-  if (process.env.NODE_ENV === 'production' && !process.env.ALLOWED_ORIGIN) {
-    missing.push('ALLOWED_ORIGIN');
+  if (process.env.NODE_ENV === 'production') {
+    // ALLOWED_ORIGIN is required for CORS security in production
+    if (!process.env.ALLOWED_ORIGIN) missing.push('ALLOWED_ORIGIN');
+    // REDIS_URL is required in production (sourced from Secrets Manager)
+    if (!process.env.REDIS_URL) missing.push('REDIS_URL');
+  }
+
+  if (process.env.BACKUP_ENABLED === 'true') {
+    BACKUP_ENV_VARS.forEach((key) => {
+      if (!process.env[key]) missing.push(key);
+    });
   }
 
   if (missing.length > 0) {
@@ -39,4 +52,4 @@ function validateEnv() {
   }
 }
 
-module.exports = { validateEnv, REQUIRED_ENV_VARS };
+module.exports = { validateEnv, REQUIRED_ENV_VARS, BACKUP_ENV_VARS };

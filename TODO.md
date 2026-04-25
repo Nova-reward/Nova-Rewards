@@ -1,0 +1,1 @@
+# Task Complete: Resolve conflicts (none found) and remove MD/snapshots\n\n1. [x] Remove snapshot test directories\n2. [x] Remove non-essential MD files\n3. [x] Git add/commit/push\n4. [x] Verify clean status\n\nAll done. No conflicts. Removed 54 files (19 snapshots + 35 MDs). Branch: feature/nova-token pushed to origin.

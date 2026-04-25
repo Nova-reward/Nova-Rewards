@@ -1,14 +1,14 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
+import useSWR from 'swr';
 import { useAuth } from './AuthContext';
 import { useToast } from '../components/Toast';
 import api from '../lib/api';
 
 const NotificationContext = createContext(null);
 
-const MAX_NOTIFICATIONS = 10;
+const MAX_NOTIFICATIONS = 50;
 
 const TYPE_ICONS = {
   reward: '🎁',
@@ -22,7 +22,6 @@ export function getTypeIcon(type) {
   return TYPE_ICONS[type] || '🔔';
 }
 
-/** Returns a relative time string like "2m ago", "1h ago", "3d ago" */
 export function relativeTime(isoString) {
   const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
   if (diff < 60) return `${diff}s ago`;
@@ -31,7 +30,6 @@ export function relativeTime(isoString) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-/** Plays a subtle notification sound via the Web Audio API (no asset needed). */
 function playNotificationSound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -45,81 +43,106 @@ function playNotificationSound() {
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.3);
   } catch {
-    // AudioContext not available (SSR / restricted env) — silently ignore
+    // AudioContext not available — silently ignore
   }
 }
+
+const fetcher = url => api.get(url).then(res => res.data);
 
 export function NotificationProvider({ children }) {
   const { token, isAuthenticated } = useAuth();
   const { addToast } = useToast();
 
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [archived, setArchived] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const socketRef = useRef(null);
-  // Keep a ref so the socket event handler always sees the latest value
-  const dropdownOpenRef = useRef(dropdownOpen);
-  useEffect(() => { dropdownOpenRef.current = dropdownOpen; }, [dropdownOpen]);
+  const { data: notificationsData, mutate } = useSWR(
+    isAuthenticated && token ? '/api/notifications' : null,
+    fetcher,
+    { refreshInterval: 30000, revalidateOnFocus: true }
+  );
 
-  // ── Socket lifecycle ──────────────────────────────────────────────────────
+  const allNotifications = notificationsData?.data || [];
+
+  const [unreadCount, setUnreadCount] = useState(0);
+  const prevCountRef = useRef(0);
+
   useEffect(() => {
-    if (!isAuthenticated || !token) return;
-
-    const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', {
-      auth: { token },
-      reconnection: true,
-      reconnectionDelay: 2000,
-    });
-    socketRef.current = socket;
-
-    socket.on('notification', (notification) => {
-      // Prepend and cap at MAX_NOTIFICATIONS
-      setNotifications((prev) => [notification, ...prev].slice(0, MAX_NOTIFICATIONS));
-
-      if (!dropdownOpenRef.current) {
-        setUnreadCount((c) => c + 1);
+    if (!dropdownOpen) {
+      const serverUnread = allNotifications.filter(n => !n.is_read).length;
+      if (serverUnread > prevCountRef.current) {
         playNotificationSound();
-        addToast(notification.message, 'info');
+        const newest = allNotifications.filter(n => !n.is_read)[0];
+        if (newest) {
+          addToast(newest.message || 'New notification', newest.type || 'info');
+        }
       }
-    });
+      setUnreadCount(serverUnread);
+      prevCountRef.current = serverUnread;
+    }
+  }, [allNotifications, addToast, dropdownOpen]);
 
-    return () => {
-      socket.disconnect();
-      socketRef.current = null;
-    };
-  }, [isAuthenticated, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  const addNotification = useCallback(() => mutate(), [mutate]);
+  const setNotificationsList = useCallback(() => mutate(), [mutate]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
-  const addNotification = useCallback((notification) => {
-    setNotifications((prev) => [notification, ...prev].slice(0, MAX_NOTIFICATIONS));
-    setUnreadCount((c) => c + 1);
-  }, []);
+  const dismiss = useCallback(async (id) => {
+    try {
+      await api.patch(`/api/notifications/${id}/read`);
+      mutate();
+    } catch {
+      // Non-critical
+    }
+  }, [mutate]);
 
-  const setNotificationsList = useCallback((list) => {
-    setNotifications(list.slice(0, MAX_NOTIFICATIONS));
-  }, []);
+  const archive = useCallback(async (id) => {
+    try {
+      await api.patch(`/api/notifications/${id}/read`);
+      setArchived(prev => {
+        const target = allNotifications.find(n => n.id === id);
+        return target ? [target, ...prev] : prev;
+      });
+      mutate();
+    } catch {
+      // Non-critical
+    }
+  }, [allNotifications, mutate]);
+
+  const clearAll = useCallback(async () => {
+    try {
+      await api.patch('/api/notifications/read-all');
+      setArchived([]);
+      mutate();
+    } catch {
+      // Non-critical
+    }
+  }, [mutate]);
 
   const openDropdown = useCallback(async () => {
     setDropdownOpen(true);
     setUnreadCount(0);
+    prevCountRef.current = 0;
     try {
       await api.patch('/api/notifications/read-all');
+      mutate();
     } catch {
-      // Non-critical — badge is already cleared client-side
+      // Non-critical
     }
-  }, []);
+  }, [mutate]);
 
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
 
   return (
     <NotificationContext.Provider
       value={{
-        notifications,
+        notifications: allNotifications,
+        archived,
         unreadCount,
         dropdownOpen,
         addNotification,
         setNotifications: setNotificationsList,
+        dismiss,
+        archive,
+        clearAll,
         openDropdown,
         closeDropdown,
       }}

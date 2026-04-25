@@ -1,21 +1,11 @@
-'use client';
-/**
- * Merchant Registration & Verification Flow
- * Steps:
- *   1. Business details form
- *   2. Wallet verification (Freighter signing)
- *   3. Business profile upload (logo, description, website)
- *   4. Guided first-campaign tutorial overlay
- *
- * Mobile-responsive for all steps.
- * Closes #619
- */
-
-import { useState, useCallback } from 'react';
-import CampaignManager from '../components/CampaignManager';
-import CampaignAnalytics from '../components/CampaignAnalytics';
-import IssueRewardForm from '../components/IssueRewardForm';
+import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import api from '../lib/api';
+import DashboardLayout from '../components/layout/DashboardLayout';
+
+const CampaignManager  = dynamic(() => import('../components/CampaignManager'),  { ssr: false });
+const CampaignAnalytics = dynamic(() => import('../components/CampaignAnalytics'), { ssr: false });
+const IssueRewardForm  = dynamic(() => import('../components/IssueRewardForm'),  { ssr: false });
 
 // ── Step indicators ──────────────────────────────────────────────────────────
 const STEPS = ['Business Details', 'Wallet Verification', 'Business Profile', 'Dashboard'];
@@ -328,83 +318,31 @@ function TutorialOverlay({ onClose }) {
   const isLast = step === TUTORIAL_STEPS.length - 1;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1000, padding: '1rem',
-    }}>
-      <div style={{
-        background: 'var(--card-bg, #1e1b4b)', borderRadius: '1rem',
-        padding: '2rem', maxWidth: 420, width: '100%',
-        border: '1px solid rgba(124,58,237,0.4)',
-        boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
-      }}>
-        {/* Progress dots */}
-        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.5rem', justifyContent: 'center' }}>
-          {TUTORIAL_STEPS.map((_, i) => (
-            <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i === step ? 'var(--accent)' : 'rgba(148,163,184,0.3)' }} />
-          ))}
-        </div>
-
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>{current.icon}</div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.5rem' }}>{current.title}</h3>
-          <p style={{ color: 'var(--muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>{current.body}</p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          {step > 0 && (
-            <button className="btn btn-secondary" onClick={() => setStep(s => s - 1)} style={{ flex: 1 }}>
-              ← Back
-            </button>
-          )}
-          <button
-            className="btn btn-primary"
-            onClick={isLast ? onClose : () => setStep(s => s + 1)}
-            style={{ flex: 1 }}
-          >
-            {isLast ? "Let's go! 🚀" : 'Next →'}
-          </button>
-        </div>
-
-        <button
-          onClick={onClose}
-          style={{ display: 'block', margin: '1rem auto 0', background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.8rem' }}
-        >
-          Skip tutorial
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Dashboard (post-registration) ────────────────────────────────────────────
-const TABS = ['Campaigns', 'Analytics', 'Issue Rewards'];
-
-function MerchantDashboard({ merchant, apiKey }) {
-  const [activeTab, setActiveTab] = useState('Campaigns');
-  const [totals, setTotals] = useState({ totalDistributed: 0, totalRedeemed: 0 });
-  const [showTutorial, setShowTutorial] = useState(true);
-
-  const refreshTotals = useCallback(async () => {
-    try {
-      const res = await api.get(`/api/transactions/merchant-totals/${merchant.id}`);
-      setTotals(res.data.data || { totalDistributed: 0, totalRedeemed: 0 });
-    } catch { /* ignore */ }
-  }, [merchant.id]);
-
-  return (
     <>
-      {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
+      <div className="container">
+        <h1 style={{ marginBottom: '1.5rem', fontSize: '1.8rem', fontWeight: 700 }}>Merchant Portal</h1>
 
-      <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>Merchant Portal</p>
-            <p style={{ fontWeight: 700, fontSize: '1.1rem' }}>{merchant.name}</p>
-            <p style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.3rem' }}>
-              API Key: <span style={{ color: 'var(--accent)' }}>{apiKey}</span>
-            </p>
+        {!merchant ? (
+          <div className="card">
+            <h2 style={{ marginBottom: '1rem' }}>Register as a Merchant</h2>
+            <form onSubmit={handleRegister}>
+              <div>
+                <label className="label">Business Name</label>
+                <input className="input" value={regForm.name} onChange={setReg('name')} placeholder="Acme Coffee" disabled={regStatus === 'loading'} />
+              </div>
+              <div>
+                <label className="label">Stellar Wallet Address</label>
+                <input className="input" value={regForm.walletAddress} onChange={setReg('walletAddress')} placeholder="G…" disabled={regStatus === 'loading'} />
+              </div>
+              <div>
+                <label className="label">Business Category (optional)</label>
+                <input className="input" value={regForm.businessCategory} onChange={setReg('businessCategory')} placeholder="Food & Beverage" disabled={regStatus === 'loading'} />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={regStatus === 'loading'}>
+                {regStatus === 'loading' ? 'Registering…' : 'Register'}
+              </button>
+              {regMessage && <p className="error">{regMessage}</p>}
+            </form>
           </div>
           <div style={{ display: 'flex', gap: '2rem' }}>
             {[['Distributed', totals.totalDistributed, 'var(--accent)'], ['Redeemed', totals.totalRedeemed, 'var(--success)']].map(([label, val, color]) => (
@@ -492,3 +430,7 @@ export default function MerchantPage() {
     </>
   );
 }
+
+MerchantDashboard.getLayout = function getLayout(page) {
+  return <DashboardLayout>{page}</DashboardLayout>;
+};

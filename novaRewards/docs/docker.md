@@ -54,6 +54,10 @@ Services started:
 | redis | 6379 | Redis 7 |
 | mailhog | 1025 / 8025 | SMTP trap + web UI |
 
+The PostgreSQL service is configured with WAL archiving enabled, and the backend
+now writes encrypted base backups to `./backups/base` while PostgreSQL archives
+encrypted WAL segments to `./backups/wal`.
+
 Stop everything:
 
 ```bash
