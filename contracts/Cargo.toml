@@ -11,6 +11,7 @@ members = [
     "redemption",
     "escrow",
     "contract_state",
+    "distribution",
 ]
 default-members = [
     "nova_token",
@@ -22,6 +23,7 @@ default-members = [
     "redemption",
     "escrow",
     "contract_state",
+    "distribution",
 ]
 
 [workspace.package]

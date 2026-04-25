@@ -221,6 +221,70 @@ jobs:
           path: novaRewards/backend/test-results/load/
           retention-days: 30
 
+  backend-integration:
+    name: Backend – Integration Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: novaRewards/backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nova_rewards_test
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://nova:test_password@localhost:5432/nova_rewards_test
+      NODE_ENV: test
+      JWT_SECRET: test-jwt-secret-at-least-32-chars!!
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      STELLAR_NETWORK: testnet
+      HORIZON_URL: https://horizon-testnet.stellar.org
+      ISSUER_PUBLIC: GTEST000000000000000000000000000000000000000000000000000001
+      ISSUER_SECRET: STEST000000000000000000000000000000000000000000000000000001
+      DISTRIBUTION_PUBLIC: GTEST000000000000000000000000000000000000000000000000000002
+      DISTRIBUTION_SECRET: STEST000000000000000000000000000000000000000000000000000002
+      ALLOWED_ORIGIN: "*"
+      PORT: "3099"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: novaRewards
+
+      - name: Run database migrations
+        run: node ../database/migrate.js
+        env:
+          DATABASE_URL: postgresql://nova:test_password@localhost:5432/nova_rewards_test
+
+      - name: Run integration tests
+        run: npx jest --selectProjects integration --runInBand --forceExit
+        env:
+          DATABASE_URL: postgresql://nova:test_password@localhost:5432/nova_rewards_test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: novaRewards/backend/test-results/
+
   frontend:
     name: Frontend – Build
     runs-on: ubuntu-latest

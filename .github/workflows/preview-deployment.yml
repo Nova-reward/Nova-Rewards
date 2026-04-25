@@ -38,12 +38,8 @@ jobs:
           PREVIEW_URL="pr-${PR_NUMBER}-nova-rewards-staging.herokuapp.com"
           echo "url=${PREVIEW_URL}" >> $GITHUB_OUTPUT
 
-      - name: Install workspace dependencies
-        run: npm ci
-        working-directory: novaRewards
-
-      - name: Build frontend
-        working-directory: novaRewards/frontend
+      - name: Build backend
+        working-directory: ./backend
         run: |
           NEXT_PUBLIC_API_URL=https://api-pr-${{ github.event.pull_request.number }}-nova-rewards.herokuapp.com \
           NEXT_PUBLIC_STELLAR_NETWORK=testnet \
@@ -103,28 +99,26 @@ jobs:
           script: |
             const pr = context.payload.pull_request;
             const prNumber = pr.number;
-            const previewUrl = `https://pr-${prNumber}-nova-rewards-staging.herokuapp.com`;
             const apiUrl = `https://api-pr-${prNumber}-nova-rewards.herokuapp.com`;
-
-            const commentBody = [
-              '## 🚀 Preview Deployment Ready',
-              '',
-              '✅ Your preview environment is ready for testing!',
-              '',
-              `- **Frontend**: [${previewUrl}](${previewUrl})`,
-              `- **API**: [${apiUrl}](${apiUrl})`,
-              `- **PR Number**: ${prNumber}`,
-              '',
-              '### Test Credentials',
-              '- Email: `testuser1@test.com`',
-              '- Password: `TestPassword123!`',
-              '',
-              '### Notes',
-              '- Preview environment uses staging database with seed data',
-              '- Changes are deployed automatically on new commits',
-              '- Preview environment expires 7 days after PR closes',
-            ].join('\n');
-
+            
+            const commentBody = `## 🚀 Preview Deployment Ready
+            
+            ✅ Your preview environment is ready for testing!
+            
+            - **API**: [${apiUrl}](${apiUrl})
+            - **PR Number**: ${prNumber}
+            
+            ### Test Credentials
+            - Email: \`testuser1@test.com\`
+            - Password: \`TestPassword123!\`
+            
+            ### Notes
+            - The preview environment uses the staging database with seed data
+            - Changes are deployed automatically on new commits
+            - Preview environment expires 7 days after PR closes
+            
+            Happy testing! 🎉`;
+            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
