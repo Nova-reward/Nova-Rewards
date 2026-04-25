@@ -1,5 +1,9 @@
 name: Vercel Preview Deployment
 
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
 on:
   pull_request:
     branches: [main]
@@ -8,6 +12,8 @@ jobs:
   deploy-preview:
     name: Deploy Preview
     runs-on: ubuntu-latest
+    # Skip if Vercel secrets are not configured (e.g. forks)
+    if: ${{ secrets.VERCEL_TOKEN != '' }}
     permissions:
       pull-requests: write
 
