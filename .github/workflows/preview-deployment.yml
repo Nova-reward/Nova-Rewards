@@ -34,14 +34,6 @@ jobs:
           PREVIEW_URL="pr-${PR_NUMBER}-nova-rewards-staging.herokuapp.com"
           echo "url=${PREVIEW_URL}" >> $GITHUB_OUTPUT
 
-      - name: Build frontend
-        working-directory: ./frontend
-        run: |
-          npm ci
-          REACT_APP_API_URL=https://api-pr-${{ github.event.pull_request.number }}-nova-rewards.herokuapp.com \
-          REACT_APP_ENV=staging \
-          npm run build
-
       - name: Build backend
         working-directory: ./backend
         run: |
@@ -109,14 +101,12 @@ jobs:
           script: |
             const pr = context.payload.pull_request;
             const prNumber = pr.number;
-            const previewUrl = `https://pr-${prNumber}-nova-rewards-staging.herokuapp.com`;
             const apiUrl = `https://api-pr-${prNumber}-nova-rewards.herokuapp.com`;
             
             const commentBody = `## 🚀 Preview Deployment Ready
             
             ✅ Your preview environment is ready for testing!
             
-            - **Frontend**: [${previewUrl}](${previewUrl})
             - **API**: [${apiUrl}](${apiUrl})
             - **PR Number**: ${prNumber}
             
