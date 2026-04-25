@@ -9,9 +9,11 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-nova-rewards = { path = "../nova-rewards", features = ["testutils"] }
-vesting = { path = "../vesting", features = ["testutils"] }
-soroban-sdk = { version = "21.0.0", features = ["testutils"] }
+soroban-sdk = { version = "25.3.1", features = ["testutils"] }
+nova-rewards = { path = "../nova-rewards" }
+nova_token = { path = "../nova_token" }
+distribution = { path = "../distribution" }
+vesting = { path = "../vesting" }
 
 [[bin]]
 name = "fuzz_calculate_payout"
@@ -28,5 +30,17 @@ doc = false
 [[bin]]
 name = "fuzz_vesting"
 path = "fuzz_targets/fuzz_vesting.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_token_transfer"
+path = "fuzz_targets/fuzz_token_transfer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_reward_distribution"
+path = "fuzz_targets/fuzz_reward_distribution.rs"
 test = false
 doc = false

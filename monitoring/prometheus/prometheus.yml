@@ -69,3 +69,21 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox-exporter:9115
+
+  # Uptime monitoring — public-facing endpoints (SLA tracking, #632)
+  - job_name: 'blackbox-uptime'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - ${API_HEALTH_URL:-http://backend:4000/health}
+          - ${FRONTEND_URL:-http://frontend:3000}
+          - ${STELLAR_RPC_URL:-https://horizon-testnet.stellar.org}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

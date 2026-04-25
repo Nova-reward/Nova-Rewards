@@ -20,3 +20,25 @@ Issues related to README, specs, and developer guides.
 
 ## 7. UI/UX Design Issues
 Issues related to wireframes, prototypes, and design systems.
+
+---
+
+## Architecture Documentation
+
+| Document | Description |
+|----------|-------------|
+| [architecture.md](architecture.md) | Narrative overview of the platform architecture |
+| [system-design.md](system-design.md) | Mermaid component, reward issuance data-flow, contract interaction, and deployment topology diagrams |
+| [adr/README.md](adr/README.md) | Architecture decision record index |
+
+---
+
+## Smart Contract Documentation
+
+| Document | Description |
+|----------|-------------|
+| [contracts.md](contracts.md) | Contract addresses for testnet and mainnet, deploy instructions, and upgrade process |
+| [abi-reference.md](abi-reference.md) | Full function signatures, event schemas (topics + data), and integration examples for all 8 contracts |
+| [error-codes.md](error-codes.md) | Error message reference with description and remediation for every panic in all contracts |
+| [contract-events.md](contract-events.md) | Quick-reference event schema table |
+| [storage-schema.md](storage-schema.md) | On-chain storage key layout for all contracts |

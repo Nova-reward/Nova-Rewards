@@ -1,39 +1,62 @@
 const express = require('express');
 const router = express.Router();
-const rateLimit = require('express-rate-limit');
-const { createHash } = require('crypto');
-const { query } = require('../db/index');
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
-const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
-const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 const { verifyTrustline } = require('../../blockchain/trustline');
+const { slidingRewards } = require('../middleware/rateLimiter');
+const { enqueueRewardIssuance } = require('../services/rewardIssuanceService');
+const { checkRewardFarming, recordRewardClaim } = require('../middleware/abuseDetection');
 
 /**
- * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.
- * Uses Redis as the backing store when REDIS_URL is set (production),
- * falling back to in-memory for local development.
- * Closes: #123
+ * @openapi
+ * /rewards/issue:
+ *   post:
+ *     tags: [Rewards]
+ *     summary: Enqueue a reward issuance (idempotent)
+ *     security:
+ *       - merchantApiKey: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idempotencyKey, walletAddress, amount, campaignId]
+ *             properties:
+ *               idempotencyKey: { type: string }
+ *               walletAddress:  { type: string }
+ *               amount:         { type: number }
+ *               campaignId:     { type: integer }
+ *               userId:         { type: integer }
+ *     responses:
+ *       202: { description: Queued }
+ *       200: { description: Duplicate — already processed }
+ *       400: { description: Validation error }
  */
-const redisClient = getRedisClient();
-const distributeRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Use Redis store only when a client is available
-  ...(redisClient && {
-    store: new RedisStore({
-      sendCommand: (...args) => redisClient.call(...args),
-      prefix: 'rl:distribute:',
-    }),
-  }),
-  message: {
-    success: false,
-    error: 'rate_limit_exceeded',
-    message: 'Too many requests. Please try again later.',
-  },
+router.post('/issue', slidingRewards, authenticateMerchant, async (req, res, next) => {
+  try {
+    const { idempotencyKey, walletAddress, amount, campaignId, userId } = req.body;
+    if (!idempotencyKey || !walletAddress || !amount || !campaignId) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'idempotencyKey, walletAddress, amount, and campaignId are required',
+      });
+    }
+    if (Number(amount) <= 0) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'amount must be > 0' });
+    }
+
+    const result = await enqueueRewardIssuance({ idempotencyKey, campaignId, userId, walletAddress, amount });
+
+    if (result.duplicate) {
+      return res.status(200).json({ success: true, duplicate: true, issuanceId: result.issuanceId, status: result.status });
+    }
+    res.status(202).json({ success: true, queued: true, issuanceId: result.issuanceId });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
@@ -92,7 +115,7 @@ const distributeRateLimiter = rateLimit({
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (req, res, next) => {
+router.post('/distribute', slidingRewards, authenticateMerchant, checkRewardFarming, async (req, res, next) => {
   try {
     const { walletAddress, customerWallet, amount, campaignId } = req.body;
     const recipientWallet = walletAddress || customerWallet;
@@ -155,6 +178,8 @@ router.post('/distribute', distributeRateLimiter, authenticateMerchant, async (r
       amount,
       campaignId,
     });
+
+    await recordRewardClaim(recipientWallet, campaignId);
 
     res.json({ success: true, txHash: result.txHash, transaction: result.tx });
   } catch (err) {
