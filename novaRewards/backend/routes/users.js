@@ -3,12 +3,68 @@ const { query } = require('../db/index');
 const { getUserByWallet, getUserById, createUser } = require('../db/userRepository');
 const userRepository = require('../db/userRepository');
 const { getUserReferralStats, processReferralBonus } = require('../services/referralService');
-const { getUserTotalPoints, getUserReferralPoints } = require('../db/pointTransactionRepository');
+const { getUserBalance, getUserTotalPoints, getUserReferralPoints } = require('../db/pointTransactionRepository');
+const { getUserRedemptions } = require('../db/redemptionRepository');
+const { getTransactionsByUser, getRewardsHistoryCursor } = require('../db/transactionRepository');
 const { sendWelcome } = require('../services/emailService');
-const { authenticateUser, requireOwnershipOrAdmin } = require('../middleware/authenticateUser');
+const { authenticateUser, requireAdmin, requireOwnershipOrAdmin } = require('../middleware/authenticateUser');
 const { validateUpdateUserDto } = require('../middleware/validateDto');
 const { isValidStellarAddress, getNOVABalance } = require('../../blockchain/stellarService');
 const { client: redisClient } = require('../lib/redis');
+const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
+
+const SALT_ROUNDS = 12;
+
+// Store avatars in memory; persist to disk under /public/avatars
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, '../../frontend/public/avatars');
+      require('fs').mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `user-${req.params.id}-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+  },
+});
+
+function parsePositiveInteger(value) {
+  const parsed = parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parsePagination(query) {
+  const page = query.page === undefined ? 1 : parseInt(query.page, 10);
+  const limit = query.limit === undefined ? 20 : parseInt(query.limit, 10);
+
+  if (!Number.isInteger(page) || page <= 0) {
+    return { error: 'page must be a positive integer' };
+  }
+
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+    return { error: 'limit must be a positive integer between 1 and 100' };
+  }
+
+  return { page, limit };
+}
+
+function ensureSelfOrAdmin(req, res, userId) {
+  if (req.user.id !== userId && req.user.role !== 'admin') {
+    res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
 
 /**
  * @openapi
@@ -422,7 +478,7 @@ router.get('/:id/referrals', async (req, res, next) => {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.patch('/:id', authenticateUser, validateUpdateUserDto, async (req, res, next) => {
+async function updateUserProfile(req, res, next) {
   try {
     const userId = parseInt(req.params.id, 10);
     const currentUserId = req.user.id;
@@ -449,7 +505,10 @@ router.patch('/:id', authenticateUser, validateUpdateUserDto, async (req, res, n
   } catch (err) {
     next(err);
   }
-});
+}
+
+router.put('/:id', authenticateUser, validateUpdateUserDto, updateUserProfile);
+router.patch('/:id', authenticateUser, validateUpdateUserDto, updateUserProfile);
 
 /**
  * @openapi
@@ -580,6 +639,159 @@ router.post('/:id/referrals/process', async (req, res, next) => {
     }
 
     res.json({ success: true, data: result.bonus, message: result.message });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/users/:id/profile-picture
+ * Upload avatar image (JPEG/PNG/WebP, max 5 MB).
+ * Requirements: #171
+ */
+router.post('/:id/profile-picture', authenticateUser, (req, res, next) => {
+  const userId = parseInt(req.params.id, 10);
+  if (req.user.id !== userId && req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+  }
+  upload.single('avatar')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: 'upload_error', message: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'No file uploaded' });
+    }
+    const avatarUrl = `/avatars/${req.file.filename}`;
+    await query(
+      `UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2`,
+      [avatarUrl, userId]
+    );
+    res.json({ success: true, data: { avatarUrl } });
+  });
+});
+
+/**
+ * PATCH /api/users/:id/password
+ * Change password — requires current password verification.
+ * Requirements: #171
+ */
+router.patch('/:id/password', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (req.user.id !== userId) {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false, error: 'validation_error', message: 'currentPassword and newPassword are required',
+      });
+    }
+    if (newPassword.length < 8 || !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+      return res.status(400).json({
+        success: false, error: 'validation_error',
+        message: 'New password must be at least 8 characters with uppercase, lowercase, and a number',
+      });
+    }
+
+    const result = await query(
+      'SELECT password_hash FROM users WHERE id = $1 AND is_deleted = FALSE',
+      [userId]
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const match = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!match) {
+      return res.status(401).json({ success: false, error: 'invalid_credentials', message: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /users/:id/balance — Horizon token balance per campaign, cached 30s
+// ---------------------------------------------------------------------------
+router.get('/:id/balance', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parsePositiveInteger(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+    if (!ensureSelfOrAdmin(req, res, userId)) return;
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const cacheKey = `balance:${userId}`;
+    if (redisClient && redisClient.isOpen) {
+      const cached = await redisClient.get(cacheKey).catch(() => null);
+      if (cached) {
+        return res.json({ success: true, data: JSON.parse(cached), cached: true });
+      }
+    }
+
+    // Fetch on-chain balance from Horizon
+    const onChainBalance = user.stellar_public_key
+      ? await getNOVABalance(user.stellar_public_key).catch(() => '0')
+      : '0';
+
+    // Fetch off-chain point balance
+    const offChainBalance = await getUserBalance(userId).catch(() => 0);
+
+    const data = {
+      userId,
+      stellarPublicKey: user.stellar_public_key || null,
+      onChainBalance,          // NOVA token balance from Horizon
+      offChainPoints: offChainBalance, // accumulated off-chain points
+    };
+
+    if (redisClient && redisClient.isOpen) {
+      redisClient.setEx(cacheKey, 30, JSON.stringify(data)).catch(() => {});
+    }
+
+    res.json({ success: true, data, cached: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /users/:id/rewards/history — cursor-paginated reward history
+// ---------------------------------------------------------------------------
+router.get('/:id/rewards/history', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parsePositiveInteger(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+    if (!ensureSelfOrAdmin(req, res, userId)) return;
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'limit must be between 1 and 100' });
+    }
+
+    const { data, nextCursor } = await getRewardsHistoryCursor(userId, {
+      limit,
+      cursor: req.query.cursor,
+    });
+
+    res.json({ success: true, data, pagination: { nextCursor, limit } });
   } catch (err) {
     next(err);
   }

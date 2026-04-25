@@ -1,8 +1,41 @@
-const rateLimit = require('express-rate-limit');
+/**
+ * Rate Limiters
+ *
+ * Fixed-window limiters (express-rate-limit + Redis):
+ *   globalLimiter  — 100 req / 60 s per IP  (applied app-wide)
+ *   authLimiter    — 5   req / 60 s per IP  (login, forgot-password)
+ *
+ * Sliding-window limiters (Redis sorted-set, atomic Lua):
+ *   slidingGlobal      — 100 req / 60 s  per IP          (fallback global)
+ *   slidingAuth        — 5   req / 60 s  per IP          (auth endpoints)
+ *   slidingUser        — 200 req / 60 s  per user-or-IP  (authenticated routes)
+ *   slidingSearch      — 30  req / 60 s  per user-or-IP  (search endpoints)
+ *   slidingWebhook     — 60  req / 60 s  per IP          (webhook endpoints)
+ *   slidingRewards     — 20  req / 60 s  per IP          (reward distribution)
+ *   slidingAdmin       — 120 req / 60 s  per user        (admin endpoints)
+ */
+
+const rateLimit   = require('express-rate-limit');
 const { RedisStore } = require('rate-limit-redis');
 const { client: redisClient } = require('../lib/redis');
+const { slidingRateLimiter } = require('./slidingRateLimiter');
+const {
+  RATE_LIMIT_WINDOW_MS,
+  RATE_LIMIT_RETRY_AFTER_SECS,
+  RL_GLOBAL_MAX,
+  RL_AUTH_MAX,
+  RL_USER_MAX,
+  RL_SEARCH_MAX,
+  RL_WEBHOOK_MAX,
+  RL_WEBHOOK_API_KEY_MAX,
+  RL_REWARDS_MAX,
+  RL_ADMIN_MAX,
+} = require('../config/constants');
 
-// IPs exempt from all rate limiting (health-check / monitoring)
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
 const WHITELIST = (process.env.RATE_LIMIT_WHITELIST || '')
   .split(',')
   .map((ip) => ip.trim())
@@ -12,11 +45,6 @@ function skip(req) {
   return WHITELIST.includes(req.ip);
 }
 
-/**
- * Returns a RedisStore when the client is connected, otherwise undefined
- * (express-rate-limit falls back to its in-memory store).
- * This prevents a crash at module-load time when Redis is unavailable (e.g. in tests / CI).
- */
 function makeStore(prefix) {
   if (!redisClient.isOpen) return undefined;
   return new RedisStore({
@@ -26,18 +54,21 @@ function makeStore(prefix) {
 }
 
 function onLimitReached(req, res) {
-  res.setHeader('Retry-After', '60');
+  res.setHeader('Retry-After', String(RATE_LIMIT_RETRY_AFTER_SECS));
   res.status(429).json({
     success: false,
-    error: 'too_many_requests',
-    message: 'Rate limit exceeded. Please retry after 60 seconds.',
+    error:   'too_many_requests',
+    message: `Rate limit exceeded. Please retry after ${RATE_LIMIT_RETRY_AFTER_SECS} seconds.`,
   });
 }
 
-/** Default limiter: 100 req / 60 s — applied globally */
+// ---------------------------------------------------------------------------
+// Fixed-window limiters (kept for backward compatibility)
+// ---------------------------------------------------------------------------
+
 const globalLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 100,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RL_GLOBAL_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   skip,
@@ -45,10 +76,9 @@ const globalLimiter = rateLimit({
   handler: onLimitReached,
 });
 
-/** Strict limiter: 5 req / 60 s — applied to auth endpoints */
 const authLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 5,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RL_AUTH_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   skip,
@@ -56,4 +86,85 @@ const authLimiter = rateLimit({
   handler: onLimitReached,
 });
 
-module.exports = { globalLimiter, authLimiter };
+// ---------------------------------------------------------------------------
+// Sliding-window limiters
+// ---------------------------------------------------------------------------
+
+const w = (s) => s * 1000; // seconds → ms helper
+
+const slidingGlobal = slidingRateLimiter({
+  prefix:   'sw:global',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_GLOBAL_MAX)  || RL_GLOBAL_MAX,
+  keyBy:    'ip',
+});
+
+const slidingAuth = slidingRateLimiter({
+  prefix:   'sw:auth',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_AUTH_MAX)    || RL_AUTH_MAX,
+  keyBy:    'ip',
+  message:  `Too many authentication attempts. Retry after ${RATE_LIMIT_RETRY_AFTER_SECS} seconds.`,
+});
+
+const slidingUser = slidingRateLimiter({
+  prefix:   'sw:user',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_USER_MAX)    || RL_USER_MAX,
+  keyBy:    'user-or-ip',
+});
+
+const slidingSearch = slidingRateLimiter({
+  prefix:   'sw:search',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_SEARCH_MAX)  || RL_SEARCH_MAX,
+  keyBy:    'user-or-ip',
+  message:  `Search rate limit exceeded. Retry after ${RATE_LIMIT_RETRY_AFTER_SECS} seconds.`,
+});
+
+const slidingWebhook = slidingRateLimiter({
+  prefix:   'sw:webhook',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_WEBHOOK_MAX) || RL_WEBHOOK_MAX,
+  keyBy:    'ip',
+});
+
+/**
+ * Webhook endpoint limiter keyed by merchant API key.
+ * Falls back to IP if no x-api-key header is present.
+ */
+const webhookApiKeyLimiter = slidingRateLimiter({
+  prefix:   'sw:webhook-apikey',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_WEBHOOK_API_KEY_MAX) || RL_WEBHOOK_API_KEY_MAX,
+  keyBy:    'api-key',
+});
+
+const slidingRewards = slidingRateLimiter({
+  prefix:   'sw:rewards',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_REWARDS_MAX) || RL_REWARDS_MAX,
+  keyBy:    'ip',
+});
+
+const slidingAdmin = slidingRateLimiter({
+  prefix:   'sw:admin',
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max:      parseInt(process.env.RL_ADMIN_MAX)   || RL_ADMIN_MAX,
+  keyBy:    'user',
+});
+
+module.exports = {
+  // fixed-window (legacy)
+  globalLimiter,
+  authLimiter,
+  // sliding-window
+  slidingGlobal,
+  slidingAuth,
+  slidingUser,
+  slidingSearch,
+  slidingWebhook,
+  webhookApiKeyLimiter,
+  slidingRewards,
+  slidingAdmin,
+};

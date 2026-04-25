@@ -153,9 +153,9 @@ Run before and after optimization:
 ```bash
 cd contracts
 stellar contract build
-stellar contract inspect --wasm target/wasm32-unknown-unknown/release/nova_rewards.wasm
-stellar contract inspect --wasm target/wasm32-unknown-unknown/release/nova_token.wasm
-stellar contract inspect --wasm target/wasm32-unknown-unknown/release/vesting.wasm
+stellar contract inspect --wasm target/wasm32v1-none/release/nova_rewards.wasm
+stellar contract inspect --wasm target/wasm32v1-none/release/nova_token.wasm
+stellar contract inspect --wasm target/wasm32v1-none/release/vesting.wasm
 ```
 
 ### Size Targets

@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import CampaignManager from '../components/CampaignManager';
-import CampaignAnalytics from '../components/CampaignAnalytics';
-import IssueRewardForm from '../components/IssueRewardForm';
+import dynamic from 'next/dynamic';
 import api from '../lib/api';
+import DashboardLayout from '../components/layout/DashboardLayout';
+
+const CampaignManager  = dynamic(() => import('../components/CampaignManager'),  { ssr: false });
+const CampaignAnalytics = dynamic(() => import('../components/CampaignAnalytics'), { ssr: false });
+const IssueRewardForm  = dynamic(() => import('../components/IssueRewardForm'),  { ssr: false });
 
 const TABS = ['Campaigns', 'Analytics', 'Issue Rewards'];
 
@@ -50,13 +53,6 @@ export default function MerchantDashboard() {
 
   return (
     <>
-      <nav className="nav">
-        <span className="nav-brand">⭐ NovaRewards</span>
-        <div className="nav-links">
-          <a href="/">Customer Portal</a>
-        </div>
-      </nav>
-
       <div className="container">
         <h1 style={{ marginBottom: '1.5rem', fontSize: '1.8rem', fontWeight: 700 }}>Merchant Portal</h1>
 
@@ -64,15 +60,18 @@ export default function MerchantDashboard() {
           <div className="card">
             <h2 style={{ marginBottom: '1rem' }}>Register as a Merchant</h2>
             <form onSubmit={handleRegister}>
-              <label className="label">Business Name</label>
-              <input className="input" value={regForm.name} onChange={setReg('name')} placeholder="Acme Coffee" disabled={regStatus === 'loading'} />
-
-              <label className="label">Stellar Wallet Address</label>
-              <input className="input" value={regForm.walletAddress} onChange={setReg('walletAddress')} placeholder="G…" disabled={regStatus === 'loading'} />
-
-              <label className="label">Business Category (optional)</label>
-              <input className="input" value={regForm.businessCategory} onChange={setReg('businessCategory')} placeholder="Food & Beverage" disabled={regStatus === 'loading'} />
-
+              <div>
+                <label className="label">Business Name</label>
+                <input className="input" value={regForm.name} onChange={setReg('name')} placeholder="Acme Coffee" disabled={regStatus === 'loading'} />
+              </div>
+              <div>
+                <label className="label">Stellar Wallet Address</label>
+                <input className="input" value={regForm.walletAddress} onChange={setReg('walletAddress')} placeholder="G…" disabled={regStatus === 'loading'} />
+              </div>
+              <div>
+                <label className="label">Business Category (optional)</label>
+                <input className="input" value={regForm.businessCategory} onChange={setReg('businessCategory')} placeholder="Food & Beverage" disabled={regStatus === 'loading'} />
+              </div>
               <button className="btn btn-primary" type="submit" disabled={regStatus === 'loading'}>
                 {regStatus === 'loading' ? 'Registering…' : 'Register'}
               </button>
@@ -162,3 +161,7 @@ export default function MerchantDashboard() {
     </>
   );
 }
+
+MerchantDashboard.getLayout = function getLayout(page) {
+  return <DashboardLayout>{page}</DashboardLayout>;
+};

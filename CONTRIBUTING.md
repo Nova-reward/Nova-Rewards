@@ -1,123 +1,329 @@
 # Contributing to Nova Rewards
 
-Thank you for your interest in contributing to Nova Rewards! This guide outlines how open-source contributors can add features and fix bugs in the Nova Rewards frontend.
+Thanks for taking the time to contribute! This guide covers everything you need to go from zero to a merged pull request.
 
-## Prerequisites
+---
 
-Before making any changes, please read the following guides:
+## Table of Contents
 
-- **[Stellar & Soroban Integration Tutorial](docs/stellar/integration.md)** — Required reading for any work touching the blockchain layer, transaction submission, or Soroban contracts.
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+  - [Fork and Clone](#fork-and-clone)
+  - [Local Development Setup](#local-development-setup)
+- [Branch Naming Conventions](#branch-naming-conventions)
+- [Commit Message Format](#commit-message-format)
+- [Pull Request Process](#pull-request-process)
+- [Code Review Standards](#code-review-standards)
+- [Issue Reporting](#issue-reporting)
+- [Getting Help](#getting-help)
+
+---
+
+## Code of Conduct
+
+Be respectful and constructive. We're all here to build something good together.
+
+---
 
 ## Getting Started
 
-### Fork and Clone the Repository
+### Fork and Clone
 
-1. Fork the repository on GitHub by clicking the "Fork" button.
-2. Clone your fork locally:
+1. **Fork** the repository to your GitHub account using the **Fork** button at the top right.
+
+2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/your-username/Nova-Rewards.git
+   git clone https://github.com/YOUR_USERNAME/Nova-Rewards.git
    cd Nova-Rewards
    ```
-3. Add the upstream remote:
+
+3. **Add the upstream remote** so you can pull in future changes:
    ```bash
-   git remote add upstream https://github.com/milah-247/Nova-Rewards.git
+   git remote add upstream https://github.com/Emoji-dot/Nova-Rewards.git
    ```
 
-### Local Setup
-
-1. Navigate to the frontend directory:
+4. **Verify your remotes**:
    ```bash
-   cd novaRewards/frontend
+   git remote -v
+   # origin    https://github.com/YOUR_USERNAME/Nova-Rewards.git (fetch)
+   # upstream  https://github.com/Emoji-dot/Nova-Rewards.git (fetch)
    ```
 
-2. Install dependencies:
+5. **Keep your fork up to date** before starting any new work:
    ```bash
-   npm install
+   git fetch upstream
+   git checkout main
+   git merge upstream/main
    ```
 
-3. Set up environment variables:
-   - Copy `.env.example` to `.env.local` (if it exists) and fill in the required values.
-   - Ensure you have the necessary API keys and configuration for Stellar integration.
+---
 
-4. Start the development server:
-   ```bash
-   npm run dev
-   ```
-   The application should now be running at `http://localhost:3000`.
+### Local Development Setup
 
-## Branching Strategy
+#### Prerequisites
 
-We follow a Git Flow-inspired branching model:
+| Tool | Minimum Version | Install |
+|------|----------------|---------|
+| Node.js | 18.x | [nodejs.org](https://nodejs.org) |
+| npm | 9.x | Bundled with Node.js |
+| Rust | stable | [rustup.rs](https://rustup.rs) |
+| Stellar CLI | latest | `cargo install --locked stellar-cli` |
+| Docker (optional) | 24.x | [docker.com](https://www.docker.com) |
 
-- **`main`**: Production-ready code. Only updated via pull requests from `develop`.
-- **`develop`**: Integration branch for ongoing development. Feature and fix branches merge here.
-- **`feature/*`**: For new features (e.g., `feature/user-dashboard`).
-- **`fix/*`**: For bug fixes (e.g., `fix/login-validation`).
+#### Frontend / Backend Setup
 
-Always create feature branches from `develop` and merge back to `develop` via pull requests.
+```bash
+# Install dependencies
+cd novaRewards
+npm install
+
+# Copy environment variables
+cp ../.env.testnet .env.local
+# Edit .env.local and fill in any required values
+
+# Start the development server
+npm run dev
+```
+
+#### Smart Contracts Setup
+
+```bash
+cd contracts
+
+# Build all contracts
+cargo build --release
+
+# Run contract tests
+cargo test
+
+# Lint and format
+cargo fmt --all
+cargo clippy -- -D warnings
+```
+
+#### Verify Everything Works
+
+```bash
+# From the repo root — run all checks
+npm run lint        # TypeScript/JS linting
+npm run test        # Frontend/backend tests
+cargo test          # Contract tests
+```
+
+If any step fails, check the [troubleshooting section in the README](./novaRewards/QUICK_START_PWA.md) or open a discussion.
+
+---
+
+## Branch Naming Conventions
+
+Always branch off `main`. Use the following prefixes:
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| New feature | `feature/<short-description>` | `feature/add-referral-dashboard` |
+| Bug fix | `fix/<issue-number>-<short-description>` | `fix/305-token-refresh-race` |
+| Hotfix (production) | `hotfix/<short-description>` | `hotfix/critical-payout-bug` |
+| Documentation | `docs/<short-description>` | `docs/update-contributing-guide` |
+| Refactor | `refactor/<short-description>` | `refactor/reward-service-cleanup` |
+| Chore / tooling | `chore/<short-description>` | `chore/upgrade-eslint` |
+
+**Rules:**
+- Use lowercase and hyphens only — no spaces or underscores.
+- Keep descriptions short (3–5 words).
+- Always include the issue number in `fix/` branches.
+
+---
+
+## Commit Message Format
+
+We follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification. This enables automatic changelog generation and clear history.
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Types
+
+| Type | When to use |
+|------|------------|
+| `feat` | A new feature |
+| `fix` | A bug fix |
+| `docs` | Documentation changes only |
+| `style` | Formatting, whitespace — no logic change |
+| `refactor` | Code restructure with no feature or fix |
+| `perf` | Performance improvement |
+| `test` | Adding or fixing tests |
+| `build` | Build system or dependency changes |
+| `ci` | CI/CD configuration changes |
+| `chore` | Maintenance tasks that don't touch src/tests |
+| `revert` | Reverts a previous commit |
+
+### Scope (optional)
+
+Describes the area of the codebase affected. Examples: `auth`, `campaigns`, `contracts`, `ui`, `api`, `rewards`.
+
+### Rules
+
+- Use the **imperative, present tense**: "add feature" not "added feature".
+- Keep the description under **72 characters**.
+- Reference issues in the footer: `Closes #123` or `Fixes #456`.
+- Mark breaking changes with `!` after the type or a `BREAKING CHANGE:` footer.
+
+### Examples
+
+```
+feat(campaigns): add expiry date to reward campaigns
+
+Allows campaign creators to set an end date. Campaigns automatically
+deactivate when the expiry date is reached.
+
+Closes #212
+```
+
+```
+fix(auth): resolve token refresh race condition
+
+Multiple concurrent requests were triggering duplicate refresh calls.
+Added a mutex to serialize token refresh operations.
+
+Fixes #305
+```
+
+```
+docs: add local development setup to CONTRIBUTING.md
+```
+
+```
+feat(contracts)!: change reward payout calculation to use basis points
+
+BREAKING CHANGE: The `calculate_payout` function now expects amounts
+in basis points instead of percentages.
+```
+
+---
 
 ## Pull Request Process
 
-1. Create a feature branch from `develop`:
+1. **Create a branch** following the [naming conventions](#branch-naming-conventions).
+
+2. **Make your changes** and commit using the [commit format](#commit-message-format).
+
+3. **Run all checks locally** before pushing:
    ```bash
-   git checkout develop
-   git pull upstream develop
-   git checkout -b feature/your-feature-name
+   npm run lint && npm run test
+   cargo fmt --all && cargo clippy -- -D warnings && cargo test
    ```
 
-2. Make your changes, following the code standards below.
-
-3. Commit your changes using conventional commits:
-   ```
-   feat: add user dashboard component
-   fix: resolve login validation bug
+4. **Push your branch**:
+   ```bash
+   git push -u origin feature/your-branch-name
    ```
 
-4. Push your branch and create a pull request to `develop`:
-   - Provide a clear description of the changes.
-   - Reference any related issues.
-   - Ensure all tests pass and code style checks are met.
+5. **Open a Pull Request** against `main` on GitHub. The [PR template](.github/pull_request_template.md) will load automatically — fill it out completely.
 
-5. Wait for review and address any feedback.
+6. **Link the related issue** in the PR description using `Closes #<issue-number>`.
 
-## Component Standards
+7. **Request a review** from at least one maintainer.
 
-### File Naming
-- Use PascalCase for component files: `UserDashboard.tsx`
+8. **Address review feedback** by pushing new commits. Do not force-push after a review has started.
 
-### Folder Structure
-Organize code into the following directories within `novaRewards/frontend/src/`:
-- `components/`: Reusable UI components
-- `hooks/`: Custom React hooks
-- `services/`: API calls and external service integrations
-- `pages/`: Next.js pages
+9. **Await approval** — at least one approving review is required before merge.
 
-### Testing
-- Every component must have a co-located test file: `ComponentName.test.tsx`
-- Write unit tests for components, hooks, and services.
+10. **Squash and merge** — maintainers will squash commits on merge to keep `main` history clean.
 
-## Code Style
+### PR Size Guidelines
 
-Code style is enforced by ESLint and Prettier.
+- Aim for PRs under **400 lines changed**.
+- If a feature is large, break it into smaller sequential PRs.
+- Smaller PRs get reviewed faster and are less likely to conflict.
 
-- Run linting: `npm run lint`
-- Auto-fix issues: `npm run lint:fix`
+---
 
-Ensure your code passes all linting checks before submitting a pull request.
+## Code Review Standards
 
-## Testing
+### For Authors
 
-### Running Tests
-- Run unit tests: `npm test`
-- Run tests with coverage: `npm run test:coverage`
+- Self-review your diff before requesting a review.
+- Respond to all comments — either address them or explain why you disagree.
+- Keep the PR up to date with `main` by rebasing or merging.
+- Don't take feedback personally — reviewers are reviewing the code, not you.
 
-### Writing Tests
-- Use Jest for unit testing.
-- Place test files alongside the code they test (e.g., `Component.tsx` and `Component.test.tsx`).
-- Aim for high test coverage, especially for critical business logic.
+### For Reviewers
 
-## Good First Issues
+- Aim to provide an initial review within **2 business days**.
+- Be specific and constructive — suggest alternatives, don't just flag problems.
+- Distinguish between blocking issues and non-blocking suggestions (use `nit:` prefix for minor style notes).
+- Approve only when you're genuinely satisfied — a rubber-stamp approval helps no one.
 
-Looking for a place to start contributing? Check out our [Good First Issues](https://github.com/milah-247/Nova-Rewards/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue) on GitHub. These are beginner-friendly tasks that introduce you to the codebase.
+### Code Review Checklist
 
-If you have any questions, feel free to open an issue or join our discussions!
+Use this checklist when reviewing any PR:
+
+**Scope & Intent**
+- [ ] The PR addresses exactly one issue or concern
+- [ ] The linked issue is referenced in the title/description
+- [ ] No unrelated changes are included
+
+**Code Quality**
+- [ ] Code follows the [Code Style Guide](docs/code-style.md)
+- [ ] No `any` types introduced (TypeScript)
+- [ ] No commented-out code left behind
+- [ ] No `console.log` or debug statements in production paths
+- [ ] No secrets, keys, or credentials committed
+
+**Correctness**
+- [ ] Logic has been manually tested locally
+- [ ] Edge cases and error paths are handled
+- [ ] Existing tests still pass
+
+**Contracts (if applicable)**
+- [ ] Contract changes have a linked spec in `.kiro/specs/`
+- [ ] `cargo clippy` passes with no warnings
+- [ ] Contract tests pass (`cargo test`)
+
+**Documentation**
+- [ ] Relevant docs updated (README, inline comments, JSDoc/doc comments)
+- [ ] CHANGELOG updated if this is a user-facing change
+
+**PR Hygiene**
+- [ ] Branch is up to date with `main`
+- [ ] PR title follows Conventional Commits format
+- [ ] PR description clearly explains *what* and *why*
+
+---
+
+## Issue Reporting
+
+Before opening a new issue, search existing issues to avoid duplicates.
+
+Use the appropriate template when creating an issue:
+
+- **[Bug Report](.github/ISSUE_TEMPLATE/bug_report.md)** — for reproducible bugs or unexpected behavior
+- **[Feature Request](.github/ISSUE_TEMPLATE/feature_request.md)** — for new features or improvements
+- **[Task](.github/ISSUE_TEMPLATE/task.md)** — for general tasks or chores
+
+### Issue Labels
+
+| Label | Meaning |
+|-------|---------|
+| `bug` | Confirmed bug |
+| `enhancement` | New feature or improvement |
+| `documentation` | Docs-only change |
+| `good first issue` | Suitable for new contributors |
+| `help wanted` | Extra attention needed |
+| `needs-triage` | Awaiting maintainer review |
+| `P1-high` | High priority |
+| `P2-medium` | Medium priority |
+| `P3-low` | Low priority |
+
+---
+
+## Getting Help
+
+- **Questions about the codebase?** Open a [GitHub Discussion](https://github.com/Emoji-dot/Nova-Rewards/discussions).
+- **Found a security vulnerability?** See [docs/security/README.md](docs/security/README.md) — do **not** open a public issue.
+- **Stuck on setup?** Check [novaRewards/QUICK_START_PWA.md](novaRewards/QUICK_START_PWA.md) or ask in Discussions.

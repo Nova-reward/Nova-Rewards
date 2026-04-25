@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { withFeatureFlag, FLAGS } from '../lib/featureFlags';
 
 /**
  * ReferralLink Component:
@@ -11,7 +12,7 @@ import api from '../lib/api';
  *
  * Requirements: 168
  */
-export default function ReferralLink({ userId }) {
+function ReferralLink({ userId }) {
   const [referralData, setReferralData] = useState({ code: '', totalReferrals: 0, pointsEarned: 0 });
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -195,3 +196,7 @@ export default function ReferralLink({ userId }) {
     </div>
   );
 }
+
+// Wrap with the feature flag HOC — renders null when REFERRAL flag is off.
+// Requirements: #606 (NEXT_PUBLIC_REFERRAL_ENABLED feature flag)
+export default withFeatureFlag(ReferralLink, FLAGS.REFERRAL);

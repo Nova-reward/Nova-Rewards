@@ -1,0 +1,497 @@
+/* =============================================================================
+   Mobile-first styles
+   All rules here are mobile-first (base = small screen, scale up with min-width).
+   ============================================================================= */
+
+/* ---------------------------------------------------------------------------
+   Touch targets — every interactive element must be at least 44×44px
+   --------------------------------------------------------------------------- */
+.btn,
+.nav-link,
+.bottom-nav-item,
+.header-icon-btn,
+.profile-btn,
+.sidebar-toggle,
+.mobile-menu-btn,
+input[type="checkbox"],
+input[type="radio"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Inline/text buttons that shouldn't stretch */
+.btn-inline {
+  min-height: unset;
+  min-width: unset;
+}
+
+/* ---------------------------------------------------------------------------
+   Bottom navigation bar (mobile only)
+   --------------------------------------------------------------------------- */
+.bottom-nav {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 200;
+  /* Safe area inset for notched phones */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.65rem;
+  font-weight: 500;
+  transition: color 0.15s ease;
+  /* Tap highlight */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-nav-item:hover,
+.bottom-nav-item:active {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.bottom-nav-item--active {
+  color: var(--accent);
+}
+
+.bottom-nav-icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.bottom-nav-label {
+  line-height: 1;
+}
+
+/* Add bottom padding to main content so it clears the bottom nav */
+.main-content {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
+/* Hide bottom nav on desktop */
+@media (min-width: 1025px) {
+  .bottom-nav {
+    display: none;
+  }
+
+  .main-content {
+    padding-bottom: 1.5rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Reward card grid — mobile-first single column, scales up
+   --------------------------------------------------------------------------- */
+.reward-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 480px) {
+  .reward-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .reward-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .reward-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Reward card */
+.reward-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+  /* Prevent text selection on tap */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.reward-card:active {
+  transform: scale(0.98);
+}
+
+@media (hover: hover) {
+  .reward-card:hover {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+  }
+}
+
+.reward-image-container {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.reward-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.reward-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.reward-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.reward-badge-out-of-stock {
+  background: var(--badge-gray-bg);
+  color: var(--badge-gray-text);
+}
+
+.reward-content {
+  flex: 1;
+  padding: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.reward-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.reward-description {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reward-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+
+.reward-cost,
+.reward-stock {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.reward-cost-label,
+.reward-stock-label {
+  color: var(--muted);
+}
+
+.reward-cost-value {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.reward-stock-value.in-stock    { color: var(--success); }
+.reward-stock-value.out-of-stock { color: var(--error); }
+
+.reward-error {
+  font-size: 0.75rem;
+  color: var(--error);
+}
+
+.reward-button {
+  width: 100%;
+  border-radius: 0;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  padding: 0.75rem;
+  font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Bottom sheet modal (mobile) / centered modal (desktop)
+   --------------------------------------------------------------------------- */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;   /* sheet slides up from bottom on mobile */
+  justify-content: center;
+  /* Animate overlay */
+  animation: overlay-in 0.2s ease;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sheet-content {
+  background: var(--surface);
+  width: 100%;
+  max-height: 90dvh;
+  border-radius: 20px 20px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 1.25rem 1.5rem;
+  /* Slide up animation */
+  animation: sheet-slide-up 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  /* Safe area */
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@keyframes sheet-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* Drag handle */
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 0.75rem auto 1.25rem;
+}
+
+.sheet-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+/* On desktop, render as a centered dialog instead */
+@media (min-width: 640px) {
+  .sheet-overlay {
+    align-items: center;
+  }
+
+  .sheet-content {
+    width: 100%;
+    max-width: 480px;
+    border-radius: 16px;
+    max-height: 85dvh;
+    padding: 1.5rem;
+    animation: modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .sheet-handle {
+    display: none;
+  }
+
+  @keyframes modal-scale-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Form inputs — larger tap targets on mobile
+   --------------------------------------------------------------------------- */
+@media (max-width: 639px) {
+  .input,
+  .form-input {
+    padding: 0.75rem 1rem;
+    font-size: 1rem;   /* prevents iOS auto-zoom on focus */
+    min-height: 44px;
+  }
+
+  .btn {
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Table → card list on mobile
+   --------------------------------------------------------------------------- */
+@media (max-width: 639px) {
+  .table-mobile-cards table,
+  .table-mobile-cards thead,
+  .table-mobile-cards tbody,
+  .table-mobile-cards th,
+  .table-mobile-cards td,
+  .table-mobile-cards tr {
+    display: block;
+  }
+
+  .table-mobile-cards thead {
+    display: none;
+  }
+
+  .table-mobile-cards tr {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .table-mobile-cards td {
+    border: none;
+    padding: 0.2rem 0;
+    font-size: 0.875rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .table-mobile-cards td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Pull-to-refresh indicator (visual only — logic handled by browser/PWA)
+   --------------------------------------------------------------------------- */
+.pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  gap: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.pull-indicator.visible {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   Swipe hint on horizontally scrollable containers
+   --------------------------------------------------------------------------- */
+.scroll-x {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-x > * {
+  scroll-snap-align: start;
+}
+
+/* ---------------------------------------------------------------------------
+   Safe area padding for notched/dynamic-island devices
+   --------------------------------------------------------------------------- */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-left   { padding-left:   env(safe-area-inset-left,   0px); }
+.safe-right  { padding-right:  env(safe-area-inset-right,  0px); }
+
+/* ---------------------------------------------------------------------------
+   Leaderboard list — mobile-friendly rows
+   --------------------------------------------------------------------------- */
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.leaderboard-rank {
+  font-size: 1rem;
+  font-weight: 700;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.leaderboard-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.leaderboard-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.leaderboard-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leaderboard-wallet {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: monospace;
+}
+
+.leaderboard-points {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}

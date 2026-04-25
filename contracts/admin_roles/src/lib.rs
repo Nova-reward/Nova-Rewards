@@ -1,7 +1,27 @@
+//! # Admin Roles Contract
+//!
+//! Centralized access control for Nova Rewards protocol operations.
+//!
+//! ## Features
+//! - Two-step admin transfer (propose → accept) to prevent accidental ownership loss
+//! - Configurable multisig threshold and signer set
+//! - Privileged stubs for mint, withdraw, rate update, and pause operations
+//!
+//! ## Usage
+//! ```ignore
+//! client.initialize(&admin, &signers_vec, &threshold);
+//!
+//! // Two-step admin transfer
+//! client.propose_admin(&new_admin);
+//! // new_admin calls:
+//! client.accept_admin();
+//!
+//! // Update multisig settings
+//! client.update_signers(&signers_vec);
+//! client.update_threshold(&2);
+//! ```
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, vec, Address, Env, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, vec, Address, Env, Vec};
 
 // ── Storage keys ────────────────────────────────────────────────────────────
 #[contracttype]
@@ -18,37 +38,58 @@ pub struct AdminRolesContract;
 
 #[contractimpl]
 impl AdminRolesContract {
-    /// Initialise: set the first admin and optional multisig signers + threshold.
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        signers: Vec<Address>,
-        threshold: u32,
-    ) {
+    /// Initializes the contract with the first admin and optional multisig settings.
+    ///
+    /// # Parameters
+    /// - `admin` – Initial admin address.
+    /// - `signers` – Initial multisig signer set (may be empty).
+    /// - `threshold` – Minimum approvals required for multisig operations.
+    ///
+    /// # Panics
+    /// - `"already initialised"` if called more than once.
+    pub fn initialize(env: Env, admin: Address, signers: Vec<Address>, threshold: u32) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Signers, &signers);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
+    /// Returns the currently configured admin address.
     fn admin(env: &Env) -> Address {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
+    /// Requires the stored admin account to authorize the current invocation.
     fn require_admin(env: &Env) {
         Self::admin(env).require_auth();
     }
 
     // ── Two-step admin transfer ───────────────────────────────────────────────
 
-    /// Step 1 – current admin proposes a new admin.
+    /// Stores a pending admin that can later accept ownership.
+    ///
+    /// The current admin must call this first; the new admin then calls
+    /// [`accept_admin`](AdminRolesContract::accept_admin) to complete the transfer.
+    ///
+    /// # Parameters
+    /// - `new_admin` – Address being proposed as the next admin.
+    ///
+    /// # Authorization
+    /// Requires current admin authorization.
+    ///
+    /// # Events
+    /// Emits `("adm_roles", "adm_prop")` with data `(current_admin: Address, proposed: Address)`.
     pub fn propose_admin(env: Env, new_admin: Address) {
         Self::require_admin(&env);
-        env.storage().instance().set(&DataKey::PendingAdmin, &new_admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingAdmin, &new_admin);
 
         // emit admin_proposed event
         env.events().publish(
@@ -57,7 +98,18 @@ impl AdminRolesContract {
         );
     }
 
-    /// Step 2 – pending admin accepts and becomes the new admin.
+    /// Completes the two-step admin transfer for the pending admin.
+    ///
+    /// Must be called by the address previously set via [`propose_admin`](AdminRolesContract::propose_admin).
+    ///
+    /// # Authorization
+    /// Requires pending admin authorization.
+    ///
+    /// # Events
+    /// Emits `("adm_roles", "adm_xfer")` with data `(old_admin: Address, new_admin: Address)`.
+    ///
+    /// # Panics
+    /// - `"no pending admin"` if no admin transfer is in progress.
     pub fn accept_admin(env: Env) {
         let pending: Address = env
             .storage()
@@ -79,13 +131,27 @@ impl AdminRolesContract {
 
     // ── Multisig threshold ────────────────────────────────────────────────────
 
-    /// Update the approval threshold (admin-gated).
+    /// Updates the multisig approval threshold.
+    ///
+    /// # Parameters
+    /// - `threshold` – New minimum number of signer approvals required.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
     pub fn update_threshold(env: Env, threshold: u32) {
         Self::require_admin(&env);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
     }
 
-    /// Replace the signers list (admin-gated).
+    /// Replaces the configured multisig signer set.
+    ///
+    /// # Parameters
+    /// - `signers` – New list of authorized signer addresses.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
     pub fn update_signers(env: Env, signers: Vec<Address>) {
         Self::require_admin(&env);
         env.storage().instance().set(&DataKey::Signers, &signers);
@@ -93,36 +159,47 @@ impl AdminRolesContract {
 
     // ── Privileged stubs (gated behind admin auth) ────────────────────────────
 
+    /// Placeholder privileged mint hook guarded by admin auth.
     pub fn mint(env: Env, _to: Address, _amount: i128) {
         Self::require_admin(&env);
     }
 
+    /// Placeholder privileged withdrawal hook guarded by admin auth.
     pub fn withdraw(env: Env, _to: Address, _amount: i128) {
         Self::require_admin(&env);
     }
 
+    /// Placeholder privileged rate update hook guarded by admin auth.
     pub fn update_rate(env: Env, _rate: u32) {
         Self::require_admin(&env);
     }
 
+    /// Placeholder pause hook guarded by admin auth.
     pub fn pause(env: Env) {
         Self::require_admin(&env);
     }
 
     // ── Read-only ─────────────────────────────────────────────────────────────
 
+    /// Returns the active admin address.
     pub fn get_admin(env: Env) -> Address {
         Self::admin(&env)
     }
 
+    /// Returns the pending admin, if a transfer is in progress.
     pub fn get_pending_admin(env: Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::PendingAdmin)
     }
 
+    /// Returns the configured multisig threshold, defaulting to `1`.
     pub fn get_threshold(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::Threshold).unwrap_or(1)
+        env.storage()
+            .instance()
+            .get(&DataKey::Threshold)
+            .unwrap_or(1)
     }
 
+    /// Returns the configured signer set, or an empty vector when unset.
     pub fn get_signers(env: Env) -> Vec<Address> {
         env.storage()
             .instance()
