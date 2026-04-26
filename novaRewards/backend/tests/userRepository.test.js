@@ -167,3 +167,136 @@ describe('profile functions', () => {
     expect(await repo.isAdmin(1)).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 6.2 — Unit tests: updateUser ignores role, updateUserRole only updates role
+// ---------------------------------------------------------------------------
+
+describe('updateUser — role field exclusion (Requirements 5.3)', () => {
+  test('ignores role key and does not include role = in SQL', async () => {
+    const updated = { id: 1, first_name: 'Alice', role: 'user' };
+    query.mockResolvedValue({ rows: [updated] });
+
+    await repo.update(1, { first_name: 'Alice', role: 'admin' });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).not.toMatch(/role\s*=/i);
+  });
+
+  test('still updates allowed fields when role is mixed in', async () => {
+    const updated = { id: 1, last_name: 'Smith', role: 'user' };
+    query.mockResolvedValue({ rows: [updated] });
+
+    const result = await repo.update(1, { last_name: 'Smith', role: 'admin' });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toMatch(/last_name\s*=/i);
+    expect(sql).not.toMatch(/role\s*=/i);
+    expect(result).toEqual(updated);
+  });
+
+  test('returns findById result when only role is provided (no valid fields)', async () => {
+    const user = { id: 1, role: 'user' };
+    query.mockResolvedValue({ rows: [user] });
+
+    const result = await repo.update(1, { role: 'admin' });
+
+    // Should have called findById (one query), not an UPDATE
+    const sql = query.mock.calls[0][0];
+    expect(sql).not.toMatch(/UPDATE/i);
+    expect(result).toEqual(user);
+  });
+});
+
+describe('updateUserRole (Requirements 6.2)', () => {
+  test('executes UPDATE with only role column', async () => {
+    const updated = { id: 1, role: 'merchant', updated_at: new Date() };
+    query.mockResolvedValue({ rows: [updated] });
+
+    const result = await repo.updateUserRole(1, 'merchant');
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toMatch(/UPDATE users/i);
+    expect(sql).toMatch(/SET role = \$1/i);
+    // Should not touch other columns
+    expect(sql).not.toMatch(/first_name/i);
+    expect(sql).not.toMatch(/last_name/i);
+    expect(result).toEqual(updated);
+  });
+
+  test('returns null when user not found', async () => {
+    query.mockResolvedValue({ rows: [] });
+    const result = await repo.updateUserRole(999, 'user');
+    expect(result).toBeNull();
+  });
+
+  test('uses trx.query when transaction client is provided', async () => {
+    const updated = { id: 1, role: 'user', updated_at: new Date() };
+    const trx = { query: jest.fn().mockResolvedValue({ rows: [updated] }) };
+
+    const result = await repo.updateUserRole(1, 'user', trx);
+
+    // The shared pool query should NOT have been called
+    expect(query).not.toHaveBeenCalled();
+    // The transaction client query SHOULD have been called
+    expect(trx.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = trx.query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE users/i);
+    expect(sql).toMatch(/SET role = \$1/i);
+    expect(params).toEqual(['user', 1]);
+    expect(result).toEqual(updated);
+  });
+
+  test('falls back to shared query when trx is undefined', async () => {
+    const updated = { id: 1, role: 'merchant', updated_at: new Date() };
+    query.mockResolvedValue({ rows: [updated] });
+
+    await repo.updateUserRole(1, 'merchant', undefined);
+
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 6.1 — Property test: updateUser never persists a role change (Property 5)
+// Feature: admin-auth-privilege-escalation, Property 5: updateUser repository never persists a role change
+// Validates: Requirements 5.3
+// ---------------------------------------------------------------------------
+
+const fc = require('fast-check');
+
+describe('Property 5: updateUser repository never persists a role change', () => {
+  test('SQL never contains role = for any update object that includes a role key', () => {
+    // Capture the SQL text passed to query for each generated input
+    query.mockImplementation((sql) => Promise.resolve({ rows: [{ id: 1 }] }));
+
+    fc.assert(
+      fc.asyncProperty(
+        fc.record({
+          first_name: fc.option(fc.string({ minLength: 1, maxLength: 30 }), { nil: undefined }),
+          last_name:  fc.option(fc.string({ minLength: 1, maxLength: 30 }), { nil: undefined }),
+          bio:        fc.option(fc.string({ minLength: 0, maxLength: 200 }), { nil: undefined }),
+          stellar_public_key: fc.option(fc.string({ minLength: 1, maxLength: 60 }), { nil: undefined }),
+          role: fc.oneof(
+            fc.constantFrom('admin', 'user', 'merchant'),
+            fc.string({ minLength: 1, maxLength: 20 })
+          ),
+        }),
+        async (updates) => {
+          jest.clearAllMocks();
+          query.mockResolvedValue({ rows: [{ id: 1 }] });
+
+          await repo.update(1, updates);
+
+          // If query was called (i.e., there were valid fields besides role),
+          // the SQL must not contain a role assignment.
+          if (query.mock.calls.length > 0) {
+            const sql = query.mock.calls[0][0];
+            expect(sql).not.toMatch(/\brole\s*=/i);
+          }
+        }
+      ),
+      { numRuns: 100 }
+    );
+  });
+});

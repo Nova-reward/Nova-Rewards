@@ -1,0 +1,124 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert distribution
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  
+  routes:
+    # Critical alerts go to PagerDuty and Slack
+    - match:
+        severity: critical
+      receiver: 'pagerduty-critical'
+      continue: true
+    
+    - match:
+        severity: critical
+      receiver: 'slack-critical'
+      group_wait: 10s
+    
+    # Warning alerts go to Slack only
+    - match:
+        severity: warning
+      receiver: 'slack-warnings'
+      group_wait: 5m
+    
+    # Database alerts
+    - match:
+        component: database
+      receiver: 'slack-database'
+      group_wait: 2m
+    
+    # Infrastructure alerts
+    - match:
+        component: infrastructure
+      receiver: 'slack-infrastructure'
+
+# Inhibition rules to prevent alert spam
+inhibit_rules:
+  # Inhibit warning if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+  
+  # Inhibit all alerts if service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['instance']
+
+# Receiver configurations
+receivers:
+  - name: 'default'
+    slack_configs:
+      - channel: '#nova-alerts'
+        title: 'Nova Rewards Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook: '{{ .CommonAnnotations.runbook }}'
+
+  - name: 'slack-critical'
+    slack_configs:
+      - channel: '#nova-critical'
+        color: 'danger'
+        title: ':rotating_light: CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+          *Runbook:* {{ .CommonAnnotations.runbook }}
+          *Firing Alerts:* {{ .Alerts.Firing | len }}
+        send_resolved: true
+
+  - name: 'slack-warnings'
+    slack_configs:
+      - channel: '#nova-alerts'
+        color: 'warning'
+        title: ':warning: Warning: {{ .GroupLabels.alertname }}'
+        text: |
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+          *Runbook:* {{ .CommonAnnotations.runbook }}
+        send_resolved: true
+
+  - name: 'slack-database'
+    slack_configs:
+      - channel: '#nova-database'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: ':database: Database Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+          *Runbook:* {{ .CommonAnnotations.runbook }}
+        send_resolved: true
+
+  - name: 'slack-infrastructure'
+    slack_configs:
+      - channel: '#nova-infrastructure'
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        title: ':gear: Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+          *Runbook:* {{ .CommonAnnotations.runbook }}
+        send_resolved: true
