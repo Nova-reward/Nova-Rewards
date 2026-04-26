@@ -11,3 +11,7 @@ soroban-sdk = { version = "22.0.0", features = ["testutils"] }
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+
+[[test]]
+name = "referral_tests"
+path = "tests/referral_tests.rs"

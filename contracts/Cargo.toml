@@ -24,3 +24,9 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+
+[package.metadata.tarpaulin]
+exclude = ["nova-rewards"]
+out = ["Html", "Lcov"]
+output-dir = "coverage"
+timeout = "120"
