@@ -99,8 +99,10 @@ app.use("/api/webhooks", require("./routes/webhooks"));
 // Swagger/OpenAPI docs
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./swagger");
-app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.get("/api/docs/openapi.json", (req, res) => res.json(swaggerSpec));
+if (process.env.NODE_ENV !== "production") {
+  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.get("/api/docs/openapi.json", (req, res) => res.json(swaggerSpec));
+}
 
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {
