@@ -1,0 +1,8 @@
+# Terraform Variables for Nova Rewards SSL/TLS Infrastructure
+# Copy this file to terraform.tfvars and update values
+
+aws_region   = "us-east-1"
+domain_name  = "api.nova-rewards.xyz"
+ops_email    = "ops@nova-rewards.xyz"
+instance_type = "t3.medium"
+environment  = "production"

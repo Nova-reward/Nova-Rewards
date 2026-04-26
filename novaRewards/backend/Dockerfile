@@ -3,13 +3,13 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files and install production dependencies only
+# Install dependencies for local development
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
-# Copy application source files
+# Copy the application source files
 COPY . .
 
-EXPOSE 4000
+EXPOSE 3001
 
-CMD ["node", "server.js"]
+CMD ["npm", "run", "dev"]

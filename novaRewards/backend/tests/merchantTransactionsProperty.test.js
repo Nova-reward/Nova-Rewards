@@ -82,7 +82,7 @@ describe('getTransactionsByMerchant property tests (Property 9)', () => {
           );
 
           expect(query).toHaveBeenCalledWith(
-            expect.stringContaining('WHERE merchant_id = $1'),
+            expect.stringContaining('WHERE t.merchant_id = $1'),
             [queriedMerchantId]
           );
           expect(result).toEqual(expected);
