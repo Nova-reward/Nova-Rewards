@@ -7,6 +7,7 @@ require('./db/index');
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const { connectRedis } = require('./lib/redis');
 const { startLeaderboardCacheWarmer } = require('./jobs/leaderboardCacheWarmer');
 const { startDailyLoginBonusJob } = require('./jobs/dailyLoginBonus');
@@ -14,12 +15,54 @@ const { globalLimiter, authLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 
-// Configure CORS based on environment
-const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGIN
-  ? { origin: process.env.ALLOWED_ORIGIN }
-  : {}; // Open CORS for development
+// Build allowed-origins list from comma-separated env var (supports multiple origins)
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow server-to-server requests (no Origin header) only in non-production
+    if (!origin) {
+      return callback(null, process.env.NODE_ENV !== 'production');
+    }
+    if (allowedOrigins.length === 0 && process.env.NODE_ENV !== 'production') {
+      return callback(null, true); // open in dev when no origins configured
+    }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+};
 
 app.use(cors(corsOptions));
+
+// Security headers (OWASP)
+app.use(
+  helmet({
+    // HSTS: 1 year, include subdomains, allow preload
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    // Prevent MIME-type sniffing
+    noSniff: true,
+    // Deny framing (clickjacking protection)
+    frameguard: { action: 'deny' },
+    // Referrer-Policy
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    // Disable X-Powered-By
+    hidePoweredBy: true,
+    // CSP is handled by the frontend; disable helmet's default for the API
+    contentSecurityPolicy: false,
+  })
+);
 app.use(express.json());
 
 // Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
