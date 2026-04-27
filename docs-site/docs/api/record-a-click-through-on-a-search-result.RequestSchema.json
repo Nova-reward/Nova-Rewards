@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["analyticsId","clickedId","clickedType"],"properties":{"analyticsId":{"type":"integer"},"clickedId":{"type":"integer"},"clickedType":{"type":"string"}}}}}}}

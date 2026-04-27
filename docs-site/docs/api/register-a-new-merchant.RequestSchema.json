@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["name","walletAddress"],"properties":{"name":{"type":"string","example":"Stellar Coffee Co."},"walletAddress":{"type":"string","example":"GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN"},"businessCategory":{"type":"string","example":"Food & Beverage"}}}}}}}
