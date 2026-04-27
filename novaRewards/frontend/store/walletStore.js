@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
-import { connectWallet, isFreighterInstalled, sign, getNetworkPassphrase } from '../lib/freighter';
+import {
+  connectWallet,
+  isFreighterInstalled,
+  sign,
+  getNetworkPassphrase,
+  getFreighterNetwork,
+  checkNetworkMismatch,
+} from '../lib/freighter';
 import { getNOVABalance, getTransactionHistory } from '../lib/horizonClient';
 
 const STELLAR_NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet';
@@ -15,6 +22,7 @@ const ERROR_MESSAGES = {
   sign_rejected: 'You rejected the signing request. Please try again.',
   sign_failed: 'Failed to sign transaction. Please try again.',
   refresh_failed: 'Failed to refresh wallet balance. Please check your connection.',
+  network_mismatch: `Network mismatch: Please switch Freighter to ${STELLAR_NETWORK === 'mainnet' ? 'Public' : 'Testnet'} before continuing.`,
   generic: 'Something went wrong with your wallet. Please try again.',
 };
 
@@ -23,6 +31,7 @@ function getUserFriendlyError(err) {
   if (msg.includes('not installed') || msg.includes('freighter')) return ERROR_MESSAGES.not_installed;
   if (msg.includes('denied') || msg.includes('rejected') || msg.includes('access')) return ERROR_MESSAGES.access_denied;
   if (msg.includes('public key')) return ERROR_MESSAGES.no_public_key;
+  if (msg.includes('network mismatch')) return ERROR_MESSAGES.network_mismatch;
   if (msg.includes('sign')) return ERROR_MESSAGES.sign_failed;
   return err?.message || ERROR_MESSAGES.generic;
 }
@@ -42,6 +51,8 @@ export const useWalletStore = create(
         balance: '0',
         transactions: [],
         freighterInstalled: null,
+        networkMismatch: false,
+        freighterNetwork: null,
         isLoading: false,
         isSigning: false,
         error: null,
@@ -50,9 +61,10 @@ export const useWalletStore = create(
         /**
          * Called after rehydration to refresh balance from the network.
          * This ensures persisted state is validated against current on-chain data.
+         * Also checks for network mismatch on rehydration.
          */
         rehydrate: async () => {
-          const { publicKey } = get();
+          const { publicKey, walletType } = get();
           if (!publicKey) {
             set({ hydrated: true }, false, 'wallet/rehydrateNoKey');
             return;
@@ -63,11 +75,29 @@ export const useWalletStore = create(
               getNOVABalance(publicKey),
               getTransactionHistory(publicKey),
             ]);
-            set({ balance: bal, transactions: txs, hydrated: true }, false, 'wallet/rehydrateSuccess');
+
+            // Check network mismatch for Freighter wallets on rehydration
+            let networkMismatch = false;
+            let freighterNetwork = null;
+            if (walletType === 'freighter') {
+              try {
+                const netInfo = await getFreighterNetwork();
+                freighterNetwork = netInfo.network;
+                networkMismatch = await checkNetworkMismatch();
+              } catch {
+                // Silently ignore network read failures on rehydration
+              }
+            }
+
+            set(
+              { balance: bal, transactions: txs, hydrated: true, networkMismatch, freighterNetwork },
+              false,
+              'wallet/rehydrateSuccess',
+            );
           } catch {
             // Persisted key may be stale — clear it
             set(
-              { publicKey: null, walletType: null, balance: '0', transactions: [], hydrated: true },
+              { publicKey: null, walletType: null, balance: '0', transactions: [], hydrated: true, networkMismatch: false, freighterNetwork: null },
               false,
               'wallet/rehydrateFailed',
             );
@@ -97,11 +127,12 @@ export const useWalletStore = create(
         },
 
         /**
-         * Connects Freighter wallet, checks installation, and loads initial data.
+         * Connects Freighter wallet, checks installation, loads initial data,
+         * and verifies the network configuration matches the dApp.
          * Persists publicKey and walletType to localStorage via zustand/persist.
          */
         connect: async () => {
-          set({ isLoading: true, error: null }, false, 'wallet/connectStart');
+          set({ isLoading: true, error: null, networkMismatch: false, freighterNetwork: null }, false, 'wallet/connectStart');
           try {
             const installed = await isFreighterInstalled();
             set({ freighterInstalled: installed }, false, 'wallet/checkFreighter');
@@ -112,7 +143,24 @@ export const useWalletStore = create(
             }
 
             const key = await connectWallet();
-            set({ publicKey: key, walletType: 'freighter', network: STELLAR_NETWORK }, false, 'wallet/setPublicKey');
+
+            // Detect network mismatch after successful connection
+            let networkMismatch = false;
+            let freighterNetwork = null;
+            try {
+              const netInfo = await getFreighterNetwork();
+              freighterNetwork = netInfo.network;
+              networkMismatch = await checkNetworkMismatch();
+            } catch (netErr) {
+              // If we can't read network, don't block connection but log it
+              console.warn('Could not verify Freighter network:', netErr);
+            }
+
+            set(
+              { publicKey: key, walletType: 'freighter', network: STELLAR_NETWORK, networkMismatch, freighterNetwork },
+              false,
+              'wallet/setPublicKey',
+            );
             await get().refreshBalance(key);
           } catch (err) {
             set({ error: getUserFriendlyError(err) }, false, 'wallet/connectError');
@@ -127,7 +175,7 @@ export const useWalletStore = create(
          */
         disconnect: () =>
           set(
-            { publicKey: null, walletType: null, balance: '0', transactions: [], error: null, freighterInstalled: null },
+            { publicKey: null, walletType: null, balance: '0', transactions: [], error: null, freighterInstalled: null, networkMismatch: false, freighterNetwork: null },
             false,
             'wallet/disconnect',
           ),
