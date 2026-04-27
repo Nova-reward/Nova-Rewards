@@ -203,4 +203,95 @@ router.post('/login', checkIpBlock, async (req, res, next) => {
   }
 });
 
+/**
+ * @openapi
+ * /auth/refresh:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Rotate refresh token and issue new access + refresh tokens
+ */
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Refresh token required' });
+    }
+
+    const { verifyToken, consumeRefreshJti, signAccessToken, signRefreshToken, storeRefreshJti } =
+      require('../services/tokenService');
+
+    let decoded;
+    try {
+      decoded = verifyToken(refreshToken);
+    } catch {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Invalid or expired refresh token' });
+    }
+
+    if (decoded.type !== 'refresh' || !decoded.jti) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Invalid token type' });
+    }
+
+    // Consume jti — one-time use (rotation)
+    const walletAddress = await consumeRefreshJti(decoded.jti);
+    if (!walletAddress) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Refresh token already used or revoked' });
+    }
+
+    const result = await query(
+      `SELECT id, wallet_address, role FROM users WHERE wallet_address = $1 AND is_deleted = FALSE`,
+      [walletAddress]
+    );
+    const user = result.rows[0];
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'User not found' });
+    }
+
+    const accessToken = signAccessToken(user);
+    const { token: newRefreshToken, jti: newJti } = signRefreshToken(user);
+    await storeRefreshJti(newJti, user.wallet_address);
+
+    return res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /auth/logout:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Revoke access token and refresh token (add to blocklist)
+ */
+router.post('/logout', async (req, res, next) => {
+  try {
+    const { revokeToken, verifyToken, consumeRefreshJti } = require('../services/tokenService');
+
+    // Revoke access token
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = verifyToken(authHeader.substring(7));
+        if (decoded.jti) await revokeToken(decoded.jti, decoded.exp);
+      } catch { /* already expired */ }
+    }
+
+    // Revoke refresh token
+    const { refreshToken } = req.body || {};
+    if (refreshToken) {
+      try {
+        const decoded = verifyToken(refreshToken);
+        if (decoded.jti) {
+          await consumeRefreshJti(decoded.jti);
+          await revokeToken(decoded.jti, decoded.exp);
+        }
+      } catch { /* already expired */ }
+    }
+
+    return res.json({ success: true, message: 'Logged out' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
