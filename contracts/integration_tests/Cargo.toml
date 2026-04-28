@@ -1,0 +1,16 @@
+[package]
+name = "integration_tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["rlib"]
+
+[dev-dependencies]
+soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+nova_token   = { path = "../nova_token" }
+reward_pool  = { path = "../reward_pool" }
+admin_roles  = { path = "../admin_roles" }
+referral     = { path = "../referral" }
+vesting      = { path = "../vesting" }

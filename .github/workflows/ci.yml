@@ -7,15 +7,13 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  # ── Backend (Node.js) tests ─────────────────────────────────────────────────
+  backend-test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
@@ -28,3 +26,46 @@ jobs:
       - name: Run tests
         working-directory: novaRewards/backend
         run: npx jest --runInBand --ci
+
+  # ── Soroban contract tests with coverage ────────────────────────────────────
+  contract-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            contracts/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('contracts/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run contract tests
+        working-directory: contracts
+        run: cargo test --workspace
+
+      - name: Generate coverage report
+        working-directory: contracts
+        run: |
+          cargo llvm-cov --workspace --lcov --output-path lcov.info
+          cargo llvm-cov --workspace --html --output-dir coverage-html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-coverage
+          path: |
+            contracts/lcov.info
+            contracts/coverage-html/
+          retention-days: 30
