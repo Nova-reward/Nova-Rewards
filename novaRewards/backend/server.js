@@ -29,6 +29,28 @@ const corsOptions =
     : {}; // Open CORS for development
 
 app.use(cors(corsOptions));
+
+// Security headers (OWASP)
+app.use(
+  helmet({
+    // HSTS: 1 year, include subdomains, allow preload
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    // Prevent MIME-type sniffing
+    noSniff: true,
+    // Deny framing (clickjacking protection)
+    frameguard: { action: 'deny' },
+    // Referrer-Policy
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    // Disable X-Powered-By
+    hidePoweredBy: true,
+    // CSP is handled by the frontend; disable helmet's default for the API
+    contentSecurityPolicy: false,
+  })
+);
 app.use(express.json());
 app.use(tracingMiddleware);
 app.use(metricsMiddleware);
