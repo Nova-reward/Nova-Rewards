@@ -1,12 +1,21 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env,
+    contract, contractimpl, contracttype, contracterror, symbol_short, Address, Env,
 };
+
+// ── Errors ────────────────────────────────────────────────────────────────────
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+}
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 #[contracttype]
 pub enum DataKey {
     Admin,
+    Initialized,
     /// referred -> referrer
     Referral(Address),
     /// referrer -> total count
@@ -21,12 +30,14 @@ pub struct ReferralContract;
 
 #[contractimpl]
 impl ReferralContract {
-    pub fn initialize(env: Env, admin: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialised");
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        if env.storage().instance().has(&DataKey::Initialized) {
+            return Err(Error::AlreadyInitialized);
         }
+        env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::PoolBalance, &0_i128);
+        Ok(())
     }
 
     fn admin(env: &Env) -> Address {
@@ -178,5 +189,13 @@ mod tests {
         let referred = Address::generate(&env);
         client.register_referral(&referrer, &referred);
         let _ = env.events().all(); // drain; event emission verified via snapshot
+    }
+
+    #[test]
+    #[should_panic(expected = "AlreadyInitialized")]
+    fn test_reinitialize_is_blocked() {
+        let (env, admin, client) = setup();
+        // second call must revert with AlreadyInitialized
+        client.initialize(&admin);
     }
 }

@@ -1,9 +1,20 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token, Address, BytesN, Env, Vec,
+    contract, contractimpl, contracttype, contracterror, symbol_short,
+    Address, BytesN, Env, Vec,
 };
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+}
 
 // ---------------------------------------------------------------------------
 // Storage keys
@@ -14,6 +25,8 @@ pub enum DataKey {
     Admin,
     Balance(Address),
     MigratedVersion,
+    /// Initialization guard flag
+    Initialized,
     /// Address of the XLM SAC token contract
     XlmToken,
     /// Address of the DEX router contract used for multi-hop swaps
@@ -95,12 +108,14 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     /// Must be called once after first deployment to set the admin.
-    pub fn initialize(env: Env, admin: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        if env.storage().instance().has(&DataKey::Initialized) {
+            return Err(Error::AlreadyInitialized);
         }
+        env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
+        Ok(())
     }
 
     /// Sets the XLM SAC token address and DEX router address.

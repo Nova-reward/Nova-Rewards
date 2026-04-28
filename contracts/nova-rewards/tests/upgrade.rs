@@ -102,3 +102,14 @@ fn test_upgrade_requires_admin_auth() {
     // Calling without auth should panic
     client.upgrade(&new_hash);
 }
+
+#[test]
+#[should_panic(expected = "AlreadyInitialized")]
+fn test_reinitialize_is_blocked() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = deploy(&env);
+    // second call must revert with AlreadyInitialized
+    client.initialize(&admin);
+}
