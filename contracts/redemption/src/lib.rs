@@ -47,9 +47,15 @@ pub enum DataKey {
     Admin,
     NextId,
     Redemption(u32),
-    RedemptionRate(Address),  // merchant -> tokens_per_perk_unit
-    TotalRedemptions(Address), // merchant -> total_amount_redeemed
+    RedemptionRate(Address),  // merchant -> tokens_per_perk_unit (instance)
+    TotalRedemptions(Address), // merchant -> total_amount_redeemed (instance)
 }
+
+// ── Storage Type Notes ───────────────────────────────────────────────────────
+// Admin, NextId: Instance storage (contract metadata, no TTL needed)
+// Redemption(u32): Persistent storage (historical records, extended on access)
+// RedemptionRate: Instance storage (configuration, rarely changes)
+// TotalRedemptions: Instance storage (accumulator, no TTL needed)
 
 // ── Contract ──────────────────────────────────────────────────────────────────
 #[contract]
@@ -113,7 +119,8 @@ impl RedemptionContract {
         );
         req.status = RedemptionStatus::Confirmed;
         env.storage().persistent().set(&key, &req);
-        env.storage().persistent().extend_ttl(&key, TTL, TTL);
+        // Extend TTL: 31 days (2,678,400 ledgers)
+        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
 
         env.events().publish(
             (symbol_short!("redeem"), symbol_short!("confirm")),
@@ -158,7 +165,8 @@ impl RedemptionContract {
             .persistent()
             .get(&key)
             .expect("not found");
-        env.storage().persistent().extend_ttl(&key, TTL, TTL);
+        // Extend TTL on read: 31 days (2,678,400 ledgers)
+        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
         req
     }
 

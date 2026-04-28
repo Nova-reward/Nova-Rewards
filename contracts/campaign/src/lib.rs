@@ -7,6 +7,11 @@ use soroban_sdk::{
 const MAX_TOKENS: usize = 5;
 
 // ── Storage Keys ─────────────────────────────────────────────────────────────
+// Storage Type Classification:
+// - Admin, Paused: Instance storage (contract metadata, no TTL)
+// - Campaign(u64): Persistent storage (accessed in hot paths, extend TTL)
+// - Participants(u64): Persistent storage (accessed on join, extend TTL)
+// - Joined(u64, Address): Persistent storage (write-once, no extension needed)
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
@@ -121,6 +126,8 @@ impl CampaignContract {
 
         data.active = active;
         env.storage().persistent().set(&key, &data);
+        // Extend TTL: 31 days (2,678,400 ledgers at 5s/ledger)
+        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
 
         let topic = if active { symbol_short!("active") } else { symbol_short!("inactive") };
         env.events().publish((symbol_short!("camp"), topic), id);
@@ -150,11 +157,15 @@ impl CampaignContract {
 
         data.current_participants += 1;
         env.storage().persistent().set(&key, &data);
+        // Extend TTL: 31 days
+        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
         env.storage().persistent().set(&joined_key, &true);
 
         let mut participants: Vec<Address> = env.storage().persistent().get(&DataKey::Participants(id)).unwrap();
         participants.push_back(participant.clone());
         env.storage().persistent().set(&DataKey::Participants(id), &participants);
+        // Extend TTL: 31 days
+        env.storage().persistent().extend_ttl(&DataKey::Participants(id), 2_678_400, 2_678_400);
 
         env.events().publish((symbol_short!("camp"), symbol_short!("joined")), (id, participant));
     }
@@ -180,7 +191,11 @@ impl CampaignContract {
     }
 
     pub fn get_campaign(env: Env, id: u64) -> CampaignData {
-        env.storage().persistent().get(&DataKey::Campaign(id)).expect("campaign not found")
+        let key = DataKey::Campaign(id);
+        let data = env.storage().persistent().get(&key).expect("campaign not found");
+        // Extend TTL on read: 31 days
+        env.storage().persistent().extend_ttl(&key, 2_678_400, 2_678_400);
+        data
     }
 
     /// Pauses all contract operations. Only admin can call.
