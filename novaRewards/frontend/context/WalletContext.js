@@ -1,7 +1,12 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { connectWallet as connectFreighter, isFreighterInstalled } from '../lib/freighter';
+import {
+  connectWallet as connectFreighter,
+  isFreighterInstalled,
+  getFreighterNetwork,
+  checkNetworkMismatch,
+} from '../lib/freighter';
 import { getNOVABalance, getTransactionHistory } from '../lib/horizonClient';
 
 const WalletContext = createContext(null);
@@ -61,6 +66,8 @@ export function WalletProvider({ children }) {
   const [balance, setBalance] = useState('0');
   const [transactions, setTransactions] = useState([]);
   const [freighterInstalled, setFreighterInstalled] = useState(null);
+  const [networkMismatch, setNetworkMismatch] = useState(false);
+  const [freighterNetwork, setFreighterNetwork] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hydrated, setHydrated] = useState(false);
@@ -101,6 +108,8 @@ export function WalletProvider({ children }) {
   const connect = useCallback(async (type = 'freighter') => {
     setLoading(true);
     setError(null);
+    setNetworkMismatch(false);
+    setFreighterNetwork(null);
     try {
       let key;
       if (type === 'freighter') {
@@ -108,6 +117,16 @@ export function WalletProvider({ children }) {
         setFreighterInstalled(installed);
         if (!installed) throw new Error('Freighter wallet extension is not installed. Please install it from freighter.app');
         key = await connectFreighter();
+
+        // Detect network mismatch after successful Freighter connection
+        try {
+          const netInfo = await getFreighterNetwork();
+          setFreighterNetwork(netInfo.network);
+          const mismatch = await checkNetworkMismatch();
+          setNetworkMismatch(mismatch);
+        } catch (netErr) {
+          console.warn('Could not verify Freighter network:', netErr);
+        }
       } else if (type === 'albedo') {
         key = await connectAlbedo();
       } else if (type === 'xbull') {
@@ -143,6 +162,8 @@ export function WalletProvider({ children }) {
     setBalance('0');
     setTransactions([]);
     setError(null);
+    setNetworkMismatch(false);
+    setFreighterNetwork(null);
     localStorage.removeItem('walletPublicKey');
     localStorage.removeItem('walletType');
   }, []);
@@ -192,6 +213,8 @@ export function WalletProvider({ children }) {
       balance,
       transactions,
       freighterInstalled,
+      networkMismatch,
+      freighterNetwork,
       loading,
       error,
       connect,
