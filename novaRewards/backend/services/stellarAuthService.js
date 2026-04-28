@@ -8,13 +8,14 @@ const { getConfig, getRequiredConfig } = require('./configService');
 const NONCE_PREFIX = 'stellar:nonce:';
 const NONCE_TTL_SECONDS = 5 * 60; // 5 minutes
 const JWT_EXPIRES_IN = getConfig('STELLAR_AUTH_JWT_EXPIRES_IN', '15m');
+const AUTH_DOMAIN = getConfig('AUTH_DOMAIN', 'novarewards.com');
 
 /**
  * Generates a challenge nonce tied to a Stellar wallet address.
- * Stores the nonce in Redis with a 5-minute TTL.
+ * Stores the challenge data in Redis with a 5-minute TTL.
  *
  * @param {string} walletAddress - Stellar public key (G...)
- * @returns {Promise<{ nonce: string, expiresAt: number }>}
+ * @returns {Promise<{ nonce: string, timestamp: number, domain: string, expiresAt: number }>}
  */
 async function createChallenge(walletAddress) {
   if (!isValidWallet(walletAddress)) {
@@ -22,25 +23,29 @@ async function createChallenge(walletAddress) {
   }
 
   const nonce = uuidv4();
+  const timestamp = Math.floor(Date.now() / 1000);
   const key = `${NONCE_PREFIX}${walletAddress}`;
-  const expiresAt = Math.floor(Date.now() / 1000) + NONCE_TTL_SECONDS;
+  const expiresAt = timestamp + NONCE_TTL_SECONDS;
 
-  // Store nonce in Redis with 5-min TTL. Overwrites any previous nonce for this wallet.
-  await redisClient.set(key, nonce, { EX: NONCE_TTL_SECONDS });
+  const challengeData = JSON.stringify({ nonce, timestamp });
 
-  return { nonce, expiresAt };
+  // Store challenge data in Redis with 5-min TTL. Overwrites any previous challenge for this wallet.
+  await redisClient.set(key, challengeData, { EX: NONCE_TTL_SECONDS });
+
+  return { nonce, timestamp, domain: AUTH_DOMAIN, expiresAt };
 }
 
 /**
  * Verifies a signed challenge and issues a JWT.
  *
  * Flow:
- *  1. Retrieve the nonce from Redis for the given wallet address
+ *  1. Retrieve the challenge data from Redis for the given wallet address
  *  2. If missing or expired → 401
- *  3. Delete the nonce (single-use)
- *  4. Verify the Stellar signature against the challenge message
- *  5. Look up or create the user record, determine roles
- *  6. Sign and return a JWT containing walletAddress, roles, expiry
+ *  3. Delete the challenge data (single-use)
+ *  4. Verify the timestamp is within the last 5 minutes
+ *  5. Verify the Stellar signature against the reconstructed challenge message
+ *  6. Look up or create the user record, determine roles
+ *  7. Sign and return a JWT containing walletAddress, roles, expiry
  *
  * @param {string} walletAddress - Stellar public key
  * @param {string} signedChallenge - Base64-encoded signed challenge
@@ -55,24 +60,45 @@ async function verifyChallenge(walletAddress, signedChallenge) {
     throw Object.assign(new Error('Signed challenge is required'), { status: 400 });
   }
 
-  // 1. Retrieve nonce from Redis
+  // 1. Retrieve challenge data from Redis
   const key = `${NONCE_PREFIX}${walletAddress}`;
-  const nonce = await redisClient.get(key);
+  const storedData = await redisClient.get(key);
 
-  if (!nonce) {
+  if (!storedData) {
     const err = new Error('Challenge expired or not found');
     err.status = 401;
     err.code = 'challenge_expired';
     throw err;
   }
 
-  // 2. Single-use: delete the nonce immediately
+  let challenge;
+  try {
+    challenge = JSON.parse(storedData);
+  } catch (e) {
+    const err = new Error('Malformed challenge data');
+    err.status = 401;
+    err.code = 'malformed_challenge';
+    throw err;
+  }
+
+  const { nonce, timestamp } = challenge;
+
+  // 2. Single-use: delete the challenge data immediately
   await redisClient.del(key);
 
-  // 3. Reconstruct the challenge message that was signed
-  const challengeMessage = buildChallengeMessage(walletAddress, nonce);
+  // 3. Verify timestamp (must be within 5 minutes)
+  const now = Math.floor(Date.now() / 1000);
+  if (now - timestamp > NONCE_TTL_SECONDS) {
+    const err = new Error('Challenge signature expired');
+    err.status = 401;
+    err.code = 'challenge_expired';
+    throw err;
+  }
 
-  // 4. Verify the Stellar signature
+  // 4. Reconstruct the challenge message that was signed
+  const challengeMessage = buildChallengeMessage(walletAddress, nonce, timestamp, AUTH_DOMAIN);
+
+  // 5. Verify the Stellar signature
   const signatureValid = verifyStellarSignature(
     walletAddress,
     challengeMessage,
@@ -86,7 +112,7 @@ async function verifyChallenge(walletAddress, signedChallenge) {
     throw err;
   }
 
-  // 5. Look up user by wallet address to determine roles
+  // 6. Look up user by wallet address to determine roles
   const user = await findOrCreateUserByWallet(walletAddress);
 
   // 6. Issue JWT
@@ -136,10 +162,10 @@ function isValidWallet(address) {
 
 /**
  * Builds the deterministic challenge message the client must sign.
- * Format: "NovaRewards Auth\nWallet: <address>\nNonce: <nonce>"
+ * Format: "NovaRewards Auth\nDomain: <domain>\nWallet: <address>\nNonce: <nonce>\nTimestamp: <timestamp>"
  */
-function buildChallengeMessage(walletAddress, nonce) {
-  return `NovaRewards Auth\nWallet: ${walletAddress}\nNonce: ${nonce}`;
+function buildChallengeMessage(walletAddress, nonce, timestamp, domain) {
+  return `NovaRewards Auth\nDomain: ${domain}\nWallet: ${walletAddress}\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
 }
 
 /**

@@ -210,6 +210,47 @@ describe('Stellar Auth — POST /api/auth/verify', () => {
     expect(res.body.error).toBe('challenge_expired');
   });
 
+  it('returns 401 if the signature is valid but timestamp is expired (logic check)', async () => {
+    const kp = Keypair.random();
+    const wallet = kp.publicKey();
+
+    // Manually inject an expired challenge into the mock redis
+    const oldTimestamp = Math.floor(Date.now() / 1000) - (10 * 60);
+    const nonce = 'old-nonce';
+    const key = `stellar:nonce:${wallet}`;
+    // We bypass the mock's TTL for this test to verify the service logic
+    await redisClient.set(key, JSON.stringify({ nonce, timestamp: oldTimestamp }));
+
+    const message = stellarAuthService._buildChallengeMessage(wallet, nonce, oldTimestamp, 'novarewards.com');
+    const signedChallenge = signChallenge(kp, message);
+
+    const res = await request(app)
+      .post('/api/auth/verify')
+      .send({ walletAddress: wallet, signedChallenge });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('challenge_expired');
+    expect(res.body.message).toBe('Challenge signature expired');
+  });
+
+  it('returns 401 for malformed signedChallenge (not base64)', async () => {
+    const kp = Keypair.random();
+    const wallet = kp.publicKey();
+
+    await request(app)
+      .post('/api/auth/challenge')
+      .send({ walletAddress: wallet });
+
+    const res = await request(app)
+      .post('/api/auth/verify')
+      .send({ walletAddress: wallet, signedChallenge: '!!!not-base64!!!' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('invalid_signature');
+    // Ensure no stack trace exposure (error message should be clean)
+    expect(res.body.message).toBe('Invalid signature');
+  });
+
   it('returns 401 for an invalid signature', async () => {
     const kp = Keypair.random();
     const wallet = kp.publicKey();
@@ -313,12 +354,14 @@ describe('Stellar Auth — POST /api/auth/verify', () => {
 
 describe('stellarAuthService internals', () => {
   describe('_buildChallengeMessage', () => {
-    it('produces a deterministic message with wallet and nonce', () => {
+    it('produces a deterministic message with domain, wallet, nonce and timestamp', () => {
       const msg = stellarAuthService._buildChallengeMessage(
         'GABC123',
         'nonce-xyz',
+        123456789,
+        'example.com'
       );
-      expect(msg).toBe('NovaRewards Auth\nWallet: GABC123\nNonce: nonce-xyz');
+      expect(msg).toBe('NovaRewards Auth\nDomain: example.com\nWallet: GABC123\nNonce: nonce-xyz\nTimestamp: 123456789');
     });
   });
 

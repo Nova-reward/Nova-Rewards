@@ -38,15 +38,17 @@ router.post('/challenge', slidingAuth, async (req, res, next) => {
       });
     }
 
-    const { nonce, expiresAt } = await stellarAuthService.createChallenge(walletAddress);
+    const { nonce, timestamp, domain, expiresAt } = await stellarAuthService.createChallenge(walletAddress);
 
     return res.json({
       success: true,
       data: {
         walletAddress,
         nonce,
+        timestamp,
+        domain,
         expiresAt,
-        message: stellarAuthService._buildChallengeMessage(walletAddress, nonce),
+        message: stellarAuthService._buildChallengeMessage(walletAddress, nonce, timestamp, domain),
       },
     });
   } catch (err) {
