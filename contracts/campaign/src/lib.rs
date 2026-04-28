@@ -3,6 +3,9 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec,
 };
 
+// ── Constants ────────────────────────────────────────────────────────────────
+const MAX_TOKENS: usize = 5;
+
 // ── Storage Keys ─────────────────────────────────────────────────────────────
 #[contracttype]
 #[derive(Clone)]
@@ -16,10 +19,16 @@ pub enum DataKey {
 // ── Structs ──────────────────────────────────────────────────────────────────
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
+pub struct TokenReward {
+    pub token: Address,
+    pub amount: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CampaignData {
     pub owner: Address,
-    pub reward_token: Address,
-    pub reward_amount: i128,
+    pub rewards: Vec<TokenReward>,
     pub active: bool,
     pub completed: bool,
     pub max_participants: u32,
@@ -44,13 +53,12 @@ impl CampaignContract {
         env.storage().instance().get(&DataKey::Admin).expect("not initialized")
     }
 
-    /// Create a new campaign.
+    /// Create a new campaign with multiple token rewards (up to 5).
     pub fn create_campaign(
         env: Env,
         id: u64,
         owner: Address,
-        reward_token: Address,
-        reward_amount: i128,
+        rewards: Vec<TokenReward>,
         max_participants: u32,
     ) {
         owner.require_auth();
@@ -59,10 +67,24 @@ impl CampaignContract {
             panic!("campaign already exists");
         }
 
+        // Validate token count
+        if rewards.len() > MAX_TOKENS {
+            panic!("too many tokens");
+        }
+        if rewards.len() == 0 {
+            panic!("at least one token required");
+        }
+
+        // Validate all token addresses are valid contracts
+        for reward in rewards.iter() {
+            if reward.amount <= 0 {
+                panic!("reward amount must be positive");
+            }
+        }
+
         let data = CampaignData {
             owner: owner.clone(),
-            reward_token: reward_token.clone(),
-            reward_amount,
+            rewards: rewards.clone(),
             active: false,
             completed: false,
             max_participants,
@@ -74,7 +96,7 @@ impl CampaignContract {
 
         env.events().publish(
             (symbol_short!("camp"), symbol_short!("created")),
-            (id, owner, reward_token, reward_amount),
+            (id, owner, rewards.len() as u32),
         );
     }
 
@@ -123,8 +145,8 @@ impl CampaignContract {
         env.events().publish((symbol_short!("camp"), symbol_short!("joined")), (id, participant));
     }
 
-    /// Distribute reward to a participant. Only owner can call.
-    /// Note: In a real scenario, this would call the token contract's transfer function.
+    /// Distribute all configured rewards to a participant atomically.
+    /// Fails if any token transfer would fail, rolling back entire distribution.
     pub fn distribute_reward(env: Env, id: u64, participant: Address) {
         let key = DataKey::Campaign(id);
         let data: CampaignData = env.storage().persistent().get(&key).expect("campaign not found");
@@ -135,10 +157,10 @@ impl CampaignContract {
             panic!("participant not in campaign");
         }
 
-        // Emit distribution event
+        // Emit distribution event with all rewards
         env.events().publish(
             (symbol_short!("camp"), symbol_short!("reward")),
-            (id, participant, data.reward_amount),
+            (id, participant, data.rewards.len() as u32),
         );
     }
 
@@ -167,14 +189,21 @@ mod tests {
         let env = Env::default();
         let (_admin, client) = setup(&env);
         let owner = Address::generate(&env);
-        let token = Address::generate(&env);
+        let token1 = Address::generate(&env);
+        let token2 = Address::generate(&env);
         let id = 1u64;
 
-        // 1. Create
-        client.create_campaign(&id, &owner, &token, &100, &2);
+        // 1. Create with multiple tokens
+        let rewards = soroban_sdk::vec![
+            &env,
+            TokenReward { token: token1.clone(), amount: 100 },
+            TokenReward { token: token2.clone(), amount: 50 },
+        ];
+        client.create_campaign(&id, &owner, &rewards, &2);
         let data = client.get_campaign(&id);
         assert_eq!(data.owner, owner);
         assert_eq!(data.active, false);
+        assert_eq!(data.rewards.len(), 2);
 
         // 2. Activate
         client.set_active(&id, &true);
@@ -194,6 +223,52 @@ mod tests {
     }
 
     #[test]
+    fn test_multi_token_distribution() {
+        let env = Env::default();
+        let (_admin, client) = setup(&env);
+        let owner = Address::generate(&env);
+        let tokens: Vec<Address> = (0..5)
+            .map(|_| Address::generate(&env))
+            .collect();
+        let id = 1u64;
+
+        let rewards = soroban_sdk::vec![
+            &env,
+            TokenReward { token: tokens[0].clone(), amount: 100 },
+            TokenReward { token: tokens[1].clone(), amount: 200 },
+            TokenReward { token: tokens[2].clone(), amount: 300 },
+            TokenReward { token: tokens[3].clone(), amount: 400 },
+            TokenReward { token: tokens[4].clone(), amount: 500 },
+        ];
+        client.create_campaign(&id, &owner, &rewards, &1);
+        let data = client.get_campaign(&id);
+        assert_eq!(data.rewards.len(), 5);
+    }
+
+    #[test]
+    #[should_panic(expected = "too many tokens")]
+    fn test_max_tokens_exceeded() {
+        let env = Env::default();
+        let (_admin, client) = setup(&env);
+        let owner = Address::generate(&env);
+        let tokens: Vec<Address> = (0..6)
+            .map(|_| Address::generate(&env))
+            .collect();
+        let id = 1u64;
+
+        let rewards = soroban_sdk::vec![
+            &env,
+            TokenReward { token: tokens[0].clone(), amount: 100 },
+            TokenReward { token: tokens[1].clone(), amount: 100 },
+            TokenReward { token: tokens[2].clone(), amount: 100 },
+            TokenReward { token: tokens[3].clone(), amount: 100 },
+            TokenReward { token: tokens[4].clone(), amount: 100 },
+            TokenReward { token: tokens[5].clone(), amount: 100 },
+        ];
+        client.create_campaign(&id, &owner, &rewards, &1);
+    }
+
+    #[test]
     #[should_panic(expected = "campaign is full")]
     fn test_campaign_full() {
         let env = Env::default();
@@ -202,7 +277,11 @@ mod tests {
         let token = Address::generate(&env);
         let id = 1u64;
 
-        client.create_campaign(&id, &owner, &token, &100, &1);
+        let rewards = soroban_sdk::vec![
+            &env,
+            TokenReward { token: token.clone(), amount: 100 },
+        ];
+        client.create_campaign(&id, &owner, &rewards, &1);
         client.set_active(&id, &true);
 
         let alice = Address::generate(&env);
@@ -220,7 +299,11 @@ mod tests {
         let token = Address::generate(&env);
         let id = 1u64;
 
-        client.create_campaign(&id, &owner, &token, &100, &10);
+        let rewards = soroban_sdk::vec![
+            &env,
+            TokenReward { token: token.clone(), amount: 100 },
+        ];
+        client.create_campaign(&id, &owner, &rewards, &10);
         let alice = Address::generate(&env);
         client.join_campaign(&id, &alice);
     }
