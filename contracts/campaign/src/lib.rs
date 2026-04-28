@@ -14,6 +14,7 @@ pub enum DataKey {
     Campaign(u64),            // id -> CampaignData
     Participants(u64),        // id -> Vec<Address>
     Joined(u64, Address),     // (id, address) -> bool
+    Paused,                   // bool - contract pause state
 }
 
 // ── Structs ──────────────────────────────────────────────────────────────────
@@ -53,6 +54,16 @@ impl CampaignContract {
         env.storage().instance().get(&DataKey::Admin).expect("not initialized")
     }
 
+    fn is_paused(env: &Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    fn require_not_paused(env: &Env) {
+        if Self::is_paused(env) {
+            panic!("contract is paused");
+        }
+    }
+
     /// Create a new campaign with multiple token rewards (up to 5).
     pub fn create_campaign(
         env: Env,
@@ -61,6 +72,7 @@ impl CampaignContract {
         rewards: Vec<TokenReward>,
         max_participants: u32,
     ) {
+        Self::require_not_paused(&env);
         owner.require_auth();
         let key = DataKey::Campaign(id);
         if env.storage().persistent().has(&key) {
@@ -102,6 +114,7 @@ impl CampaignContract {
 
     /// Activate or deactivate a campaign. Only owner can call.
     pub fn set_active(env: Env, id: u64, active: bool) {
+        Self::require_not_paused(&env);
         let key = DataKey::Campaign(id);
         let mut data: CampaignData = env.storage().persistent().get(&key).expect("campaign not found");
         data.owner.require_auth();
@@ -115,6 +128,7 @@ impl CampaignContract {
 
     /// Join an active campaign.
     pub fn join_campaign(env: Env, id: u64, participant: Address) {
+        Self::require_not_paused(&env);
         participant.require_auth();
         let key = DataKey::Campaign(id);
         let mut data: CampaignData = env.storage().persistent().get(&key).expect("campaign not found");
@@ -148,6 +162,7 @@ impl CampaignContract {
     /// Distribute all configured rewards to a participant atomically.
     /// Fails if any token transfer would fail, rolling back entire distribution.
     pub fn distribute_reward(env: Env, id: u64, participant: Address) {
+        Self::require_not_paused(&env);
         let key = DataKey::Campaign(id);
         let data: CampaignData = env.storage().persistent().get(&key).expect("campaign not found");
         data.owner.require_auth();
@@ -166,6 +181,32 @@ impl CampaignContract {
 
     pub fn get_campaign(env: Env, id: u64) -> CampaignData {
         env.storage().persistent().get(&DataKey::Campaign(id)).expect("campaign not found")
+    }
+
+    /// Pauses all contract operations. Only admin can call.
+    /// All state-modifying functions will revert while paused.
+    pub fn pause(env: Env) {
+        Self::get_admin(&env).require_auth();
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish(
+            (symbol_short!("camp"), symbol_short!("paused")),
+            Self::get_admin(&env),
+        );
+    }
+
+    /// Unpauses contract operations. Only admin can call.
+    pub fn unpause(env: Env) {
+        Self::get_admin(&env).require_auth();
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish(
+            (symbol_short!("camp"), symbol_short!("unpaused")),
+            Self::get_admin(&env),
+        );
+    }
+
+    /// Returns the current pause state.
+    pub fn is_paused(env: Env) -> bool {
+        Self::is_paused(&env)
     }
 }
 
@@ -306,5 +347,80 @@ mod tests {
         client.create_campaign(&id, &owner, &rewards, &10);
         let alice = Address::generate(&env);
         client.join_campaign(&id, &alice);
+    }
+
+    #[test]
+    fn test_pause_unpause() {
+        let env = Env::default();
+        let (admin, client) = setup(&env);
+        
+        assert_eq!(client.is_paused(), false);
+        
+        client.pause();
+        assert_eq!(client.is_paused(), true);
+        
+        client.unpause();
+        assert_eq!(client.is_paused(), false);
+    }
+
+    #[test]
+    #[should_panic(expected = "contract is paused")]
+    fn test_create_campaign_while_paused() {
+        let env = Env::default();
+        let (admin, client) = setup(&env);
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let id = 1u64;
+
+        client.pause();
+        
+        let rewards = soroban_sdk::vec![
+            &env,
+            TokenReward { token: token.clone(), amount: 100 },
+        ];
+        client.create_campaign(&id, &owner, &rewards, &10);
+    }
+
+    #[test]
+    #[should_panic(expected = "contract is paused")]
+    fn test_join_campaign_while_paused() {
+        let env = Env::default();
+        let (admin, client) = setup(&env);
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let id = 1u64;
+
+        let rewards = soroban_sdk::vec![
+            &env,
+            TokenReward { token: token.clone(), amount: 100 },
+        ];
+        client.create_campaign(&id, &owner, &rewards, &10);
+        client.set_active(&id, &true);
+        
+        client.pause();
+        
+        let alice = Address::generate(&env);
+        client.join_campaign(&id, &alice);
+    }
+
+    #[test]
+    fn test_read_operations_while_paused() {
+        let env = Env::default();
+        let (admin, client) = setup(&env);
+        let owner = Address::generate(&env);
+        let token = Address::generate(&env);
+        let id = 1u64;
+
+        let rewards = soroban_sdk::vec![
+            &env,
+            TokenReward { token: token.clone(), amount: 100 },
+        ];
+        client.create_campaign(&id, &owner, &rewards, &10);
+        
+        client.pause();
+        
+        // Read-only operations should still work
+        let data = client.get_campaign(&id);
+        assert_eq!(data.owner, owner);
     }
 }
