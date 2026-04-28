@@ -262,3 +262,7 @@ See [LICENSE](LICENSE) for terms, or contact the maintainers for licensing inqui
 | [novaRewards/README.md](novaRewards/README.md) | App-level setup (frontend + backend) |
 | [infrastructure/README_DEVOPS_SETUP.md](infrastructure/README_DEVOPS_SETUP.md) | DevOps / infra setup |
 | [ROADMAP.md](ROADMAP.md) | Issue tracker and priorities |
+
+## API Documentation
+
+Full API reference: https://udeibom.github.io/Nova-Rewards/
