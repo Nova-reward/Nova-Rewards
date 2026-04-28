@@ -75,8 +75,7 @@ const nextConfig = {
     minimumCacheTTL: 86400,
   },
   sentry: {
-    hideSourceMaps: true,
-    widenClientFileUpload: true,
+    // Deprecated in v10 — options moved to sentryWebpackPluginOptions below
   },
 };
 
@@ -85,6 +84,9 @@ const sentryWebpackPluginOptions = {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
+  // v10: source map options moved here from the `sentry` key in nextConfig
+  hideSourceMaps: true,
+  widenClientFileUpload: true,
 };
 
 module.exports = withSentryConfig(

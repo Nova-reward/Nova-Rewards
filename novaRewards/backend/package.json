@@ -51,7 +51,7 @@
   "devDependencies": {
     "fast-check": "^4.7.0",
     "jest": "^30.3.0",
-    "jest-junit": "^16.0.0",
+    "jest-junit": "^17.0.0",
     "nodemon": "^3.1.14",
     "supertest": "^7.2.2"
   },
