@@ -1,0 +1,1 @@
+version: '3.8'\nservices:\n  test-db:\n    image: postgres:15\n    environment:\n      POSTGRES_DB: nova_rewards_test\n      POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres\n    ports:\n      - \"5433:5432\"\n\n  test-redis:\n    image: redis:alpine\n    ports:\n      - \"6380:6379\"\n\n# Run: docker-compose -f docker-compose.test.yml up -d

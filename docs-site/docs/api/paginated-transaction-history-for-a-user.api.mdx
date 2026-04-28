@@ -1,0 +1,65 @@
+---
+id: paginated-transaction-history-for-a-user
+title: "Paginated transaction history for a user"
+description: "Paginated transaction history for a user"
+sidebar_label: "Paginated transaction history for a user"
+hide_title: true
+hide_table_of_contents: true
+api: eJztV11z2joQ/SuafWpnDJivptdvhCQthKYpccO0GSYR9gJqbMmV5DQMw3+/s7Yh5kIodzpzny4vYHN2z+rsh6QlWD4z4N2Br7k0PLBCSQNjBxKueYwWNf27BCHBg58p6gU4IHmM4EFqUPdCcEDjz1RoDMGzOkUHTDDHmIO3BLtICCmkxRlqcACfeZxECF6rsVo5+/0mfIZw0EuIU55GFrx6yWP9VYeRiIU90mPDdSDmzyJOY/DqrlsiaLivMmT+9hAYq4Wc0bol+buDUNCrSUo6Z8qFGCfFg6UUTFHD+FUeY7m2Z9weJpsqHXMLHoQ5crMCaLiNdsWtV9w6vMqBMvxThnqj0iSGMa3QJEoaNOSm4br0FaIJtMiX7cE1nwnJLYbMvtQgmwtjlV5UwYFASYvSkiVPkkgEnBC1H4bMl7tRqskPDCjfiVYJaitycpMGARpTAk6UipDLcvxUwCuHllX2yLXmpJCwGJvfM4nwcO3X3frKAft8P+dmvrdaNnLy+qQRNMMWtqfvqtUq5HY5/k+rrMyzZbFygMcqzSUvOGQaT7ZX0XZXDky1iu9/8ShCe3ghHzqd772W3x02/W/tz/2PXb/fbXRaX26+vev2R/2P7V6n73+47F01zocng9Or28vP3e7oKluwOo7h9PSsddK7eDcYXZ5cn3w6O7+96Y6GJ2fXX0e3zatvzTP/y/ntxaB11fFbnS8fm98Hg4tBp00UxmIUcX0fYUi5Ojy53jf+ar5vnawcCDRS4d7zvaFtNUnFinhfLzYrddevt7xGw3Pd79SVYIXNAKWRnL9XlkeHY3vfXjn5/DxcgCunGIoHYTTw6ONAa1/j3vJIhFkvMtRa6f+6V6c8MtSsGfnh2njahHqfo1cOxGjMtlJ7DPPC64ShRmOYMGyz15UzdU4+h8Wkg7VkrV3JvhrUTCrLpiqV4f+CvQhGQ/f4bYFNlWac0QkEKDA7VyF4MMNMGW7n4EGtZGdqBK0V1rS1oX5an21SHYEHc2sTr1aLVMCjuTLWa7puvcYTAf+MbEAQFuITRiqJKXm0lb54MV6N7KpSPXGNv7gOTVWova6utQrTosPHFFWQamEXN5T1PLET5Bp1J7XljYJY1vtzlusMBE7x42I9ePojf4eyP/IZz4qFWfWIkqmJ5UJiyGiWs4frzzc+q/HUzmuRmgn5UM1zr4M5l7aTiEtclLfG/IWTHyXmyMMskOIs8Vzhiag8ZoDtMD4VDlnnusceccE02lRTGEoyjTPaj/LZ8sbM1S/JlAzwbTWrIiGnKguhqKYr9cSHudDkDhyg3OY89apbdXfYh+c3fsZMdWTnyMgFW/uYRCp4DOZcSBapBY/sgiURtzTPq6wTRSzRymJAtYkyTJSQdlPnjLPTLAmMhP6ttmyjwx5Pkj1sBHxgubZMSGORb2YHD7LZUei9tQwfeQzZpA+Q2uwF9qnnZ0ImytiYy9I//6LrthTd1IPFZ1tLIi6yY0TWFMuiI++g3JHgQOFo3ZVjB6jxCLhcTrjBrzpareh1fkKlXg2F4ZOIrhrZMNuJYjNO4c2wGDxvGZ169kVHdVm6xjzxKCVQ1s47RDm4uJscA13fOo7BFveHY6DlK8Ax+Jfj/At6TA9aEBy8u/HKWTcuSZybdYIAk3L4O7sTedlM3g/nVFF/A71c1K8=
+sidebar_class_name: "get api-method"
+info_path: docs/api/novarewards-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading as="h1" className="openapi__heading">
+  Paginated transaction history for a user
+</Heading>
+
+<MethodEndpoint method="get" path="/transactions/user/history" context="endpoint" />
+
+Paginated transaction history for a user
+
+<Heading id="request" as="h2" className="openapi-tabs__heading">
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails {...require("./paginated-transaction-history-for-a-user.ParamsDetails.json")} />
+
+<RequestSchema {...require("./paginated-transaction-history-for-a-user.RequestSchema.json")} />
+
+<StatusCodes {...require("./paginated-transaction-history-for-a-user.StatusCodes.json")} />
+
+## Example (cURL)
+
+```bash
+curl -X GET "http://localhost:3001/api/transactions?page=1&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+Example (JavaScript)
+const res = await fetch(
+  "http://localhost:3001/api/transactions?page=1&limit=20",
+  {
+    headers: {
+      "Authorization": "Bearer YOUR_TOKEN"
+    }
+  }
+);
+
+console.log(await res.json());
+Example (Python)
+import requests
+
+res = requests.get(
+  "http://localhost:3001/api/transactions?page=1&limit=20",
+  headers={"Authorization": "Bearer YOUR_TOKEN"}
+)
+
+print(res.json())
+
+---

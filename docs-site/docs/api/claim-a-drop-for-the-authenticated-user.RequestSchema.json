@@ -1,0 +1,1 @@
+{"title":"Body","body":{"content":{"application/json":{"schema":{"type":"object","properties":{"proof":{"type":"array","items":{"type":"string"},"example":["0xabc...","0xdef..."],"description":"Merkle proof (required when drop has a merkle_root)"}}}}}}}

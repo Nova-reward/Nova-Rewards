@@ -1,0 +1,45 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-checks:
+    runs-on: ubuntu-latest
+    name: fmt / validate / tflint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.7.5"
+
+      - name: terraform fmt
+        working-directory: infra
+        run: terraform fmt -check -recursive
+
+      - name: terraform init (no backend)
+        working-directory: infra
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        working-directory: infra
+        run: terraform validate
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: "v0.50.3"
+
+      - name: tflint init
+        working-directory: infra
+        run: tflint --init
+
+      - name: tflint
+        working-directory: infra
+        run: tflint --recursive

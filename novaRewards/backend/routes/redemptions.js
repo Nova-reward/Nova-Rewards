@@ -4,29 +4,74 @@ const { redeemReward, getRedemptionById, getUserRedemptions } = require('../db/r
 const { getUserById } = require('../db/userRepository');
 const { getRewardById } = require('../db/adminRepository');
 const appEvents = require('../services/eventEmitter');
+const { logAudit } = require('../db/auditLogRepository');
 
 // All redemption routes require an authenticated user
 router.use(authenticateUser);
 
 /**
- * POST /api/redemptions
- *
- * Redeems a reward for the authenticated user.
- *
- * Headers:
- *   X-Idempotency-Key  (required) – client-generated UUID to prevent duplicate
- *                                   submissions on network retry
- *
- * Body:
- *   { userId: number, rewardId: number }
- *
- * Responses:
- *   201  – redemption created
- *   200  – idempotent replay (same key, same result)
- *   400  – validation error
- *   403  – userId in body does not match authenticated user
- *   404  – reward not found
- *   409  – out of stock | insufficient points | reward inactive
+ * @openapi
+ * /redemptions:
+ *   post:
+ *     tags: [Redemptions]
+ *     summary: Redeem a reward
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Idempotency-Key
+ *         required: true
+ *         schema: { type: string, format: uuid, example: "550e8400-e29b-41d4-a716-446655440000" }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [userId, rewardId]
+ *             properties:
+ *               userId: { type: integer, example: 42 }
+ *               rewardId: { type: integer, example: 12 }
+ *     responses:
+ *       201:
+ *         description: Redemption created.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     redemption: { $ref: '#/components/schemas/Redemption' }
+ *       200:
+ *         description: Idempotent replay — same result returned.
+ *       400:
+ *         description: Validation error or missing idempotency key.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Redeeming for another user.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: Reward not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: Out of stock, insufficient points, or reward inactive.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -41,7 +86,7 @@ router.post('/', async (req, res, next) => {
     }
 
     // ── Body validation ───────────────────────────────────────────────────
-    const { userId, rewardId } = req.body;
+    const { userId, rewardId, campaignId } = req.body;
 
     if (!userId || !Number.isInteger(Number(userId)) || Number(userId) <= 0) {
       return res.status(400).json({
@@ -59,8 +104,18 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    const userIdNum   = Number(userId);
-    const rewardIdNum = Number(rewardId);
+    if (campaignId !== undefined && campaignId !== null &&
+        (!Number.isInteger(Number(campaignId)) || Number(campaignId) <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'campaignId must be a positive integer',
+      });
+    }
+
+    const userIdNum     = Number(userId);
+    const rewardIdNum   = Number(rewardId);
+    const campaignIdNum = campaignId != null ? Number(campaignId) : null;
 
     // ── Authorisation: users may only redeem for themselves ───────────────
     if (req.user.id !== userIdNum) {
@@ -75,6 +130,7 @@ router.post('/', async (req, res, next) => {
     const { redemption, pointTx, idempotent } = await redeemReward({
       userId: userIdNum,
       rewardId: rewardIdNum,
+      campaignId: campaignIdNum,
       idempotencyKey: idempotencyKey.trim(),
     });
 
@@ -90,6 +146,17 @@ router.post('/', async (req, res, next) => {
       }).catch((err) => {
         console.error('[redemptions] event emit failed:', err.message);
       });
+
+      // Explicit audit log for redemption
+      logAudit({
+        entityType: 'redemption',
+        entityId: redemption.id,
+        action: 'redeem_reward',
+        performedBy: req.user.id,
+        actorType: req.user.role === 'admin' ? 'admin' : 'user',
+        details: { rewardId: rewardIdNum, userId: userIdNum, pointsSpent: redemption.points_spent },
+        source: 'POST /api/redemptions',
+      }).catch((err) => console.error('[audit] redeem_reward:', err.message));
     }
 
     const statusCode = idempotent ? 200 : 201;
@@ -109,8 +176,37 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * GET /api/redemptions
- * Returns paginated redemption history for the authenticated user.
+ * @openapi
+ * /redemptions:
+ *   get:
+ *     tags: [Redemptions]
+ *     summary: List redemption history for the authenticated user
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1, example: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100, example: 20 }
+ *     responses:
+ *       200:
+ *         description: Paginated redemption list.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/Redemption' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -125,8 +221,43 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
- * GET /api/redemptions/:id
- * Returns a single redemption, scoped to the authenticated user.
+ * @openapi
+ * /redemptions/{id}:
+ *   get:
+ *     tags: [Redemptions]
+ *     summary: Get a single redemption by ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 55 }
+ *     responses:
+ *       200:
+ *         description: Redemption record.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/Redemption' }
+ *       400:
+ *         description: Invalid id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: Redemption not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/:id', async (req, res, next) => {
   try {
