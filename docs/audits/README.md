@@ -20,6 +20,8 @@ This directory tracks security audits for all Nova Rewards smart contracts.
 | admin_roles | 0.1.0 | Scheduled | Scheduled | TBD |
 | governance | 0.1.0 | Scheduled | Scheduled | TBD |
 
+> A comprehensive third-party audit engagement is planned for all Soroban contracts before mainnet deployment. The audit scope includes token, distribution, campaign, staking, vesting, and treasury.
+
 ## Process
 
 1. New contracts must have an audit entry before production deployment.
