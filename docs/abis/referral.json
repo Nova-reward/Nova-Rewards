@@ -1,0 +1,74 @@
+{
+  "contract": "referral",
+  "version": "1.0.0",
+  "description": "Tracks referral registrations and credits referrers with NOVA tokens.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the referral contract.",
+      "params": [{ "name": "admin", "type": "Address" }, { "name": "token", "type": "Address" }],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "fund_pool",
+      "description": "Deposits tokens into the referral reward pool.",
+      "params": [{ "name": "from", "type": "Address" }, { "name": "amount", "type": "i128" }],
+      "returns": null,
+      "errors": ["amount must be positive"]
+    },
+    {
+      "name": "register_referral",
+      "description": "Registers a new user with a referrer.",
+      "params": [
+        { "name": "new_user", "type": "Address" },
+        { "name": "referrer", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["already registered", "self referral not allowed"]
+    },
+    {
+      "name": "credit_referrer",
+      "description": "Credits a referrer with a bonus. Admin only.",
+      "params": [
+        { "name": "referrer", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "insufficient pool balance", "amount must be positive"]
+    },
+    {
+      "name": "get_referrer",
+      "description": "Returns the referrer for a given user.",
+      "params": [{ "name": "user", "type": "Address" }],
+      "returns": { "type": "Option<Address>" },
+      "errors": []
+    },
+    {
+      "name": "total_referrals",
+      "description": "Returns the total referral count for a referrer.",
+      "params": [{ "name": "referrer", "type": "Address" }],
+      "returns": { "type": "u32" },
+      "errors": []
+    },
+    {
+      "name": "pool_balance",
+      "description": "Returns the referral pool balance.",
+      "params": [],
+      "returns": { "type": "i128" },
+      "errors": []
+    }
+  ],
+  "events": [
+    { "name": "referral_registered", "fields": [{ "name": "new_user", "type": "Address" }, { "name": "referrer", "type": "Address" }] },
+    { "name": "referrer_credited",   "fields": [{ "name": "referrer", "type": "Address" }, { "name": "amount", "type": "i128" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized",    "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",           "message": "unauthorized" },
+    { "code": 3, "name": "AlreadyRegistered",      "message": "user already registered" },
+    { "code": 4, "name": "SelfReferral",           "message": "self referral not allowed" },
+    { "code": 5, "name": "InsufficientPool",       "message": "insufficient pool balance" },
+    { "code": 6, "name": "AmountMustBePositive",   "message": "amount must be positive" }
+  ]
+}

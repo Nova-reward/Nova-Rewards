@@ -1,0 +1,110 @@
+{
+  "contract": "redemption",
+  "version": "1.0.0",
+  "description": "Handles on-chain redemption requests: request, confirm, cancel, and rate management.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the redemption contract.",
+      "params": [{ "name": "admin", "type": "Address" }, { "name": "token", "type": "Address" }],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "set_redemption_rate",
+      "description": "Sets the redemption rate (NOVA per unit). Admin only.",
+      "params": [{ "name": "rate", "type": "u32", "description": "Rate in basis points." }],
+      "returns": null,
+      "errors": ["unauthorized", "invalid rate"]
+    },
+    {
+      "name": "request",
+      "description": "Creates a redemption request.",
+      "params": [
+        { "name": "user", "type": "Address" },
+        { "name": "amount", "type": "i128", "description": "NOVA tokens to redeem." }
+      ],
+      "returns": { "type": "u32", "description": "Request ID." },
+      "errors": ["amount must be positive", "insufficient balance", "no rate set"]
+    },
+    {
+      "name": "confirm",
+      "description": "Confirms a redemption request. Admin only.",
+      "params": [{ "name": "request_id", "type": "u32" }],
+      "returns": null,
+      "errors": ["unauthorized", "not found", "already confirmed", "already cancelled"]
+    },
+    {
+      "name": "cancel",
+      "description": "Cancels a pending redemption request.",
+      "params": [
+        { "name": "user", "type": "Address" },
+        { "name": "request_id", "type": "u32" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "not found", "already confirmed"]
+    },
+    {
+      "name": "redeem",
+      "description": "Burns tokens and records the redemption proof.",
+      "params": [
+        { "name": "user", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": { "type": "RedemptionProof" },
+      "errors": ["amount must be positive", "insufficient balance", "no rate set"]
+    },
+    {
+      "name": "get_redemption_rate",
+      "description": "Returns the current redemption rate.",
+      "params": [],
+      "returns": { "type": "u32" },
+      "errors": []
+    },
+    {
+      "name": "get_total_redemptions",
+      "description": "Returns the total number of redemptions.",
+      "params": [],
+      "returns": { "type": "u32" },
+      "errors": []
+    }
+  ],
+  "types": {
+    "RedemptionStatus": {
+      "variants": ["Pending", "Confirmed", "Cancelled"]
+    },
+    "RedemptionRequest": {
+      "fields": [
+        { "name": "id", "type": "u32" },
+        { "name": "user", "type": "Address" },
+        { "name": "amount", "type": "i128" },
+        { "name": "status", "type": "RedemptionStatus" }
+      ]
+    },
+    "RedemptionProof": {
+      "fields": [
+        { "name": "user", "type": "Address" },
+        { "name": "amount", "type": "i128" },
+        { "name": "rate", "type": "u32" },
+        { "name": "ledger", "type": "u32" }
+      ]
+    }
+  },
+  "events": [
+    { "name": "redemption_requested", "fields": [{ "name": "id", "type": "u32" }, { "name": "user", "type": "Address" }, { "name": "amount", "type": "i128" }] },
+    { "name": "redemption_confirmed", "fields": [{ "name": "id", "type": "u32" }] },
+    { "name": "redemption_cancelled", "fields": [{ "name": "id", "type": "u32" }] },
+    { "name": "redeemed",             "fields": [{ "name": "user", "type": "Address" }, { "name": "amount", "type": "i128" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized",  "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",         "message": "unauthorized" },
+    { "code": 3, "name": "NotFound",             "message": "request not found" },
+    { "code": 4, "name": "AlreadyConfirmed",     "message": "already confirmed" },
+    { "code": 5, "name": "AlreadyCancelled",     "message": "already cancelled" },
+    { "code": 6, "name": "InsufficientBalance",  "message": "insufficient balance" },
+    { "code": 7, "name": "NoRateSet",            "message": "redemption rate not set" },
+    { "code": 8, "name": "InvalidRate",          "message": "invalid redemption rate" },
+    { "code": 9, "name": "AmountMustBePositive", "message": "amount must be positive" }
+  ]
+}
