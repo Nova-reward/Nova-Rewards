@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Merchant {
+  id                Int        @id @default(autoincrement())
+  name              String     @db.VarChar(255)
+  wallet_address    String     @unique @db.VarChar(56)
+  business_category String?    @db.VarChar(100)
+  api_key           String     @unique @db.VarChar(64)
+  created_at        DateTime   @default(now()) @db.Timestamptz()
+  campaigns         Campaign[]
+
+  @@map("merchants")
+}
+
+model Campaign {
+  id          Int      @id @default(autoincrement())
+  merchant_id Int
+  name        String   @db.VarChar(255)
+  reward_rate Decimal  @db.Decimal(18, 7)
+  start_date  DateTime @db.Date
+  end_date    DateTime @db.Date
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+  merchant    Merchant @relation(fields: [merchant_id], references: [id], onDelete: Cascade)
+
+  @@map("campaigns")
+}

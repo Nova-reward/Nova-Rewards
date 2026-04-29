@@ -1,0 +1,10 @@
+.github/
+.git/
+README.md
+*.md
+infrastructure/
+terraform/
+backend/
+scripts/
+.env
+.env.local

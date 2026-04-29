@@ -1,0 +1,94 @@
+{
+  "contract": "escrow",
+  "version": "1.0.0",
+  "description": "Time-locked escrow for conditional token releases.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the escrow contract.",
+      "params": [{ "name": "admin", "type": "Address" }],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "create",
+      "description": "Creates a new escrow.",
+      "params": [
+        { "name": "depositor", "type": "Address" },
+        { "name": "beneficiary", "type": "Address" },
+        { "name": "token", "type": "Address" },
+        { "name": "amount", "type": "i128" },
+        { "name": "timeout_ledger", "type": "u32", "description": "Ledger after which depositor can refund." }
+      ],
+      "returns": { "type": "u32", "description": "Escrow ID." },
+      "errors": ["amount must be positive"]
+    },
+    {
+      "name": "fund",
+      "description": "Funds an existing escrow.",
+      "params": [
+        { "name": "escrow_id", "type": "u32" },
+        { "name": "from", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["not found", "already funded"]
+    },
+    {
+      "name": "release",
+      "description": "Releases escrowed tokens to the beneficiary. Admin only.",
+      "params": [{ "name": "escrow_id", "type": "u32" }],
+      "returns": null,
+      "errors": ["unauthorized", "not funded", "already released", "already refunded"]
+    },
+    {
+      "name": "refund",
+      "description": "Refunds escrowed tokens to the depositor after timeout.",
+      "params": [
+        { "name": "escrow_id", "type": "u32" },
+        { "name": "depositor", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "not funded", "timeout not reached", "already released", "already refunded"]
+    },
+    {
+      "name": "get",
+      "description": "Returns escrow details.",
+      "params": [{ "name": "escrow_id", "type": "u32" }],
+      "returns": { "type": "Escrow" },
+      "errors": ["not found"]
+    }
+  ],
+  "types": {
+    "EscrowStatus": {
+      "variants": ["Pending", "Funded", "Released", "Refunded"]
+    },
+    "Escrow": {
+      "fields": [
+        { "name": "id", "type": "u32" },
+        { "name": "depositor", "type": "Address" },
+        { "name": "beneficiary", "type": "Address" },
+        { "name": "token", "type": "Address" },
+        { "name": "amount", "type": "i128" },
+        { "name": "timeout_ledger", "type": "u32" },
+        { "name": "status", "type": "EscrowStatus" }
+      ]
+    }
+  },
+  "events": [
+    { "name": "escrow_created",  "fields": [{ "name": "id", "type": "u32" }, { "name": "depositor", "type": "Address" }, { "name": "beneficiary", "type": "Address" }] },
+    { "name": "escrow_funded",   "fields": [{ "name": "id", "type": "u32" }] },
+    { "name": "escrow_released", "fields": [{ "name": "id", "type": "u32" }, { "name": "beneficiary", "type": "Address" }] },
+    { "name": "escrow_refunded", "fields": [{ "name": "id", "type": "u32" }, { "name": "depositor", "type": "Address" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized",  "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",         "message": "unauthorized" },
+    { "code": 3, "name": "NotFound",             "message": "escrow not found" },
+    { "code": 4, "name": "AlreadyFunded",        "message": "already funded" },
+    { "code": 5, "name": "NotFunded",            "message": "escrow not funded" },
+    { "code": 6, "name": "AlreadyReleased",      "message": "already released" },
+    { "code": 7, "name": "AlreadyRefunded",      "message": "already refunded" },
+    { "code": 8, "name": "TimeoutNotReached",    "message": "timeout ledger not reached" },
+    { "code": 9, "name": "AmountMustBePositive", "message": "amount must be positive" }
+  ]
+}

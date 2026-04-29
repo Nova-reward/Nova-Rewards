@@ -2,22 +2,23 @@
 
 import DashboardLayout from '../components/DashboardLayout';
 import ErrorBoundary from '../components/ErrorBoundary';
+import TransactionHistory from '../components/TransactionHistory';
 import { withAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 /**
- * History page - displays transaction history
- * Requirements: 164.2
+ * Transaction History page — paginated list of all reward issuances,
+ * redemptions, and transfers with filtering and CSV export.
+ *
+ * Closes #592
  */
 function HistoryContent() {
+  const { user } = useAuth();
+
   return (
     <DashboardLayout>
       <div className="dashboard-content">
-        <div className="card">
-          <h2 style={{ marginBottom: '1rem' }}>📜 Transaction History</h2>
-          <p style={{ color: 'var(--muted)' }}>
-            View your complete transaction history. This feature is coming soon!
-          </p>
-        </div>
+        <TransactionHistory userId={user?.id} />
       </div>
     </DashboardLayout>
   );

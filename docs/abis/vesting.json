@@ -1,0 +1,96 @@
+{
+  "contract": "vesting",
+  "version": "1.0.0",
+  "description": "Linear token vesting with cliff periods for team and investor allocations.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the vesting contract.",
+      "params": [{ "name": "admin", "type": "Address" }, { "name": "token", "type": "Address" }],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "fund_pool",
+      "description": "Deposits tokens into the vesting pool.",
+      "params": [{ "name": "from", "type": "Address" }, { "name": "amount", "type": "i128" }],
+      "returns": null,
+      "errors": ["amount must be positive"]
+    },
+    {
+      "name": "create_schedule",
+      "description": "Creates a vesting schedule for a beneficiary. Admin only.",
+      "params": [
+        { "name": "beneficiary", "type": "Address" },
+        { "name": "amount", "type": "i128", "description": "Total tokens to vest." },
+        { "name": "cliff_seconds", "type": "u64", "description": "Cliff period in seconds." },
+        { "name": "duration_seconds", "type": "u64", "description": "Total vesting duration in seconds." }
+      ],
+      "returns": { "type": "u32", "description": "Schedule ID." },
+      "errors": ["unauthorized", "amount must be positive", "duration must be positive", "insufficient pool balance"]
+    },
+    {
+      "name": "release",
+      "description": "Releases vested tokens to the beneficiary.",
+      "params": [
+        { "name": "beneficiary", "type": "Address" },
+        { "name": "schedule_id", "type": "u32" }
+      ],
+      "returns": { "type": "i128", "description": "Amount released." },
+      "errors": ["not found", "cliff not passed", "nothing to release", "already fully released"]
+    },
+    {
+      "name": "vested_amount",
+      "description": "Returns the currently vested (releasable) amount.",
+      "params": [
+        { "name": "beneficiary", "type": "Address" },
+        { "name": "schedule_id", "type": "u32" }
+      ],
+      "returns": { "type": "i128" },
+      "errors": ["not found"]
+    },
+    {
+      "name": "get_schedule",
+      "description": "Returns a vesting schedule.",
+      "params": [
+        { "name": "beneficiary", "type": "Address" },
+        { "name": "schedule_id", "type": "u32" }
+      ],
+      "returns": { "type": "VestingSchedule" },
+      "errors": ["not found"]
+    },
+    {
+      "name": "pool_balance",
+      "description": "Returns the vesting pool balance.",
+      "params": [],
+      "returns": { "type": "i128" },
+      "errors": []
+    }
+  ],
+  "types": {
+    "VestingSchedule": {
+      "fields": [
+        { "name": "beneficiary", "type": "Address" },
+        { "name": "amount", "type": "i128" },
+        { "name": "released", "type": "i128" },
+        { "name": "start_time", "type": "u64" },
+        { "name": "cliff_seconds", "type": "u64" },
+        { "name": "duration_seconds", "type": "u64" }
+      ]
+    }
+  },
+  "events": [
+    { "name": "schedule_created", "fields": [{ "name": "id", "type": "u32" }, { "name": "beneficiary", "type": "Address" }, { "name": "amount", "type": "i128" }] },
+    { "name": "released",         "fields": [{ "name": "id", "type": "u32" }, { "name": "beneficiary", "type": "Address" }, { "name": "amount", "type": "i128" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized",    "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",           "message": "unauthorized" },
+    { "code": 3, "name": "NotFound",               "message": "schedule not found" },
+    { "code": 4, "name": "CliffNotPassed",         "message": "cliff period has not passed" },
+    { "code": 5, "name": "NothingToRelease",       "message": "nothing to release" },
+    { "code": 6, "name": "AlreadyFullyReleased",   "message": "schedule fully released" },
+    { "code": 7, "name": "AmountMustBePositive",   "message": "amount must be positive" },
+    { "code": 8, "name": "DurationMustBePositive", "message": "duration must be positive" }
+  ]
+}

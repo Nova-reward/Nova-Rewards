@@ -1,0 +1,38 @@
+groups:
+  - name: nova_rewards_recording_rules
+    interval: 30s
+    rules:
+      # Request rate by route
+      - record: nova:http_requests:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_count[5m])) by (route, method, status_code)
+
+      # Error rate percentage
+      - record: nova:http_errors:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m])) by (route)
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) by (route)
+
+      # Latency percentiles
+      - record: nova:http_request_duration:p50
+        expr: |
+          histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))
+
+      - record: nova:http_request_duration:p95
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))
+
+      - record: nova:http_request_duration:p99
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))
+
+      # CPU usage percentage
+      - record: instance:cpu_usage:percent
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+      # Memory usage percentage
+      - record: instance:memory_usage:percent
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100

@@ -1,0 +1,70 @@
+groups:
+  - name: nova_uptime
+    interval: 30s
+    rules:
+      # ── Uptime alerts (fire within 2 minutes of downtime) ──────────────
+
+      - alert: APIHealthEndpointDown
+        expr: probe_success{job="blackbox-uptime", instance=~".*health.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: backend
+          sla: "99.9"
+        annotations:
+          summary: "API health endpoint is down"
+          description: "{{ $labels.instance }} has been unreachable for 2 minutes."
+          runbook: "https://github.com/milah-247/Nova-Rewards/blob/main/docs/ops/incident-response.md#api-down"
+
+      - alert: FrontendDown
+        expr: probe_success{job="blackbox-uptime", instance=~".*frontend.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: frontend
+          sla: "99.9"
+        annotations:
+          summary: "Frontend is down"
+          description: "{{ $labels.instance }} has been unreachable for 2 minutes."
+          runbook: "https://github.com/milah-247/Nova-Rewards/blob/main/docs/ops/incident-response.md#frontend-down"
+
+      - alert: StellarRPCDown
+        expr: probe_success{job="blackbox-uptime", instance=~".*stellar.*|.*horizon.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: stellar
+          sla: "99.5"
+        annotations:
+          summary: "Stellar RPC endpoint is down"
+          description: "{{ $labels.instance }} has been unreachable for 2 minutes. On-chain operations will fail."
+          runbook: "https://github.com/milah-247/Nova-Rewards/blob/main/docs/ops/incident-response.md#stellar-rpc-down"
+
+      # ── SLA tracking ───────────────────────────────────────────────────
+
+      - alert: UptimeSLABreach
+        expr: |
+          (
+            avg_over_time(probe_success{job="blackbox-uptime"}[30d]) * 100
+          ) < 99.9
+        for: 5m
+        labels:
+          severity: warning
+          component: sla
+        annotations:
+          summary: "30-day uptime SLA breach risk for {{ $labels.instance }}"
+          description: "30-day availability is {{ $value | humanize }}% (SLA target: 99.9%)."
+          runbook: "https://github.com/milah-247/Nova-Rewards/blob/main/docs/ops/incident-response.md"
+
+      # ── Probe latency ──────────────────────────────────────────────────
+
+      - alert: EndpointHighLatency
+        expr: probe_duration_seconds{job="blackbox-uptime"} > 3
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High probe latency for {{ $labels.instance }}"
+          description: "Probe response time is {{ $value | humanize }}s (threshold: 3s)."
+          runbook: "https://github.com/milah-247/Nova-Rewards/blob/main/docs/ops/incident-response.md#high-latency"
