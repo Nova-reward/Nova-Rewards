@@ -1,0 +1,216 @@
+.PHONY: help logging-up logging-down secrets-up secrets-down staging-up staging-down cdn-deploy preview-deploy production-deploy
+
+help:
+	@echo "Nova Rewards DevOps Infrastructure Commands"
+	@echo ""
+	@echo "Logging:"
+	@echo "  make logging-up          - Start Loki, Prometheus, Grafana, Alertmanager stack"
+	@echo "  make logging-down        - Stop logging stack"
+	@echo "  make logging-logs        - View logging stack logs"
+	@echo ""
+	@echo "Secrets Management:"
+	@echo "  make secrets-up          - Start Vault and Secret Manager stack"
+	@echo "  make secrets-down        - Stop secret manager stack"
+	@echo "  make secrets-init        - Initialize and unseal Vault"
+	@echo "  make secrets-rotate      - Trigger manual secret rotation"
+	@echo ""
+	@echo "Staging Environment:"
+	@echo "  make staging-up          - Start staging environment"
+	@echo "  make staging-down        - Stop staging environment"
+	@echo "  make staging-seed        - Seed staging database with test data"
+	@echo "  make staging-clear       - Clear staging database"
+	@echo "  make staging-logs        - View staging environment logs"
+	@echo ""
+	@echo "CDN Deployment:"
+	@echo "  make cdn-plan            - Plan CDN infrastructure changes"
+	@echo "  make cdn-deploy          - Deploy CDN with CloudFront + Cloudflare"
+	@echo "  make cdn-destroy         - Destroy CDN infrastructure"
+	@echo ""
+	@echo "Database:"
+	@echo "  make db-migrate          - Run database migrations"
+	@echo "  make db-seed             - Seed database with test data"
+	@echo ""
+	@echo "General:"
+	@echo "  make health-check        - Check health of all services"
+	@echo "  make env-setup           - Setup environment variables"
+	@echo "  make clean               - Clean up all containers and volumes"
+
+# ==================== LOGGING ====================
+
+logging-up:
+	cd infrastructure/logging && docker-compose -f docker-compose-logging.yml up -d
+	@echo "✅ Logging stack started"
+	@echo "   Grafana: http://localhost:3000 (admin/admin)"
+	@echo "   Loki: http://localhost:3100"
+	@echo "   Prometheus: http://localhost:9090"
+	@echo "   Alertmanager: http://localhost:9093"
+
+logging-down:
+	cd infrastructure/logging && docker-compose -f docker-compose-logging.yml down
+	@echo "✅ Logging stack stopped"
+
+logging-logs:
+	cd infrastructure/logging && docker-compose -f docker-compose-logging.yml logs -f
+
+logging-clean:
+	cd infrastructure/logging && docker-compose -f docker-compose-logging.yml down -v
+	@echo "✅ Logging stack cleaned (volumes removed)"
+
+# ==================== SECRETS ====================
+
+secrets-up:
+	cd infrastructure/secrets && docker-compose -f docker-compose-secrets.yml up -d
+	@echo "✅ Secrets management stack started"
+	@echo "   Vault: http://localhost:8200"
+
+secrets-down:
+	cd infrastructure/secrets && docker-compose -f docker-compose-secrets.yml down
+	@echo "✅ Secrets stack stopped"
+
+secrets-init:
+	@echo "Initializing Vault..."
+	docker exec vault vault operator init -key-shares=5 -key-threshold=3
+	@echo "⚠️  Save the unseal keys and root token!"
+	@echo "Unseal Vault with: docker exec vault vault operator unseal [KEY]"
+
+secrets-rotate:
+	@echo "Triggering manual secret rotation..."
+	docker exec secret-rotator /bin/bash /app/secret-rotator.sh
+	@echo "✅ Secret rotation completed"
+
+# ==================== STAGING ====================
+
+staging-up:
+	cd infrastructure/staging && docker-compose -f docker-compose-staging.yml up -d
+	@echo "✅ Staging environment started"
+	@echo "   Frontend: http://localhost:3002"
+	@echo "   API: http://localhost:3001"
+	@sleep 10
+	@echo "Waiting for services to be healthy..."
+	@docker-compose -f infrastructure/staging/docker-compose-staging.yml exec -T backend-staging curl -f http://localhost:3001/health || true
+
+staging-down:
+	cd infrastructure/staging && docker-compose -f docker-compose-staging.yml down
+	@echo "✅ Staging environment stopped"
+
+staging-seed:
+	@echo "Seeding staging database..."
+	bash infrastructure/staging/seed-staging-db.sh seed
+	@echo "✅ Staging database seeded"
+
+staging-clear:
+	@echo "Clearing staging database..."
+	bash infrastructure/staging/seed-staging-db.sh clear
+	@echo "✅ Staging database cleared"
+
+staging-logs:
+	cd infrastructure/staging && docker-compose -f docker-compose-staging.yml logs -f
+
+staging-clean:
+	cd infrastructure/staging && docker-compose -f docker-compose-staging.yml down -v
+	@echo "✅ Staging environment cleaned"
+
+# ==================== CDN ====================
+
+cdn-plan:
+	@echo "Planning CDN infrastructure..."
+	cd terraform && terraform init && terraform plan -var-file=cdn.tfvars
+
+cdn-deploy:
+	@echo "Deploying CDN infrastructure..."
+	cd terraform && terraform init && terraform apply -var-file=cdn.tfvars
+	@echo "✅ CDN deployment completed"
+	@echo "CloudFront Domain: $(shell cd terraform && terraform output -raw cloudfront_domain_name)"
+	@echo "Cloudflare Zone ID: $(shell cd terraform && terraform output -raw cloudflare_zone_id)"
+
+cdn-destroy:
+	@echo "⚠️  This will destroy CDN infrastructure. Type 'yes' to confirm."
+	cd terraform && terraform destroy -var-file=cdn.tfvars
+
+cdn-status:
+	@cd terraform && terraform show
+
+# ==================== DATABASE ====================
+
+db-migrate:
+	@echo "Running database migrations..."
+	docker exec backend-staging npm run db:migrate
+	@echo "✅ Migrations completed"
+
+db-seed:
+	@echo "Seeding database..."
+	bash infrastructure/staging/seed-staging-db.sh seed
+	@echo "✅ Database seeded"
+
+# ==================== HEALTH CHECKS ====================
+
+health-check:
+	@echo "🏥 Checking service health..."
+	@echo ""
+	@echo "Logging Stack:"
+	@curl -sf http://localhost:3100/ready > /dev/null && echo "  ✅ Loki" || echo "  ❌ Loki"
+	@curl -sf http://localhost:9090/-/healthy > /dev/null && echo "  ✅ Prometheus" || echo "  ❌ Prometheus"
+	@curl -sf http://localhost:3000/api/health > /dev/null && echo "  ✅ Grafana" || echo "  ❌ Grafana"
+	@echo ""
+	@echo "Secrets Management:"
+	@docker exec vault vault status > /dev/null 2>&1 && echo "  ✅ Vault" || echo "  ❌ Vault"
+	@echo ""
+	@echo "Staging Environment:"
+	@curl -sf http://localhost:3001/health > /dev/null && echo "  ✅ Backend API" || echo "  ❌ Backend API"
+	@curl -sf http://localhost:3000 > /dev/null && echo "  ✅ Frontend" || echo "  ❌ Frontend"
+	@echo ""
+
+# ==================== ENVIRONMENT SETUP ====================
+
+env-setup:
+	@echo "Setting up environment variables..."
+	@if [ ! -f infrastructure/.env ]; then \
+		cp infrastructure/.env.example infrastructure/.env; \
+		echo "✅ Created .env file"; \
+		echo "⚠️  Update infrastructure/.env with your actual values"; \
+	else \
+		echo "✅ .env file already exists"; \
+	fi
+
+# ==================== CLEANUP ====================
+
+clean:
+	@echo "🧹 Cleaning up all containers and orphaned resources..."
+	docker-compose -f infrastructure/logging/docker-compose-logging.yml down -v 2>/dev/null || true
+	docker-compose -f infrastructure/secrets/docker-compose-secrets.yml down -v 2>/dev/null || true
+	docker-compose -f infrastructure/staging/docker-compose-staging.yml down -v 2>/dev/null || true
+	docker system prune -f
+	@echo "✅ Cleanup completed"
+
+# ==================== ALL-IN-ONE ====================
+
+full-setup: env-setup logging-up secrets-up staging-up staging-seed
+	@echo ""
+	@echo "✅ Full DevOps infrastructure deployed!"
+	@echo ""
+	@echo "Services:"
+	@echo "  - Logging: http://localhost:3000 (Grafana)"
+	@echo "  - Secrets: http://localhost:8200 (Vault)"
+	@echo "  - Staging: http://localhost (Frontend)"
+	@echo "  - API: http://localhost:3001 (Backend)"
+	@echo ""
+	@make health-check
+
+full-teardown: logging-down secrets-down staging-down
+	@echo "✅ All services stopped"
+
+# ==================== USEFUL SHORTCUTS ====================
+
+logs-loki:
+	docker logs -f loki
+
+logs-prometheus:
+	docker logs -f prometheus
+
+logs-backend:
+	docker logs -f backend-staging
+
+ps:
+	docker-compose -f infrastructure/logging/docker-compose-logging.yml ps
+	docker-compose -f infrastructure/secrets/docker-compose-secrets.yml ps
+	docker-compose -f infrastructure/staging/docker-compose-staging.yml ps

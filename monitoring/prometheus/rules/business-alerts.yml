@@ -1,0 +1,59 @@
+groups:
+  - name: nova_rewards_business_alerts
+    interval: 30s
+    rules:
+      # Error rate > 1% — issue #626
+      - alert: HighErrorRateBusiness
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "API error rate exceeds 1%"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 1%)"
+          runbook: "https://github.com/milah-247/Nova-Rewards/blob/main/monitoring/runbooks/high-error-rate.md"
+
+      # Queue depth > 1000 — issue #626
+      - alert: RewardQueueDepthHigh
+        expr: reward_queue_depth > 1000
+        for: 5m
+        labels:
+          severity: critical
+          component: queue
+        annotations:
+          summary: "Reward issuance queue depth exceeds 1000"
+          description: "Queue depth is {{ $value }} jobs (threshold: 1000)"
+          runbook: "https://github.com/milah-247/Nova-Rewards/blob/main/monitoring/runbooks/high-queue-depth.md"
+
+      # p99 latency > 2s — issue #626
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "p99 API latency exceeds 2s"
+          description: "p99 latency is {{ $value }}s (threshold: 2s)"
+          runbook: "https://github.com/milah-247/Nova-Rewards/blob/main/monitoring/runbooks/high-latency.md"
+
+      # Reward issuance failures
+      - alert: RewardIssuanceFailures
+        expr: |
+          rate(reward_issuances_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: rewards
+        annotations:
+          summary: "Reward issuance failure rate elevated"
+          description: "{{ $value | humanize }} failures/sec in the last 5 minutes"

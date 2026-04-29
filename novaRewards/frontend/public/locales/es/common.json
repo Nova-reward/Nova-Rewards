@@ -1,0 +1,28 @@
+{
+  "nav": {
+    "brand": "⭐ NovaRewards",
+    "merchantPortal": "Portal del Comerciante",
+    "disconnect": "Desconectar"
+  },
+  "home": {
+    "title": "Posee Tus Recompensas",
+    "description": "NovaRewards pone tokens de lealtad en la blockchain de Stellar — gana, transfiere y canjea tokens NOVA en cualquier comerciante participante.",
+    "connectWallet": "Conectar Freighter Wallet",
+    "connecting": "Conectando…",
+    "installFreighter": "Instalar Freighter Wallet",
+    "freighterRequired": "Se requiere Freighter Wallet para usar NovaRewards."
+  },
+  "wallet": {
+    "error": "Fallo en la conexión de wallet"
+  },
+  "date": {
+    "transactionDate": "Fecha de Transacción"
+  },
+  "currency": {
+    "novaTokens": "Tokens NOVA"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error"
+  }
+}
