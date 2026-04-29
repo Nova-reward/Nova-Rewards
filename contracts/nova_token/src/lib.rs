@@ -34,6 +34,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 #[contracttype]
 enum DataKey {
     Admin,
+    Initialized,
     Balance(Address),
     Allowance(Address, Address),
 }
@@ -58,7 +59,9 @@ impl NovaToken {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
+        env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
+        Ok(())
     }
 
     // ========================================
@@ -510,5 +513,13 @@ mod tests {
         let user = Address::generate(&env);
         client.mint(&user, &10);
         client.burn(&user, &100); // Should panic
+    }
+
+    #[test]
+    #[should_panic(expected = "AlreadyInitialized")]
+    fn test_reinitialize_is_blocked() {
+        let (env, admin, client) = setup();
+        // second call must revert with AlreadyInitialized
+        client.initialize(&admin);
     }
 }
