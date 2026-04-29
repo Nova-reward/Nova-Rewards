@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { createHash } = require('crypto');
 const { query } = require('../db/index');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
+const { validateMerchantRegisterDto } = require('../dtos/merchantRegisterDto');
 
 /**
  * POST /api/merchants/register
@@ -11,17 +12,24 @@ const { isValidStellarAddress } = require('../../blockchain/stellarService');
  */
 router.post('/register', async (req, res, next) => {
   try {
-    const { name, walletAddress, businessCategory } = req.body;
-
-    if (!name || typeof name !== 'string' || name.trim() === '') {
+    // DTO validation: required fields, trimming, length limits, unknown field guard
+    const { valid, errors } = validateMerchantRegisterDto(req.body);
+    if (!valid) {
       return res.status(400).json({
         success: false,
         error: 'validation_error',
-        message: 'name is required',
+        message: errors[0],
+        details: errors,
       });
     }
 
-    if (!walletAddress || !isValidStellarAddress(walletAddress)) {
+    const { name, walletAddress, businessCategory } = req.body;
+
+    // Trim inputs before use — DTO already confirmed they are valid strings
+    const trimmedName          = name.trim();
+    const trimmedWalletAddress = walletAddress.trim();
+
+    if (!isValidStellarAddress(trimmedWalletAddress)) {
       return res.status(400).json({
         success: false,
         error: 'validation_error',
@@ -36,7 +44,7 @@ router.post('/register', async (req, res, next) => {
       `INSERT INTO merchants (name, wallet_address, business_category, api_key)
        VALUES ($1, $2, $3, $4)
        RETURNING id, name, wallet_address, business_category, created_at`,
-      [name.trim(), walletAddress, businessCategory || null, apiKeyHash]
+      [trimmedName, trimmedWalletAddress, businessCategory ? businessCategory.trim() || null : null, apiKeyHash]
     );
 
     res.status(201).json({ success: true, data: { ...result.rows[0], api_key: apiKey } });
