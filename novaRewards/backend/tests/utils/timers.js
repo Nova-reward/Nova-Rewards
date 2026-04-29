@@ -1,31 +1,9 @@
-function useFakeTimers() {
-  if (typeof jest !== 'undefined') {
-    return jest.useFakeTimers();
-  }
-  throw new Error('useFakeTimers requires Jest');
-}
+import { vi } from 'vitest';
 
-function advanceTimersByTime(ms) {
-  if (typeof jest !== 'undefined') {
-    return jest.advanceTimersByTime(ms);
-  }
-  throw new Error('advanceTimersByTime requires Jest');
-}
+export const useFakeTimers = () => vi.useFakeTimers();
+export const advanceTimersByTime = (ms) => vi.advanceTimersByTime(ms);
+export const restoreTimers = () => vi.useRealTimers();
+export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function restoreTimers() {
-  if (typeof jest !== 'undefined') {
-    return jest.useRealTimers();
-  }
-  throw new Error('restoreTimers requires Jest');
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-module.exports = {
-  useFakeTimers,
-  advanceTimersByTime,
-  restoreTimers,
-  sleep,
-};
+// CommonJS interop
+module.exports = { useFakeTimers, advanceTimersByTime, restoreTimers, sleep };

@@ -23,6 +23,16 @@ Issues related to wireframes, prototypes, and design systems.
 
 ---
 
+## Architecture Documentation
+
+| Document | Description |
+|----------|-------------|
+| [architecture.md](architecture.md) | Narrative overview of the platform architecture |
+| [system-design.md](system-design.md) | Mermaid component, reward issuance data-flow, contract interaction, and deployment topology diagrams |
+| [adr/README.md](adr/README.md) | Architecture decision record index |
+
+---
+
 ## Smart Contract Documentation
 
 | Document | Description |

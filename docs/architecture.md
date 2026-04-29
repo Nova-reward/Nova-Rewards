@@ -1,5 +1,10 @@
 # Nova Rewards — System Architecture
 
+> The maintained diagram-as-code source for component, reward issuance data
+> flow, contract interaction, and deployment topology diagrams lives in
+> [system-design.md](system-design.md). Key design choices are recorded as ADRs
+> in [adr/README.md](adr/README.md).
+
 ## Overview
 
 Nova Rewards is a blockchain-powered loyalty platform built on the Stellar network. It consists of four primary layers: a Next.js frontend, a Node.js/Express backend API, Soroban smart contracts on Stellar, and a PostgreSQL + Redis data layer — all orchestrated via Docker and deployed on AWS.

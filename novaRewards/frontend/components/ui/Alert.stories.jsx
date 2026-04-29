@@ -1,3 +1,7 @@
+ feat/storybook-components-setup
+import React from 'react';
+
+ main
 import { Alert, AlertTitle, AlertDescription } from './Alert';
 
 export default {
@@ -44,10 +48,17 @@ export const DescriptionOnly = (args) => (
 DescriptionOnly.args = { variant: 'default' };
 
 export const AllVariants = () => (
+ feat/storybook-components-setup
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <Alert variant="default">
+      <AlertTitle>Default</AlertTitle>
+      <AlertDescription>Informational message.</AlertDescription>
+
   <div className="flex flex-col gap-3 w-96">
     <Alert variant="default">
       <AlertTitle>Info</AlertTitle>
       <AlertDescription>This is an informational alert.</AlertDescription>
+ main
     </Alert>
     <Alert variant="success">
       <AlertTitle>Success</AlertTitle>

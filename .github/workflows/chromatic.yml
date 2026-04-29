@@ -26,11 +26,17 @@ jobs:
           cache-dependency-path: novaRewards/frontend/package-lock.json
 
       - name: Install dependencies
+ feat/storybook-components-setup
+        run: npm ci
+
+      - name: Publish to Chromatic
+
         run: npm install
         working-directory: novaRewards
 
       - name: Publish to Chromatic
         if: ${{ secrets.CHROMATIC_PROJECT_TOKEN != '' }}
+ main
         uses: chromaui/action@latest
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
@@ -38,7 +44,10 @@ jobs:
           buildScriptName: build-storybook
           exitZeroOnChanges: true
           autoAcceptChanges: ${{ github.ref == 'refs/heads/main' }}
+ feat/storybook-components-setup
+
 
       - name: Skip Chromatic (no token configured)
         if: ${{ secrets.CHROMATIC_PROJECT_TOKEN == '' }}
         run: echo "CHROMATIC_PROJECT_TOKEN not set — skipping Chromatic publish"
+ main
