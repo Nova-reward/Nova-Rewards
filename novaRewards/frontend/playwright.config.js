@@ -24,30 +24,34 @@ module.exports = defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: '**/accessibility.spec.js',
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      testIgnore: '**/accessibility.spec.js',
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      testIgnore: '**/accessibility.spec.js',
     },
     // Mobile browsers
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
       name: 'chromium-mobile',
       use: { ...devices['Pixel 5'] },
-      // Only run mobile-specific tests on mobile project
       testMatch: '**/mobile-overflow.spec.js',
     },
     {
       name: 'webkit-mobile',
       use: { ...devices['iPhone 12'] },
       testMatch: '**/mobile-overflow.spec.js',
+    },
+    // Accessibility — axe-core scans on Chromium only (Issue #956)
+    {
+      name: 'accessibility',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: '**/accessibility.spec.js',
     },
   ],
   // Skip local webServer when running against staging in CI

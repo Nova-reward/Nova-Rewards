@@ -10,6 +10,7 @@
     "test:ci": "jest --runInBand --ci --coverage --json --outputFile=test-results/results.json --reporters=default --reporters=jest-junit",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:a11y": "playwright test --project=accessibility",
     "lint": "next lint",
     "analyze": "ANALYZE=true next build",
     "storybook": "storybook dev -p 6006",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.2.4",
+    "@axe-core/playwright": "^4.9.1",
     "@playwright/test": "^1.44.0",
     "@storybook/addon-a11y": "^8.1.0",
     "@storybook/addon-essentials": "^8.1.0",
