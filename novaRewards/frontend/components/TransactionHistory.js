@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTransactions } from '../lib/useApi';
 import EmptyState from './EmptyState';
-import LoadingSkeleton from './LoadingSkeleton';
+import { SkeletonTransactionHistory } from './Skeleton';
 import MobileCardList from './MobileCardList';
 
 const PAGE_SIZE = 20;
@@ -226,9 +226,7 @@ export default function TransactionHistory({ userId }) {
 
       {/* Transaction Table / Card List */}
       {isLoading ? (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {[...Array(5)].map((_, i) => <SkeletonRow key={i} />)}
-        </div>
+        <SkeletonTransactionHistory rows={5} />
       ) : transactions && transactions.length > 0 ? (
         <div className="mb-8">
           <MobileCardList
