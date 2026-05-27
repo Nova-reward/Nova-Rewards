@@ -3,6 +3,11 @@ kind: Deployment
 metadata:
   name: nova-rewards-frontend
   namespace: nova-rewards
+  annotations:
+    # Automated rollback: kubectl rollout undo deployment/nova-rewards-frontend -n nova-rewards
+    # If new pods fail readiness within 5 minutes the deployment stalls; run the above to revert.
+    deployment.kubernetes.io/revision: "1"
+    nova-rewards/rollback-window: "5m"
 spec:
   replicas: 2
   selector:

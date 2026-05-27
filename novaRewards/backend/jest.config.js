@@ -79,7 +79,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json', 'html'],
   coverageDirectory: 'coverage',
   coverageThreshold: {
-    global: { lines: 40 },
+    global: { lines: 80, branches: 75, functions: 80 },
   },
   reporters: [
     'default',
