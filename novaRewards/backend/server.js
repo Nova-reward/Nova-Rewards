@@ -19,6 +19,9 @@ const {
   registry,
 } = require("./middleware/metricsMiddleware");
 const { tracingMiddleware } = require("./middleware/tracingMiddleware");
+const { correlationMiddleware } = require("./middleware/correlationMiddleware");
+const { httpLogger } = require("./middleware/httpLogger");
+const logger = require("./lib/logger");
 
 const app = express();
 
@@ -30,6 +33,8 @@ const corsOptions =
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(correlationMiddleware);
+app.use(httpLogger);
 app.use(tracingMiddleware);
 app.use(metricsMiddleware);
 app.use(require('./middleware/auditMiddleware').auditMiddleware);
@@ -115,7 +120,12 @@ app.get("/api/docs/openapi.json", (req, res) => res.json(swaggerSpec));
 
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {
-  console.error(err);
+  logger.error('unhandled error', {
+    correlationId: req.correlationId,
+    error: err.message,
+    stack: err.stack,
+    code: err.code,
+  });
   res.status(err.status || 500).json({
     success: false,
     error: err.code || "internal_error",
@@ -138,7 +148,7 @@ if (require.main === module) {
     require("./jobs/webhookHandler");
     // Initialize Reward Issuance Worker
     require("./jobs/rewardIssuanceWorker");
-    console.log(`NovaRewards backend running on port ${PORT}`);
+    logger.info(`NovaRewards backend running on port ${PORT}`);
   });
 }
 

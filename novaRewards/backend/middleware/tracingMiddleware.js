@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const logger = require('../lib/logger');
 
 /**
  * Middleware to generate and propagate trace IDs.
@@ -35,7 +36,7 @@ function logSpan(req, name, attributes = {}) {
   };
   
   // For now, log to console in a structured way (or use a logger like winston/pino)
-  console.log(JSON.stringify(logMessage));
+  logger.info(`[Trace Span] ${name}`, logMessage);
 }
 
 module.exports = { tracingMiddleware, logSpan };
