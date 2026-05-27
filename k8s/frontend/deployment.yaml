@@ -33,20 +33,20 @@ spec:
                 name: nova-rewards-config
           startupProbe:
             httpGet:
-              path: /api/healthz
+              path: /api/health
               port: 3000
             failureThreshold: 12
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /api/healthz
+              path: /api/health
               port: 3000
             initialDelaySeconds: 0
             periodSeconds: 10
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /api/healthz
+              path: /api/health
               port: 3000
             initialDelaySeconds: 0
             periodSeconds: 5
