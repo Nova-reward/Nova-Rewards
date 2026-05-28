@@ -1,0 +1,81 @@
+name: Database Backup
+
+on:
+  schedule:
+    # Daily at 02:00 UTC — outside peak hours, before the RDS backup window (03:00–04:00)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options: [production, staging]
+
+permissions:
+  id-token: write   # required for OIDC → AWS role assumption
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+
+jobs:
+  backup:
+    name: PostgreSQL backup → S3
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.BACKUP_IAM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Record backup start time
+        id: timer
+        run: echo "start=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_KMS_KEY_ID: ${{ secrets.BACKUP_KMS_KEY_ARN }}
+          BACKUP_SNS_TOPIC_ARN: ${{ secrets.BACKUP_SNS_TOPIC_ARN }}
+          BACKUP_DIR: /tmp/pg-backups
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: bash novaRewards/scripts/pg-backup.sh
+
+      - name: Report duration
+        if: always()
+        run: |
+          duration=$(( $(date +%s) - ${{ steps.timer.outputs.start }} ))
+          echo "Backup duration: ${duration}s"
+
+      - name: Notify on failure
+        if: failure()
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.BACKUP_IAM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Publish failure to SNS
+        if: failure()
+        env:
+          BACKUP_SNS_TOPIC_ARN: ${{ secrets.BACKUP_SNS_TOPIC_ARN }}
+        run: |
+          aws sns publish \
+            --region "$AWS_REGION" \
+            --topic-arn "$BACKUP_SNS_TOPIC_ARN" \
+            --subject "Nova Rewards DB Backup Failed ($ENVIRONMENT)" \
+            --message "GitHub Actions backup workflow failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
