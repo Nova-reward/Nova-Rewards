@@ -34,7 +34,6 @@ jobs:
           cargo fuzz run fuzz_calculate_payout \
             corpus/calculate_payout \
             -- -max_total_time=60 -max_len=32
-        continue-on-error: true
 
       - name: Fuzz staking (60s)
         working-directory: contracts/fuzz
@@ -42,7 +41,6 @@ jobs:
           cargo fuzz run fuzz_staking \
             corpus/staking \
             -- -max_total_time=60 -max_len=40
-        continue-on-error: true
 
       - name: Fuzz vesting (60s)
         working-directory: contracts/fuzz
@@ -50,7 +48,29 @@ jobs:
           cargo fuzz run fuzz_vesting \
             corpus/vesting \
             -- -max_total_time=60 -max_len=41
-        continue-on-error: true
+
+      - name: Fuzz token_transfer (60s)
+        working-directory: contracts/fuzz
+        run: |
+          cargo fuzz run fuzz_token_transfer \
+            corpus/token_transfer \
+            -- -max_total_time=60 -max_len=48
+
+      - name: Fuzz reward_distribution (60s)
+        working-directory: contracts/fuzz
+        run: |
+          cargo fuzz run fuzz_reward_distribution \
+            corpus/reward_distribution \
+            -- -max_total_time=60 -max_len=40
+
+      - name: Upload corpus artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus-${{ github.run_id }}
+          path: |
+            contracts/fuzz/corpus/
+          if-no-files-found: ignore
 
       - name: Upload crash artifacts
         if: always()

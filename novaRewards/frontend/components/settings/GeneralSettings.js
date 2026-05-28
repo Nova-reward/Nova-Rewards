@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from 'next-themes';
 
 const LANGUAGES = [
   { value: 'en', label: 'English' },
@@ -13,7 +13,7 @@ const LANGUAGES = [
  * General settings: language selection and theme toggle.
  */
 export default function GeneralSettings({ prefs, onChange }) {
-  const { theme, toggleTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
 
   return (
     <div>
@@ -40,15 +40,15 @@ export default function GeneralSettings({ prefs, onChange }) {
         <div className="settings-row-info">
           <span className="settings-row-label">Theme</span>
           <span className="settings-row-desc">
-            Current: {theme === 'light' ? 'Light' : 'Dark'} mode
+            Current: {resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode
           </span>
         </div>
         <button
           className="btn btn-secondary"
-          onClick={toggleTheme}
-          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
         >
-          {theme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+          {resolvedTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
         </button>
       </div>
     </div>

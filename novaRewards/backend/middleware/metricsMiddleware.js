@@ -48,6 +48,21 @@ const redisOperationDuration = new client.Histogram({
   registers: [registry],
 });
 
+// Cache hit/miss counters — issue #576
+const cacheHits = new client.Counter({
+  name: 'cache_hits_total',
+  help: 'Total number of cache hits',
+  labelNames: ['key_type'],
+  registers: [registry],
+});
+
+const cacheMisses = new client.Counter({
+  name: 'cache_misses_total',
+  help: 'Total number of cache misses',
+  labelNames: ['key_type'],
+  registers: [registry],
+});
+
 // Business metrics
 const rewardsDistributed = new client.Counter({
   name: 'rewards_distributed_total',
@@ -66,6 +81,37 @@ const redemptionsProcessed = new client.Counter({
 const userRegistrations = new client.Counter({
   name: 'user_registrations_total',
   help: 'Total number of user registrations',
+  registers: [registry],
+});
+
+// Reward issuance metrics — issue #626
+const rewardIssuancesTotal = new client.Counter({
+  name: 'reward_issuances_total',
+  help: 'Total reward issuance attempts',
+  labelNames: ['status', 'merchant_id'],
+  registers: [registry],
+});
+
+const rewardIssuanceDuration = new client.Histogram({
+  name: 'reward_issuance_duration_seconds',
+  help: 'Duration of reward issuance operations',
+  labelNames: ['status'],
+  buckets: [0.1, 0.5, 1, 2, 5, 10],
+  registers: [registry],
+});
+
+// Queue depth gauge — issue #626
+const rewardQueueDepth = new client.Gauge({
+  name: 'reward_queue_depth',
+  help: 'Current number of jobs in the reward issuance queue',
+  registers: [registry],
+});
+
+const apiLatencyP99 = new client.Histogram({
+  name: 'api_latency_seconds',
+  help: 'API endpoint latency for p99 tracking',
+  labelNames: ['route', 'method'],
+  buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 5],
   registers: [registry],
 });
 
@@ -111,5 +157,11 @@ module.exports = {
     rewardsDistributed,
     redemptionsProcessed,
     userRegistrations,
+    cacheHits,
+    cacheMisses,
+    rewardIssuancesTotal,
+    rewardIssuanceDuration,
+    rewardQueueDepth,
+    apiLatencyP99,
   },
 };
