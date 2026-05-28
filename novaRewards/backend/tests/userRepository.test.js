@@ -3,27 +3,28 @@ jest.mock('../db/index', () => ({ query: jest.fn() }));
 
 const { query } = require('../db/index');
 const repo = require('../db/userRepository');
+const { UserFactory, STELLAR_ADDRESSES } = require('./fixtures');
 
 beforeEach(() => jest.clearAllMocks());
 
 describe('getUserByWallet', () => {
   test('returns user when found', async () => {
-    const user = { id: 1, wallet_address: 'GABC' };
+    const user = UserFactory.build();
     query.mockResolvedValue({ rows: [user] });
-    expect(await repo.getUserByWallet('GABC')).toEqual(user);
+    expect(await repo.getUserByWallet(user.wallet_address)).toEqual(user);
   });
 
   test('returns null when not found', async () => {
     query.mockResolvedValue({ rows: [] });
-    expect(await repo.getUserByWallet('GABC')).toBeNull();
+    expect(await repo.getUserByWallet(STELLAR_ADDRESSES[0])).toBeNull();
   });
 });
 
 describe('getUserById', () => {
   test('returns user when found', async () => {
-    const user = { id: 1 };
+    const user = UserFactory.build();
     query.mockResolvedValue({ rows: [user] });
-    expect(await repo.getUserById(1)).toEqual(user);
+    expect(await repo.getUserById(user.id)).toEqual(user);
   });
 
   test('returns null when not found', async () => {
@@ -34,35 +35,37 @@ describe('getUserById', () => {
 
 describe('createUser', () => {
   test('creates user without referral', async () => {
-    const user = { id: 1, wallet_address: 'GABC', referred_by: null };
+    const user = UserFactory.build({ referred_by: null });
     query.mockResolvedValue({ rows: [user] });
-    const result = await repo.createUser({ walletAddress: 'GABC' });
+    const result = await repo.createUser({ walletAddress: user.wallet_address });
     expect(result).toEqual(user);
     expect(query.mock.calls[0][1][1]).toBeNull(); // referredBy = null
   });
 
   test('creates user with referral', async () => {
-    const user = { id: 2, wallet_address: 'GDEF', referred_by: 1 };
+    const referrer = UserFactory.build();
+    const user = UserFactory.build({ referred_by: referrer.id });
     query.mockResolvedValue({ rows: [user] });
-    const result = await repo.createUser({ walletAddress: 'GDEF', referredBy: 1 });
+    const result = await repo.createUser({ walletAddress: user.wallet_address, referredBy: referrer.id });
     expect(result).toEqual(user);
-    expect(query.mock.calls[0][1][1]).toBe(1);
+    expect(query.mock.calls[0][1][1]).toBe(referrer.id);
   });
 });
 
 describe('markReferralBonusClaimed', () => {
   test('updates and returns user', async () => {
-    const user = { id: 1, referral_bonus_claimed: true };
+    const user = UserFactory.build({ referral_bonus_claimed: true });
     query.mockResolvedValue({ rows: [user] });
-    expect(await repo.markReferralBonusClaimed(1)).toEqual(user);
+    expect(await repo.markReferralBonusClaimed(user.id)).toEqual(user);
   });
 });
 
 describe('getReferredUsers', () => {
   test('returns list of referred users', async () => {
-    const users = [{ id: 2 }, { id: 3 }];
-    query.mockResolvedValue({ rows: users });
-    expect(await repo.getReferredUsers(1)).toEqual(users);
+    const referrer = UserFactory.build();
+    const referred = UserFactory.buildList(2, { referred_by: referrer.id });
+    query.mockResolvedValue({ rows: referred });
+    expect(await repo.getReferredUsers(referrer.id)).toEqual(referred);
   });
 });
 
@@ -75,7 +78,8 @@ describe('getReferralPointsEarned', () => {
 
 describe('hasReferralBonusBeenClaimed', () => {
   test('returns true when row exists', async () => {
-    query.mockResolvedValue({ rows: [{ id: 1 }] });
+    const user = UserFactory.build();
+    query.mockResolvedValue({ rows: [{ id: user.id }] });
     expect(await repo.hasReferralBonusBeenClaimed(1, 2)).toBe(true);
   });
 
@@ -87,7 +91,8 @@ describe('hasReferralBonusBeenClaimed', () => {
 
 describe('getUnprocessedReferrals', () => {
   test('returns unprocessed referrals', async () => {
-    const rows = [{ id: 1, referred_by: 2 }];
+    const referrer = UserFactory.build();
+    const rows = [UserFactory.build({ referred_by: referrer.id })];
     query.mockResolvedValue({ rows });
     expect(await repo.getUnprocessedReferrals(24)).toEqual(rows);
   });
@@ -95,9 +100,9 @@ describe('getUnprocessedReferrals', () => {
 
 describe('profile functions', () => {
   test('findById returns user', async () => {
-    const user = { id: 1, first_name: 'John' };
+    const user = UserFactory.build();
     query.mockResolvedValue({ rows: [user] });
-    expect(await repo.findById(1)).toEqual(user);
+    expect(await repo.findById(user.id)).toEqual(user);
   });
 
   test('findById returns null when not found', async () => {
@@ -106,34 +111,35 @@ describe('profile functions', () => {
   });
 
   test('findByWalletAddress returns user', async () => {
-    const user = { id: 1 };
+    const user = UserFactory.build();
     query.mockResolvedValue({ rows: [user] });
-    expect(await repo.findByWalletAddress('GABC')).toEqual(user);
+    expect(await repo.findByWalletAddress(user.wallet_address)).toEqual(user);
   });
 
   test('getPublicProfile returns limited fields', async () => {
-    const profile = { id: 1, first_name: 'John' };
+    const user = UserFactory.build();
+    const profile = { id: user.id, first_name: user.first_name };
     query.mockResolvedValue({ rows: [profile] });
-    expect(await repo.getPublicProfile(1)).toEqual(profile);
+    expect(await repo.getPublicProfile(user.id)).toEqual(profile);
   });
 
   test('getPrivateProfile returns all fields', async () => {
-    const profile = { id: 1, stellar_public_key: 'GABC' };
-    query.mockResolvedValue({ rows: [profile] });
-    expect(await repo.getPrivateProfile(1)).toEqual(profile);
+    const user = UserFactory.build();
+    query.mockResolvedValue({ rows: [user] });
+    expect(await repo.getPrivateProfile(user.id)).toEqual(user);
   });
 
   test('update returns updated user', async () => {
-    const updated = { id: 1, first_name: 'Jane' };
+    const user = UserFactory.build();
+    const updated = { ...user, first_name: 'Jane' };
     query.mockResolvedValue({ rows: [updated] });
-    expect(await repo.update(1, { first_name: 'Jane' })).toEqual(updated);
+    expect(await repo.update(user.id, { first_name: 'Jane' })).toEqual(updated);
   });
 
   test('update with no valid fields calls findById', async () => {
-    const user = { id: 1 };
+    const user = UserFactory.build();
     query.mockResolvedValue({ rows: [user] });
-    // Pass an empty updates object — should call findById
-    const result = await repo.update(1, {});
+    const result = await repo.update(user.id, {});
     expect(result).toEqual(user);
   });
 
@@ -163,7 +169,8 @@ describe('profile functions', () => {
   });
 
   test('isAdmin returns false for non-admin', async () => {
-    query.mockResolvedValue({ rows: [{ role: 'user' }] });
-    expect(await repo.isAdmin(1)).toBe(false);
+    const user = UserFactory.build({ role: 'user' });
+    query.mockResolvedValue({ rows: [{ role: user.role }] });
+    expect(await repo.isAdmin(user.id)).toBe(false);
   });
 });

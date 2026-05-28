@@ -37,25 +37,27 @@ const repository = require('../db/transactionRepository');
 const { query } = require('../db/index');
 const { getUserById } = require('../db/userRepository');
 const service = require('../services/transactionService');
+const { TransactionFactory, UserFactory, STELLAR_ADDRESSES } = require('./fixtures');
 
 beforeEach(() => jest.clearAllMocks());
 
 describe('transactionService.recordTransaction', () => {
   test('validates and records a Stellar-backed transaction', async () => {
+    const tx = TransactionFactory.distribution({ tx_hash: 'abc123', amount: '10.0000000' });
     server.transactions.mockReturnValue({
       transaction: jest.fn().mockReturnValue({
         call: jest.fn().mockResolvedValue({ ledger_attr: 12345 }),
       }),
     });
-    repository.recordTransaction.mockResolvedValue({ id: 1, tx_hash: 'abc123' });
+    repository.recordTransaction.mockResolvedValue(tx);
 
     const result = await service.recordTransaction({
-      txHash: 'abc123',
-      txType: 'distribution',
-      amount: '10.0000000',
-      fromWallet: 'GFROM',
-      toWallet: 'GTO',
-      merchantId: 1,
+      txHash: tx.tx_hash,
+      txType: tx.tx_type,
+      amount: tx.amount,
+      fromWallet: STELLAR_ADDRESSES[0],
+      toWallet: STELLAR_ADDRESSES[1],
+      merchantId: tx.merchant_id,
       userId: 2,
       metadata: { channel: 'pos' },
     });
@@ -83,9 +85,11 @@ describe('transactionService.recordTransaction', () => {
 
 describe('transactionService.getUserHistory', () => {
   test('loads user history with validated filters', async () => {
-    getUserById.mockResolvedValue({ id: 1 });
+    const user = UserFactory.build({ id: 1 });
+    const tx = TransactionFactory.build({ tx_hash: 'abc123' });
+    getUserById.mockResolvedValue(user);
     repository.getTransactionsByUser.mockResolvedValue({
-      data: [{ tx_hash: 'abc123' }],
+      data: [tx],
       total: 1,
       page: 1,
       limit: 20,

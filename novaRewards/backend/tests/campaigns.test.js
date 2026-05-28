@@ -35,6 +35,7 @@ jest.mock('../services/emailService', () => ({
 
 const app = require('../server');
 const { createCampaign, getCampaignsByMerchant } = require('../db/campaignRepository');
+const { CampaignFactory, MerchantFactory } = require('./fixtures');
 
 // Shared valid payload
 const VALID_BODY = {
@@ -52,7 +53,7 @@ beforeEach(() => jest.clearAllMocks());
 // ---------------------------------------------------------------------------
 describe('POST /api/campaigns', () => {
   test('201 - creates campaign and returns it for valid input', async () => {
-    const created = { id: 42, ...VALID_BODY, is_active: true };
+    const created = CampaignFactory.build({ id: 42, name: 'Summer Sale', merchant_id: 1, is_active: true });
     createCampaign.mockResolvedValue(created);
 
     const res = await request(app).post('/api/campaigns').send(VALID_BODY);
@@ -140,10 +141,7 @@ describe('POST /api/campaigns', () => {
 // ---------------------------------------------------------------------------
 describe('GET /api/campaigns/:merchantId', () => {
   test('200 - returns an array of campaigns for a merchant', async () => {
-    const campaigns = [
-      { id: 1, merchant_id: 7, name: 'Spring Promo', reward_rate: 3 },
-      { id: 2, merchant_id: 7, name: 'Flash Sale', reward_rate: 10 },
-    ];
+    const campaigns = CampaignFactory.buildList(2, { merchant_id: 7 });
     getCampaignsByMerchant.mockResolvedValue(campaigns);
 
     const res = await request(app).get('/api/campaigns/7');
