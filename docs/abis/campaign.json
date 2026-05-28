@@ -1,0 +1,116 @@
+{
+  "contract": "campaign",
+  "version": "1.0.0",
+  "description": "Manages reward campaigns: creation, participant joining, and token distribution.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the contract with an admin.",
+      "params": [{ "name": "admin", "type": "Address" }],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "create_campaign",
+      "description": "Creates a new reward campaign. Admin only.",
+      "params": [
+        { "name": "owner", "type": "Address" },
+        { "name": "rewards", "type": "Vec<TokenReward>", "description": "Up to 5 token rewards." },
+        { "name": "max_participants", "type": "u32" }
+      ],
+      "returns": { "type": "u64", "description": "Campaign ID." },
+      "errors": ["unauthorized", "too many tokens", "paused"]
+    },
+    {
+      "name": "set_active",
+      "description": "Activates or deactivates a campaign. Owner only.",
+      "params": [
+        { "name": "campaign_id", "type": "u64" },
+        { "name": "active", "type": "bool" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "not found"]
+    },
+    {
+      "name": "join_campaign",
+      "description": "Joins a campaign as a participant.",
+      "params": [
+        { "name": "user", "type": "Address" },
+        { "name": "campaign_id", "type": "u64" }
+      ],
+      "returns": null,
+      "errors": ["campaign full", "already joined", "campaign inactive", "paused"]
+    },
+    {
+      "name": "distribute_reward",
+      "description": "Distributes token rewards to a participant. Owner only.",
+      "params": [
+        { "name": "campaign_id", "type": "u64" },
+        { "name": "recipient", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "not a participant", "already distributed", "paused"]
+    },
+    {
+      "name": "get_campaign",
+      "description": "Returns campaign data.",
+      "params": [{ "name": "campaign_id", "type": "u64" }],
+      "returns": { "type": "CampaignData" },
+      "errors": ["not found"]
+    },
+    {
+      "name": "pause",
+      "description": "Pauses the contract. Admin only.",
+      "params": [],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "unpause",
+      "description": "Unpauses the contract. Admin only.",
+      "params": [],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "is_paused",
+      "description": "Returns whether the contract is paused.",
+      "params": [],
+      "returns": { "type": "bool" },
+      "errors": []
+    }
+  ],
+  "types": {
+    "TokenReward": {
+      "fields": [
+        { "name": "token", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ]
+    },
+    "CampaignData": {
+      "fields": [
+        { "name": "owner", "type": "Address" },
+        { "name": "rewards", "type": "Vec<TokenReward>" },
+        { "name": "active", "type": "bool" },
+        { "name": "completed", "type": "bool" },
+        { "name": "max_participants", "type": "u32" },
+        { "name": "current_participants", "type": "u32" }
+      ]
+    }
+  },
+  "events": [
+    { "name": "campaign_created",  "fields": [{ "name": "id", "type": "u64" }, { "name": "owner", "type": "Address" }] },
+    { "name": "participant_joined","fields": [{ "name": "campaign_id", "type": "u64" }, { "name": "user", "type": "Address" }] },
+    { "name": "reward_distributed","fields": [{ "name": "campaign_id", "type": "u64" }, { "name": "recipient", "type": "Address" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized",  "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",         "message": "unauthorized" },
+    { "code": 3, "name": "CampaignFull",         "message": "campaign full" },
+    { "code": 4, "name": "AlreadyJoined",        "message": "already joined" },
+    { "code": 5, "name": "CampaignInactive",     "message": "campaign inactive" },
+    { "code": 6, "name": "TooManyTokens",        "message": "too many tokens (max 5)" },
+    { "code": 7, "name": "NotFound",             "message": "campaign not found" },
+    { "code": 8, "name": "Paused",               "message": "contract is paused" }
+  ]
+}

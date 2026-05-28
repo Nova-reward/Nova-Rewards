@@ -4,6 +4,12 @@ const { redeemReward, getRedemptionById, getUserRedemptions } = require('../db/r
 const { getUserById } = require('../db/userRepository');
 const { getRewardById } = require('../db/adminRepository');
 const appEvents = require('../services/eventEmitter');
+const { logAudit } = require('../db/auditLogRepository');
+const {
+  validateCreateRedemption,
+  validateRedemptionId,
+  validateRedemptionQuery,
+} = require('../dtos/middleware');
 
 // All redemption routes require an authenticated user
 router.use(authenticateUser);
@@ -72,7 +78,7 @@ router.use(authenticateUser);
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/', async (req, res, next) => {
+router.post('/', validateCreateRedemption, async (req, res, next) => {
   try {
     // ── Idempotency key ───────────────────────────────────────────────────
     const idempotencyKey = req.headers['x-idempotency-key'];
@@ -85,7 +91,7 @@ router.post('/', async (req, res, next) => {
     }
 
     // ── Body validation ───────────────────────────────────────────────────
-    const { userId, rewardId } = req.body;
+    const { userId, rewardId, campaignId } = req.body;
 
     if (!userId || !Number.isInteger(Number(userId)) || Number(userId) <= 0) {
       return res.status(400).json({
@@ -103,8 +109,18 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    const userIdNum   = Number(userId);
-    const rewardIdNum = Number(rewardId);
+    if (campaignId !== undefined && campaignId !== null &&
+        (!Number.isInteger(Number(campaignId)) || Number(campaignId) <= 0)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'campaignId must be a positive integer',
+      });
+    }
+
+    const userIdNum     = Number(userId);
+    const rewardIdNum   = Number(rewardId);
+    const campaignIdNum = campaignId != null ? Number(campaignId) : null;
 
     // ── Authorisation: users may only redeem for themselves ───────────────
     if (req.user.id !== userIdNum) {
@@ -119,6 +135,7 @@ router.post('/', async (req, res, next) => {
     const { redemption, pointTx, idempotent } = await redeemReward({
       userId: userIdNum,
       rewardId: rewardIdNum,
+      campaignId: campaignIdNum,
       idempotencyKey: idempotencyKey.trim(),
     });
 
@@ -134,6 +151,17 @@ router.post('/', async (req, res, next) => {
       }).catch((err) => {
         console.error('[redemptions] event emit failed:', err.message);
       });
+
+      // Explicit audit log for redemption
+      logAudit({
+        entityType: 'redemption',
+        entityId: redemption.id,
+        action: 'redeem_reward',
+        performedBy: req.user.id,
+        actorType: req.user.role === 'admin' ? 'admin' : 'user',
+        details: { rewardId: rewardIdNum, userId: userIdNum, pointsSpent: redemption.points_spent },
+        source: 'POST /api/redemptions',
+      }).catch((err) => console.error('[audit] redeem_reward:', err.message));
     }
 
     const statusCode = idempotent ? 200 : 201;
@@ -185,10 +213,7 @@ router.post('/', async (req, res, next) => {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get('/', async (req, res, next) => {
-  try {
-    const page  = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+router.get('/', validateRedemptionQuery, async (req, res, next) => {
 
     const result = await getUserRedemptions(req.user.id, { page, limit });
     res.json({ success: true, ...result });
@@ -236,7 +261,7 @@ router.get('/', async (req, res, next) => {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', validateRedemptionId, async (req, res, next) => {
   try {
     const redemptionId = parseInt(req.params.id, 10);
     if (isNaN(redemptionId) || redemptionId <= 0) {

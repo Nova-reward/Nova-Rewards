@@ -161,4 +161,35 @@ module.exports = {
   getPendingEvents,
   getContractEvents,
   getContractEventById,
+  getStreamCursor,
+  saveStreamCursor,
 };
+
+/**
+ * Gets the last persisted Horizon cursor for a contract stream.
+ * @param {string} contractId
+ * @returns {Promise<string|null>}
+ */
+async function getStreamCursor(contractId) {
+  const result = await query(
+    `SELECT cursor FROM contract_event_cursors WHERE contract_id = $1`,
+    [contractId]
+  );
+  return result.rows[0]?.cursor || null;
+}
+
+/**
+ * Upserts the Horizon cursor for a contract stream.
+ * @param {string} contractId
+ * @param {string} cursor
+ * @returns {Promise<void>}
+ */
+async function saveStreamCursor(contractId, cursor) {
+  await query(
+    `INSERT INTO contract_event_cursors (contract_id, cursor, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (contract_id) DO UPDATE
+       SET cursor = EXCLUDED.cursor, updated_at = NOW()`,
+    [contractId, cursor]
+  );
+}

@@ -2,80 +2,84 @@ name: Database Backup
 
 on:
   schedule:
-    # Daily at 02:00 UTC — outside peak hours, before the RDS backup window (03:00–04:00)
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * *'      # daily backup at 02:00 UTC
+    - cron: '0 3 * * 0'      # weekly restore test on Sunday at 03:00 UTC
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        default: 'production'
-        type: choice
-        options: [production, staging]
-
-permissions:
-  id-token: write   # required for OIDC → AWS role assumption
-  contents: read
-
-env:
-  AWS_REGION: us-east-1
-  ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+      run_restore_test:
+        description: 'Also run restore test'
+        type: boolean
+        default: false
 
 jobs:
   backup:
-    name: PostgreSQL backup → S3
+    name: Backup PostgreSQL
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 2 * * *'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.BACKUP_IAM_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Install PostgreSQL client
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends postgresql-client
-
-      - name: Record backup start time
-        id: timer
-        run: echo "start=$(date +%s)" >> "$GITHUB_OUTPUT"
+        run: sudo apt-get install -y postgresql-client
 
       - name: Run backup
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
-          BACKUP_KMS_KEY_ID: ${{ secrets.BACKUP_KMS_KEY_ARN }}
-          BACKUP_SNS_TOPIC_ARN: ${{ secrets.BACKUP_SNS_TOPIC_ARN }}
-          BACKUP_DIR: /tmp/pg-backups
-          AWS_REGION: ${{ env.AWS_REGION }}
-        run: bash novaRewards/scripts/pg-backup.sh
-
-      - name: Report duration
-        if: always()
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          duration=$(( $(date +%s) - ${{ steps.timer.outputs.start }} ))
-          echo "Backup duration: ${duration}s"
+          chmod +x scripts/db-backup.sh
+          scripts/db-backup.sh
 
-      - name: Notify on failure
-        if: failure()
+  restore-test:
+    name: Weekly Restore Test
+    runs-on: ubuntu-latest
+    if: >
+      github.event.schedule == '0 3 * * 0' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_restore_test == true)
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: restore_test
+          POSTGRES_PASSWORD: restore_test
+          POSTGRES_DB: restore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.BACKUP_IAM_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Publish failure to SNS
-        if: failure()
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Run restore test
         env:
-          BACKUP_SNS_TOPIC_ARN: ${{ secrets.BACKUP_SNS_TOPIC_ARN }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          TEST_DATABASE_URL: postgresql://restore_test:restore_test@localhost:5432/restore_test
         run: |
-          aws sns publish \
-            --region "$AWS_REGION" \
-            --topic-arn "$BACKUP_SNS_TOPIC_ARN" \
-            --subject "Nova Rewards DB Backup Failed ($ENVIRONMENT)" \
-            --message "GitHub Actions backup workflow failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          chmod +x scripts/db-restore-test.sh
+          scripts/db-restore-test.sh

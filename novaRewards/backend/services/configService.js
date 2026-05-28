@@ -3,6 +3,10 @@
  * Requirements: #181, #184
  */
 
+const {
+  DEFAULT_REFERRAL_BONUS_POINTS,
+} = require('../config/constants');
+
 /**
  * Gets a configuration value with optional default.
  * @param {string} key - Environment variable key
@@ -55,7 +59,7 @@ function getBooleanConfig(key, defaultValue = false) {
 }
 
 // Referral configuration
-const REFERRAL_BONUS_POINTS = getNumericConfig('REFERRAL_BONUS_POINTS', 100);
+const REFERRAL_BONUS_POINTS = getNumericConfig('REFERRAL_BONUS_POINTS', DEFAULT_REFERRAL_BONUS_POINTS);
 
 // Email configuration
 const SMTP_HOST = getConfig('SMTP_HOST');

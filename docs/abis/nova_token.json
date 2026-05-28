@@ -1,0 +1,131 @@
+{
+  "contract": "nova_token",
+  "version": "1.0.0",
+  "description": "Soroban fungible token contract for the NOVA asset.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the token contract. Can only be called once.",
+      "params": [
+        { "name": "admin", "type": "Address", "description": "Address authorized to mint tokens." }
+      ],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "mint",
+      "description": "Mints new tokens to a recipient. Admin only.",
+      "params": [
+        { "name": "to", "type": "Address", "description": "Recipient address." },
+        { "name": "amount", "type": "i128", "description": "Amount to mint (must be > 0)." }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "amount must be positive"]
+    },
+    {
+      "name": "burn",
+      "description": "Burns tokens from the caller's balance.",
+      "params": [
+        { "name": "from", "type": "Address", "description": "Address to burn from." },
+        { "name": "amount", "type": "i128", "description": "Amount to burn." }
+      ],
+      "returns": null,
+      "errors": ["insufficient balance", "amount must be positive"]
+    },
+    {
+      "name": "transfer",
+      "description": "Transfers tokens from caller to recipient.",
+      "params": [
+        { "name": "from", "type": "Address", "description": "Sender address." },
+        { "name": "to", "type": "Address", "description": "Recipient address." },
+        { "name": "amount", "type": "i128", "description": "Amount to transfer." }
+      ],
+      "returns": null,
+      "errors": ["insufficient balance", "amount must be positive"]
+    },
+    {
+      "name": "transfer_from",
+      "description": "Transfers tokens on behalf of owner using an allowance.",
+      "params": [
+        { "name": "spender", "type": "Address", "description": "Address spending the allowance." },
+        { "name": "from", "type": "Address", "description": "Token owner." },
+        { "name": "to", "type": "Address", "description": "Recipient." },
+        { "name": "amount", "type": "i128", "description": "Amount to transfer." }
+      ],
+      "returns": null,
+      "errors": ["insufficient allowance", "insufficient balance"]
+    },
+    {
+      "name": "approve",
+      "description": "Sets the allowance for a spender.",
+      "params": [
+        { "name": "owner", "type": "Address", "description": "Token owner." },
+        { "name": "spender", "type": "Address", "description": "Approved spender." },
+        { "name": "amount", "type": "i128", "description": "Allowance amount." }
+      ],
+      "returns": null,
+      "errors": []
+    },
+    {
+      "name": "increase_allowance",
+      "description": "Increases the spender's allowance.",
+      "params": [
+        { "name": "owner", "type": "Address" },
+        { "name": "spender", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": []
+    },
+    {
+      "name": "decrease_allowance",
+      "description": "Decreases the spender's allowance.",
+      "params": [
+        { "name": "owner", "type": "Address" },
+        { "name": "spender", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["allowance underflow"]
+    },
+    {
+      "name": "balance_of",
+      "description": "Returns the token balance of an address.",
+      "params": [
+        { "name": "address", "type": "Address", "description": "Address to query." }
+      ],
+      "returns": { "type": "i128", "description": "Token balance." },
+      "errors": []
+    },
+    {
+      "name": "allowance",
+      "description": "Returns the allowance granted from owner to spender.",
+      "params": [
+        { "name": "owner", "type": "Address" },
+        { "name": "spender", "type": "Address" }
+      ],
+      "returns": { "type": "i128", "description": "Allowance amount." },
+      "errors": []
+    },
+    {
+      "name": "admin",
+      "description": "Returns the admin address.",
+      "params": [],
+      "returns": { "type": "Address" },
+      "errors": []
+    }
+  ],
+  "events": [
+    { "name": "mint",      "fields": [{ "name": "to", "type": "Address" }, { "name": "amount", "type": "i128" }] },
+    { "name": "burn",      "fields": [{ "name": "from", "type": "Address" }, { "name": "amount", "type": "i128" }] },
+    { "name": "transfer",  "fields": [{ "name": "from", "type": "Address" }, { "name": "to", "type": "Address" }, { "name": "amount", "type": "i128" }] },
+    { "name": "approve",   "fields": [{ "name": "owner", "type": "Address" }, { "name": "spender", "type": "Address" }, { "name": "amount", "type": "i128" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized", "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",       "message": "unauthorized" },
+    { "code": 3, "name": "InsufficientBalance","message": "insufficient balance" },
+    { "code": 4, "name": "InsufficientAllowance","message": "insufficient allowance" },
+    { "code": 5, "name": "AmountMustBePositive","message": "amount must be positive" }
+  ]
+}

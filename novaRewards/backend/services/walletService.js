@@ -6,6 +6,7 @@ const {
 } = require("../../blockchain/stellarService");
 const {
   Horizon,
+  Transaction,
   Asset,
   StrKey,
   Networks,

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useWalletStore } from '../../store/walletStore';
+import WalletConnectButton from '../WalletConnectButton';
 import ThemeToggle from './ThemeToggle';
 import { User, Settings, LogOut, ChevronDown, Bell } from 'lucide-react';
 import Link from 'next/link';
@@ -32,6 +33,7 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
+        <WalletConnectButton />
         <button className="p-2 text-slate-500 hover:bg-gray-100 dark:hover:bg-brand-border rounded-lg transition-colors relative">
           <Bell className="w-5 h-5" />
           <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-brand-card"></span>
