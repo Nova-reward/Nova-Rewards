@@ -1,4 +1,5 @@
 require("dotenv").config();
+const logger = require("./lib/logger");
 const { validateEnv } = require("./middleware/validateEnv");
 
 validateEnv();
@@ -142,7 +143,7 @@ if (process.env.NODE_ENV !== "production") {
 
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {
-  console.error(err);
+  logger.error(err.message || 'Unhandled error', { stack: err.stack, code: err.code, status: err.status });
   res.status(err.status || 500).json({
     success: false,
     error: err.code || "internal_error",
@@ -165,7 +166,7 @@ if (require.main === module) {
     require("./jobs/webhookHandler");
     // Initialize Reward Issuance Worker
     require("./jobs/rewardIssuanceWorker");
-    console.log(`NovaRewards backend running on port ${PORT}`);
+    logger.info(`NovaRewards backend running on port ${PORT}`);
   });
 }
 
