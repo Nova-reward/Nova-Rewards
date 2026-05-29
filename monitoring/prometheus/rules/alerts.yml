@@ -148,6 +148,47 @@ groups:
           description: "SSL certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
           runbook: "https://github.com/nova-rewards/runbooks/blob/main/ssl-expiry.md"
 
+      # ── Backup alerts ──────────────────────────────────────────────────────
+
+      # No successful backup in the last 25 hours (daily job should run every 24h)
+      - alert: BackupMissed
+        expr: |
+          time() - nova_backup_last_success_timestamp_seconds > 90000
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database backup has not run in over 25 hours"
+          description: "Last successful backup was {{ $value | humanizeDuration }} ago. Expected every 24 hours."
+          runbook: "https://github.com/nova-rewards/runbooks/blob/main/backup-missed.md"
+
+      # Backup job failed (exit code != 0 recorded as a gauge)
+      - alert: BackupFailed
+        expr: nova_backup_last_exit_code != 0
+        for: 0m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database backup job failed"
+          description: "pg-backup.sh exited with code {{ $value }}. Check GitHub Actions logs or cron output."
+          runbook: "https://github.com/nova-rewards/runbooks/blob/main/backup-failed.md"
+
+      # Backup duration is unusually long (> 30 min may indicate a hung job)
+      - alert: BackupDurationHigh
+        expr: nova_backup_duration_seconds > 1800
+        for: 0m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database backup is taking longer than 30 minutes"
+          description: "Backup duration is {{ $value | humanizeDuration }}. Investigate for slow I/O or large data growth."
+          runbook: "https://github.com/nova-rewards/runbooks/blob/main/backup-duration-high.md"
+
+      # ── Endpoint Health Check Failure ──────────────────────────────────────
+
       # Endpoint Health Check Failure
       - alert: EndpointDown
         expr: probe_success == 0
