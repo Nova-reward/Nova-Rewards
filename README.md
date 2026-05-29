@@ -248,6 +248,7 @@ See [LICENSE](LICENSE) for terms, or contact the maintainers for licensing inqui
 | [docs/contracts.md](docs/contracts.md) | Contract addresses, deploy & upgrade instructions |
 | [docs/abi-reference.md](docs/abi-reference.md) | Full ABI — function signatures, events, integration examples |
 | [docs/error-codes.md](docs/error-codes.md) | Contract error codes and remediation |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Troubleshooting guide — 15+ common errors with symptoms, causes, and fixes |
 | [docs/api/README.md](docs/api/README.md) | REST API overview |
 | [docs/api/openapi.json](docs/api/openapi.json) | OpenAPI 3.0 spec |
 | [docs/deployment/guides.md](docs/deployment/guides.md) | Deployment guides (Docker, K8s, Vercel) |
