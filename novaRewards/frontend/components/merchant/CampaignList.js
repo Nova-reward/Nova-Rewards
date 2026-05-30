@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import EmptyState from '../EmptyState';
 
 const STATUS_BADGE = {
   active:   { cls: 'badge badge-green', label: '● Active' },
@@ -24,7 +25,16 @@ export default function CampaignList({ campaigns, loading, onPause, onResume }) 
   }
 
   if (!campaigns?.length) {
-    return <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '1.5rem 0' }}>No campaigns yet.</p>;
+    return (
+      <EmptyState
+        icon="campaigns"
+        title="No campaigns yet"
+        description="Create your first reward campaign to get started issuing tokens to your users."
+        actionLabel="Create Campaign"
+        onAction={() => window.location.href = '/merchant'}
+        variant="primary"
+      />
+    );
   }
 
   return (
