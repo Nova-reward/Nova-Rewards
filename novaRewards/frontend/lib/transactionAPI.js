@@ -6,7 +6,22 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/a
 
 export const transactionAPI = {
   /**
-   * Fetch paginated transactions
+   * Fetch transactions using cursor-based pagination.
+   * Returns { data, nextCursor }.
+   */
+  async getTransactionsCursor(userId, { limit = 25, cursor } = {}) {
+    const params = new URLSearchParams({ userId, limit });
+    if (cursor) params.set('cursor', cursor);
+
+    const response = await fetch(`${API_BASE_URL}/transactions/history?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch transactions: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  /**
+   * Fetch paginated transactions (offset-based, kept for stats/export)
    */
   async getTransactions(userId, filters = {}) {
     const params = new URLSearchParams({
