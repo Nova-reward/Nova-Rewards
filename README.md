@@ -256,6 +256,7 @@ See [LICENSE](LICENSE) for terms, or contact the maintainers for licensing inqui
 | [docs/security/threat-model.md](docs/security/threat-model.md) | Threat model |
 | [docs/security/security-best-practices.md](docs/security/security-best-practices.md) | Security best practices |
 | [docs/stellar/integration.md](docs/stellar/integration.md) | Stellar / Horizon integration guide |
+| [docs/stellar/freighter-guide.md](docs/stellar/freighter-guide.md) | Freighter wallet integration — API, testing, error reference |
 | [docs/tokenomics.md](docs/tokenomics.md) | Token economics |
 | [docs/ops/runbook.md](docs/ops/runbook.md) | Operations runbook |
 | [monitoring/README.md](monitoring/README.md) | Monitoring stack setup |
