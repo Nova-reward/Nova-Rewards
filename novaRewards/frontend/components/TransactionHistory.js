@@ -6,12 +6,71 @@ import { useScrollRestoration } from '../hooks/useScrollRestoration';
 import { transactionAPI } from '../lib/transactionAPI';
 import EmptyState from './EmptyState';
 import { SkeletonTransactionHistory } from './Skeleton';
-import MobileCardList from './MobileCardList';
+import DataTable from './DataTable';
 
 const PAGE_SIZE = 25;
 
+/** Column definitions for the transaction table */
+const COLUMNS = [
+  {
+    key: 'action_type',
+    label: 'Type',
+    render: (v) => <span className="font-semibold capitalize">{v ?? '—'}</span>,
+  },
+  {
+    key: 'amount',
+    label: 'Amount',
+    render: (v) => <span className="font-medium">{v ?? '—'}</span>,
+  },
+  {
+    key: 'campaign_name',
+    label: 'Campaign',
+    render: (v) => v || 'N/A',
+  },
+  {
+    key: 'timestamp',
+    label: 'Date',
+    render: (v) => (v ? new Date(v).toLocaleDateString() : '—'),
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    render: (v) => <span className="capitalize font-semibold">{v ?? '—'}</span>,
+  },
+  {
+    key: 'tx_hash',
+    label: 'Explorer',
+    sortable: false,
+    render: (v) =>
+      v ? (
+        <a
+          href={`https://stellar.expert/explorer/public/tx/${v}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 font-medium hover:underline"
+        >
+          View
+        </a>
+      ) : (
+        '—'
+      ),
+  },
+];
+
+/** Custom empty state shown inside the DataTable */
+function TxEmptyState() {
+  return (
+    <EmptyState
+      icon="transactions"
+      title="No transactions yet"
+      description="Your transaction history will appear here once you start earning or redeeming rewards."
+    />
+  );
+}
+
 /**
  * TransactionHistory — infinite scroll with cursor-based pagination.
+ * Renders all loaded items in a shared DataTable with sort + URL sync.
  * Closes #842
  */
 export default function TransactionHistory({ userId }) {
@@ -27,7 +86,6 @@ export default function TransactionHistory({ userId }) {
         limit: PAGE_SIZE,
         cursor,
       });
-      // Store the cursor for the next page
       if (res.nextCursor) {
         cursors.current[page + 1] = res.nextCursor;
       }
@@ -69,64 +127,17 @@ export default function TransactionHistory({ userId }) {
       {/* Initial skeleton */}
       {loading && items.length === 0 && <SkeletonTransactionHistory rows={5} />}
 
-      {/* Empty state */}
-      {!loading && items.length === 0 && (
-        <EmptyState
-          icon="transactions"
-          title="No transactions yet"
-          description="Your transaction history will appear here once you start earning or redeeming rewards."
-        />
-      )}
-
-      {/* Transaction list */}
-      {items.length > 0 && (
-        <MobileCardList
-          columns={[
-            {
-              key: 'action_type',
-              label: 'Type',
-              render: (v) => <span className="font-semibold capitalize">{v}</span>,
-            },
-            {
-              key: 'amount',
-              label: 'Amount',
-              render: (v) => <span className="font-medium">{v}</span>,
-            },
-            {
-              key: 'campaign_name',
-              label: 'Campaign',
-              render: (v) => v || 'N/A',
-            },
-            {
-              key: 'timestamp',
-              label: 'Date',
-              render: (v) => new Date(v).toLocaleDateString(),
-            },
-            {
-              key: 'status',
-              label: 'Status',
-              render: (v) => <span className="capitalize font-semibold">{v}</span>,
-            },
-            {
-              key: 'tx_hash',
-              label: 'Explorer',
-              render: (v) =>
-                v ? (
-                  <a
-                    href={`https://stellar.expert/explorer/public/tx/${v}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-500 font-medium"
-                  >
-                    View
-                  </a>
-                ) : (
-                  '—'
-                ),
-            },
-          ]}
+      {/* DataTable — handles sort, pagination, empty state, and URL sync */}
+      {(!loading || items.length > 0) && (
+        <DataTable
+          columns={COLUMNS}
           data={items}
-          emptyMessage="No transactions found."
+          defaultPageSize={25}
+          emptyState={<TxEmptyState />}
+          keyField="id"
+          urlSync={true}
+          queryPrefix="tx_"
+          loading={loading && items.length === 0}
         />
       )}
 
