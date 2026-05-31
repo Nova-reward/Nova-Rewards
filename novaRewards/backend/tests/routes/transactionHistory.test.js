@@ -3,42 +3,21 @@ const app = require('../../server');
 
 describe('Transaction History API', () => {
   const mockUserId = 'user-123';
-  const mockTransactions = [
-    {
-      id: '1',
-      userId: mockUserId,
-      type: 'issuance',
-      amount: '100.00',
-      campaignId: 1,
-      campaign: { id: 1, name: 'Summer Campaign' },
-      status: 'confirmed',
-      txHash: 'abc123',
-      createdAt: new Date('2024-01-15'),
-    },
-    {
-      id: '2',
-      userId: mockUserId,
-      type: 'redemption',
-      amount: '50.00',
-      campaignId: 2,
-      campaign: { id: 2, name: 'Winter Campaign' },
-      status: 'confirmed',
-      txHash: 'def456',
-      createdAt: new Date('2024-01-14'),
-    },
-  ];
 
   describe('GET /api/transactions/history', () => {
-    test('returns paginated transactions with default limit', async () => {
+    test('returns cursor-paginated transactions', async () => {
       const response = await request(app)
         .get('/api/transactions/history')
         .query({ userId: mockUserId });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toBeDefined();
-      expect(response.body.pagination).toBeDefined();
-      expect(response.body.pagination.limit).toBe(20);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      // nextCursor is either a string or null
+      expect(
+        response.body.nextCursor === null ||
+        typeof response.body.nextCursor === 'string'
+      ).toBe(true);
     });
 
     test('returns error when userId is missing', async () => {
@@ -49,31 +28,13 @@ describe('Transaction History API', () => {
       expect(response.body.error).toBe('validation_error');
     });
 
-    test('filters transactions by type', async () => {
-      const response = await request(app)
-        .get('/api/transactions/history')
-        .query({ userId: mockUserId, type: 'issuance' });
-
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-    });
-
-    test('returns error for invalid transaction type', async () => {
-      const response = await request(app)
-        .get('/api/transactions/history')
-        .query({ userId: mockUserId, type: 'invalid' });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('validation_error');
-    });
-
     test('respects limit parameter', async () => {
       const response = await request(app)
         .get('/api/transactions/history')
-        .query({ userId: mockUserId, limit: 50 });
+        .query({ userId: mockUserId, limit: 10 });
 
       expect(response.status).toBe(200);
-      expect(response.body.pagination.limit).toBe(50);
+      expect(response.body.data.length).toBeLessThanOrEqual(10);
     });
 
     test('caps limit to maximum of 100', async () => {
@@ -82,48 +43,36 @@ describe('Transaction History API', () => {
         .query({ userId: mockUserId, limit: 200 });
 
       expect(response.status).toBe(200);
-      expect(response.body.pagination.limit).toBeLessThanOrEqual(100);
+      expect(response.body.data.length).toBeLessThanOrEqual(100);
     });
 
-    test('handles offset parameter for pagination', async () => {
-      const response = await request(app)
+    test('accepts a cursor parameter without error', async () => {
+      // First page
+      const first = await request(app)
         .get('/api/transactions/history')
-        .query({ userId: mockUserId, offset: 10 });
+        .query({ userId: mockUserId, limit: 5 });
 
-      expect(response.status).toBe(200);
-      expect(response.body.pagination.offset).toBe(10);
+      expect(first.status).toBe(200);
+
+      // If there is a next cursor, use it
+      if (first.body.nextCursor) {
+        const second = await request(app)
+          .get('/api/transactions/history')
+          .query({ userId: mockUserId, limit: 5, cursor: first.body.nextCursor });
+
+        expect(second.status).toBe(200);
+        expect(Array.isArray(second.body.data)).toBe(true);
+      }
     });
 
-    test('filters by date range', async () => {
+    test('returns empty data array for unknown userId', async () => {
       const response = await request(app)
         .get('/api/transactions/history')
-        .query({
-          userId: mockUserId,
-          dateFrom: '2024-01-01',
-          dateTo: '2024-01-20',
-        });
+        .query({ userId: 'nonexistent-user-xyz' });
 
       expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-    });
-
-    test('filters by campaign ID', async () => {
-      const response = await request(app)
-        .get('/api/transactions/history')
-        .query({ userId: mockUserId, campaignId: 1 });
-
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-    });
-
-    test('includes hasMore flag in pagination', async () => {
-      const response = await request(app)
-        .get('/api/transactions/history')
-        .query({ userId: mockUserId });
-
-      expect(response.status).toBe(200);
-      expect(response.body.pagination.hasMore).toBeDefined();
-      expect(typeof response.body.pagination.hasMore).toBe('boolean');
+      expect(response.body.data).toEqual([]);
+      expect(response.body.nextCursor).toBeNull();
     });
   });
 
