@@ -1,5 +1,5 @@
 [package]
-name = "governance"
+name = "treasury"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true
