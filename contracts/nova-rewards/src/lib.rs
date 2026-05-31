@@ -41,6 +41,8 @@ use crate::utils::events;
 pub struct StakeRecord {
     pub amount: i128,
     pub staked_at: u64,
+    /// Timestamp of the last reward claim; used to calculate unclaimed yield.
+    pub last_claimed_at: u64,
 }
 
 #[contracttype]
@@ -523,6 +525,10 @@ impl NovaRewardsContract {
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().remove(&DataKey::EmergencyProcedure);
 
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("resumed")),
+            env.ledger().timestamp(),
+        );
         events::emit_resumed(&env, env.ledger().timestamp());
     }
 
@@ -532,6 +538,91 @@ impl NovaRewardsContract {
 
     pub fn get_emergency_procedure(env: Env) -> Option<Symbol> {
         env.storage().instance().get(&DataKey::EmergencyProcedure)
+    }
+
+    // -----------------------------------------------------------------------
+    // Cooldown period (Issue #551)
+    // -----------------------------------------------------------------------
+
+    /// Sets the cooldown duration (in seconds) that must elapse between staking
+    /// and unstaking. Defaults to 0 (no cooldown). Admin only.
+    pub fn set_cooldown_period(env: Env, seconds: u64) {
+        Self::require_admin(&env);
+        env.storage().instance().set(&DataKey::CooldownPeriod, &seconds);
+    }
+
+    /// Returns the configured cooldown period in seconds (0 = no cooldown).
+    pub fn get_cooldown_period(env: Env) -> u64 {
+        env.storage().instance().get(&DataKey::CooldownPeriod).unwrap_or(0)
+    }
+
+    // -----------------------------------------------------------------------
+    // Reward claiming (Issue #551)
+    // -----------------------------------------------------------------------
+
+    /// Claims accrued staking rewards without removing the stake.
+    ///
+    /// Calculates yield from `last_claimed_at` to now, credits it to the
+    /// staker's balance, and resets `last_claimed_at` so the next claim
+    /// starts a fresh accrual window.
+    ///
+    /// # Parameters
+    /// - `staker` – Address claiming rewards (must authorize).
+    ///
+    /// # Returns
+    /// Reward amount credited to the staker's balance.
+    ///
+    /// # Events
+    /// Emits `("claimed", staker)` with data `(reward: i128, timestamp: u64)`.
+    ///
+    /// # Panics
+    /// - `"no active stake found"` if the staker has no open stake.
+    pub fn claim_staking_reward(env: Env, staker: Address) -> i128 {
+        Self::assert_active(&env);
+        staker.require_auth();
+
+        let mut stake_record: StakeRecord = Self::read_stake(&env, &staker)
+            .expect("no active stake found");
+
+        let annual_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnnualRate)
+            .unwrap_or(0);
+
+        let current_time = env.ledger().timestamp();
+        let time_elapsed = if current_time > stake_record.last_claimed_at {
+            current_time - stake_record.last_claimed_at
+        } else {
+            0
+        };
+
+        let reward = if annual_rate > 0 && time_elapsed > 0 {
+            stake_record
+                .amount
+                .checked_mul(annual_rate)
+                .expect("overflow in amount * annual_rate")
+                .checked_mul(time_elapsed as i128)
+                .expect("overflow in * time_elapsed")
+                .checked_div(BASIS_POINTS_DIVISOR * SECONDS_PER_YEAR as i128)
+                .expect("overflow in division")
+        } else {
+            0
+        };
+
+        if reward > 0 {
+            let balance = Self::read_balance(&env, &staker);
+            Self::write_balance(&env, &staker, balance + reward);
+            stake_record.last_claimed_at = current_time;
+            Self::write_stake(&env, &staker, &stake_record);
+        }
+
+        env.events().publish(
+            (symbol_short!("claimed"), staker),
+            (reward, current_time),
+        );
+
+        reward
     }
 
     // -----------------------------------------------------------------------
@@ -822,9 +913,11 @@ impl NovaRewardsContract {
         Self::write_balance(&env, &staker, balance - amount);
         
         // Create stake record
+        let ts = env.ledger().timestamp();
         let stake_record = StakeRecord {
             amount,
-            staked_at: env.ledger().timestamp(),
+            staked_at: ts,
+            last_claimed_at: ts,
         };
         
         // Store stake record
@@ -852,17 +945,23 @@ impl NovaRewardsContract {
         let stake_record: StakeRecord = Self::read_stake(&env, &staker)
             .expect("no active stake found");
         
+        // Enforce configurable cooldown (default 0 = no cooldown)
+        let cooldown: u64 = env.storage().instance().get(&DataKey::CooldownPeriod).unwrap_or(0);
+        if cooldown > 0 && env.ledger().timestamp() < stake_record.staked_at + cooldown {
+            panic!("cooldown period not elapsed");
+        }
+
         // Get current annual rate
         let annual_rate: i128 = env
             .storage()
             .instance()
             .get(&DataKey::AnnualRate)
             .unwrap_or(0);
-        
-        // Calculate time elapsed
+
+        // Time elapsed since last claim (or since initial stake if never claimed)
         let current_time = env.ledger().timestamp();
-        let time_elapsed = if current_time > stake_record.staked_at {
-            current_time - stake_record.staked_at
+        let time_elapsed = if current_time > stake_record.last_claimed_at {
+            current_time - stake_record.last_claimed_at
         } else {
             0
         };
@@ -916,12 +1015,12 @@ impl NovaRewardsContract {
             .unwrap_or(0);
         
         let current_time = env.ledger().timestamp();
-        let time_elapsed = if current_time > stake_record.staked_at {
-            current_time - stake_record.staked_at
+        let time_elapsed = if current_time > stake_record.last_claimed_at {
+            current_time - stake_record.last_claimed_at
         } else {
             0
         };
-        
+
         if annual_rate > 0 && time_elapsed > 0 {
             stake_record
                 .amount
