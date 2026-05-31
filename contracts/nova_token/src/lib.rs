@@ -61,7 +61,6 @@ impl NovaToken {
         }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
-        Ok(())
     }
 
     // ========================================
@@ -516,10 +515,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "AlreadyInitialized")]
+    #[should_panic(expected = "already initialized")]
     fn test_reinitialize_is_blocked() {
         let (env, admin, client) = setup();
-        // second call must revert with AlreadyInitialized
         client.initialize(&admin);
     }
 }
