@@ -1,10 +1,12 @@
 'use client';
 
+import AnimatedCounter from '../ui/AnimatedCounter';
+
 const CARDS = [
-  { key: 'totalIssued',   label: 'Total Issued',    icon: '🎁', fmt: (v) => v.toLocaleString() + ' NOVA' },
-  { key: 'totalRedeemed', label: 'Total Redeemed',  icon: '✅', fmt: (v) => v.toLocaleString() + ' NOVA' },
-  { key: 'activeUsers',   label: 'Active Users',    icon: '👥', fmt: (v) => v.toLocaleString() },
-  { key: 'campaignCount', label: 'Campaigns',       icon: '🚀', fmt: (v) => v.toString() },
+  { key: 'totalIssued',   label: 'Total Issued',   icon: '🎁', fmt: (v) => `${Math.round(v).toLocaleString()} NOVA` },
+  { key: 'totalRedeemed', label: 'Total Redeemed', icon: '✅', fmt: (v) => `${Math.round(v).toLocaleString()} NOVA` },
+  { key: 'activeUsers',   label: 'Active Users',   icon: '👥', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'campaignCount', label: 'Campaigns',      icon: '🚀', fmt: (v) => String(Math.round(v)) },
 ];
 
 /**
@@ -24,7 +26,9 @@ export default function KpiCards({ kpis, loading }) {
             {loading ? (
               <div className="skeleton-block" style={{ height: '1.8rem', width: '70%', margin: '0 auto 0.4rem' }} />
             ) : (
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)' }}>{fmt(stat.value)}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)' }}>
+                <AnimatedCounter value={stat.value} format={fmt} />
+              </div>
             )}
             {!loading && stat.change !== 0 && (
               <div style={{ fontSize: '0.75rem', color: positive ? 'var(--success)' : 'var(--error)', marginTop: '0.25rem' }}>
