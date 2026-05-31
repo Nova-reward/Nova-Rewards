@@ -1,19 +1,17 @@
-# Nova Rewards Monitoring & Alerting
+# Nova Rewards — Monitoring Stack
 
-Complete observability stack for Nova Rewards platform with Prometheus, Grafana, and comprehensive alerting.
-
-## Architecture
+Prometheus + Grafana + Alertmanager observability for the Nova Rewards platform.
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
 │   Backend   │────▶│  Prometheus  │────▶│   Grafana   │
-│  (Metrics)  │     │  (Scraping)  │     │ (Dashboards)│
+│  :4000      │     │  :9090       │     │  :3000      │
 └─────────────┘     └──────┬───────┘     └─────────────┘
                            │
                            ▼
                     ┌──────────────┐
                     │ Alertmanager │
-                    │  (Routing)   │
+                    │  :9093       │
                     └──────┬───────┘
                            │
               ┌────────────┼────────────┐
@@ -23,304 +21,388 @@ Complete observability stack for Nova Rewards platform with Prometheus, Grafana,
          └────────┘  └─────────┘  └──────────┘
 ```
 
-## Components
+---
 
-### Prometheus
-- **Port**: 9090
-- **Purpose**: Metrics collection and storage
-- **Retention**: 30 days
-- **Scrape Interval**: 15 seconds
+## Starting the Monitoring Stack
 
-### Grafana
-- **Port**: 3000
-- **Purpose**: Visualization and dashboards
-- **Default Credentials**: admin/admin (change on first login)
+### 1. Configure environment
 
-### Alertmanager
-- **Port**: 9093
-- **Purpose**: Alert routing and notification
-- **Integrations**: Slack, PagerDuty, Email
-
-### Exporters
-- **Node Exporter** (9100): System metrics (CPU, memory, disk)
-- **PostgreSQL Exporter** (9187): Database metrics
-- **Redis Exporter** (9121): Cache metrics
-- **Nginx Exporter** (9113): Web server metrics
-- **Blackbox Exporter** (9115): Endpoint health checks
-
-## Quick Start
-
-### 1. Setup Environment
 ```bash
 cd monitoring
 cp .env.example .env
-# Edit .env with your configuration
 ```
 
-### 2. Start Monitoring Stack
+Edit `.env` and fill in the required values:
+
+| Variable | Description |
+|----------|-------------|
+| `SLACK_WEBHOOK_URL` | Incoming webhook URL for Slack notifications |
+| `PAGERDUTY_SERVICE_KEY` | PagerDuty Events API v2 integration key |
+| `GRAFANA_ADMIN_USER` | Grafana admin username (default: `admin`) |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana admin password (default: `admin` — **change this**) |
+| `POSTGRES_USER` | PostgreSQL user for the postgres-exporter |
+| `POSTGRES_PASSWORD` | PostgreSQL password for the postgres-exporter |
+| `POSTGRES_DB` | Database name (default: `nova_rewards`) |
+| `REDIS_PASSWORD` | Redis password (leave blank if none) |
+| `ENVIRONMENT` | Label applied to all metrics (`production`, `staging`, etc.) |
+
+### 2. Start all monitoring services
+
 ```bash
-# Start all monitoring services
-docker-compose -f docker-compose.monitoring.yml up -d
-
-# Verify services are running
-docker-compose -f docker-compose.monitoring.yml ps
+docker compose -f docker-compose.monitoring.yml up -d
 ```
 
-### 3. Access Dashboards
-- **Grafana**: http://localhost:3000
-- **Prometheus**: http://localhost:9090
-- **Alertmanager**: http://localhost:9093
+Verify every container is healthy:
 
-### 4. Configure Alerts
-Edit `alertmanager/alertmanager.yml` with your notification channels:
-- Slack webhook URL
-- PagerDuty integration key
-- Email SMTP settings
+```bash
+docker compose -f docker-compose.monitoring.yml ps
+```
 
-## Metrics Collected
+Expected output — all services should show `Up`:
 
-### Application Metrics
-- HTTP request duration (histogram)
-- Request rate by endpoint
-- Error rate by status code
-- Active requests
+| Container | Port | Purpose |
+|-----------|------|---------|
+| `nova-prometheus` | 9090 | Metrics collection & storage |
+| `nova-grafana` | 3000 | Dashboards & visualisation |
+| `nova-alertmanager` | 9093 | Alert routing & notifications |
+| `nova-node-exporter` | 9100 | Host CPU / memory / disk |
+| `nova-postgres-exporter` | 9187 | PostgreSQL metrics |
+| `nova-redis-exporter` | 9121 | Redis metrics |
+| `nova-nginx-exporter` | 9113 | Nginx metrics |
+| `nova-blackbox-exporter` | 9115 | Endpoint health probes |
 
-### System Metrics
-- CPU usage
-- Memory usage
-- Disk space
-- Network I/O
+### 3. Open the UIs
 
-### Database Metrics
-- Connection count
-- Query duration
-- Transaction rate
-- Cache hit ratio
-- Database size
+| Service | URL | Default credentials |
+|---------|-----|---------------------|
+| Grafana | http://localhost:3000 | `admin` / `admin` (change on first login) |
+| Prometheus | http://localhost:9090 | — |
+| Alertmanager | http://localhost:9093 | — |
 
-### Cache Metrics
-- Redis memory usage
-- Cache hit/miss rate
-- Eviction rate
-- Connection count
+### 4. Stop the stack
 
-## Alerts Configured
+```bash
+# Stop containers, keep volumes
+docker compose -f docker-compose.monitoring.yml down
 
-### Critical Alerts
-- **HighErrorRate**: 5xx errors > 5% for 5 minutes
-- **ServiceDown**: Service unreachable for 2 minutes
-- **PostgreSQLDown**: Database unreachable for 2 minutes
-- **RedisDown**: Cache unreachable for 2 minutes
-- **EndpointDown**: Health check failing for 5 minutes
+# Stop and wipe all data
+docker compose -f docker-compose.monitoring.yml down -v
+```
 
-### Warning Alerts
-- **HighLatency**: 95th percentile > 1 second for 10 minutes
-- **HighCPUUsage**: CPU > 80% for 10 minutes
-- **HighMemoryUsage**: Memory > 85% for 10 minutes
-- **HighDatabaseConnections**: Connections > 80% of max
-- **HighRedisMemory**: Redis memory > 90%
-- **DiskSpaceLow**: Disk space < 15%
-- **SSLCertificateExpiringSoon**: Certificate expires in < 7 days
-
-## Runbooks
-
-Detailed incident response procedures are available in the `runbooks/` directory:
-
-- [High Error Rate](./runbooks/high-error-rate.md)
-- [Service Down](./runbooks/service-down.md)
-- [High Latency](./runbooks/high-latency.md)
-- [PostgreSQL Down](./runbooks/postgres-down.md)
-- [Redis Down](./runbooks/redis-down.md)
+---
 
 ## Grafana Dashboards
 
-### Nova Rewards Overview
-- Request rate and latency
-- Error rate trends
-- System resource usage
-- Database and cache metrics
+Dashboards are provisioned automatically from `grafana/dashboards/`. No manual import is needed.
 
-### System Metrics
-- CPU, memory, disk usage
-- Network I/O
-- Process metrics
+### Nova Rewards — Overview (`nova-overview.json`)
 
-### Database Performance
-- Query performance
-- Connection pool status
-- Slow queries
-- Database size trends
+The primary operational dashboard. Panels:
 
-### Cache Performance
-- Redis memory usage
-- Hit/miss ratio
-- Eviction rate
-- Command statistics
+| Panel | Query | What it shows |
+|-------|-------|---------------|
+| Request Rate | `sum(rate(http_request_duration_seconds_count[5m])) by (route)` | Requests/sec broken down by API route |
+| Error Rate | `sum(rate(…{status_code=~"5.."}[5m])) / sum(rate(…[5m]))` | Percentage of 5xx responses |
+| p95 Latency | `histogram_quantile(0.95, sum(rate(…_bucket[5m])) by (le, route))` | 95th-percentile response time per route |
+| Active Requests | `sum(http_requests_in_flight)` | Requests currently being processed |
+| CPU Usage | `100 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100` | Host CPU % |
+| Memory Usage | `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100` | Host memory % |
+| DB Connections | `pg_stat_database_numbackends / pg_settings_max_connections * 100` | Connection pool % |
+| Redis Memory | `redis_memory_used_bytes / redis_memory_max_bytes * 100` | Redis memory % |
 
-## Integration with Existing Infrastructure
+**Access:** http://localhost:3000 → Dashboards → Nova Rewards — Overview
 
-### AWS CloudWatch
-The monitoring stack complements existing CloudWatch monitoring:
-- CloudWatch: Infrastructure-level metrics (ALB, EC2, RDS)
-- Prometheus: Application-level metrics (API, business logic)
+> **Screenshots:** The Grafana UI renders live data. To capture reference screenshots, open the dashboard, set the time range to *Last 1 hour*, and use the camera icon (top-right) to export a PNG.
 
-### Docker Compose Integration
+### Importing additional dashboards
+
+1. Download a community dashboard JSON from [grafana.com/grafana/dashboards](https://grafana.com/grafana/dashboards).
+2. Place the `.json` file in `grafana/dashboards/`.
+3. Restart Grafana: `docker compose -f docker-compose.monitoring.yml restart grafana`
+
+The provisioning config in `grafana/provisioning/dashboards/dashboard.yml` picks up all JSON files in that directory automatically.
+
+---
+
+## Prometheus Scrape Targets & Metrics
+
+Configuration file: `prometheus/prometheus.yml`  
+Scrape interval: **15 s** | Retention: **30 days**
+
+### Scrape targets
+
+| Job | Target | Key metrics |
+|-----|--------|-------------|
+| `prometheus` | `localhost:9090` | `prometheus_*` (self-monitoring) |
+| `nova-backend` | `backend:4000/metrics` | `http_request_duration_seconds`, `http_requests_in_flight`, `reward_*` |
+| `node-exporter` | `node-exporter:9100` | `node_cpu_seconds_total`, `node_memory_*`, `node_filesystem_*`, `node_network_*` |
+| `postgres` | `postgres-exporter:9187` | `pg_up`, `pg_stat_database_*`, `pg_settings_max_connections` |
+| `redis` | `redis-exporter:9121` | `redis_up`, `redis_memory_used_bytes`, `redis_keyspace_hits_total`, `redis_keyspace_misses_total` |
+| `nginx` | `nginx-exporter:9113` | `nginx_connections_*`, `nginx_http_requests_total` |
+| `blackbox` | `blackbox-exporter:9115` | `probe_success`, `probe_duration_seconds`, `probe_ssl_earliest_cert_expiry` |
+| `blackbox-uptime` | `blackbox-exporter:9115` | Same as above — probes public-facing URLs for SLA tracking |
+
+### Application metrics exposed by the backend (`/metrics`)
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `http_request_duration_seconds` | Histogram | Request latency, labelled by `route`, `method`, `status_code` |
+| `http_requests_in_flight` | Gauge | Concurrent requests being handled |
+| `http_requests_total` | Counter | Total requests, labelled by `route`, `method`, `status_code` |
+| `reward_issuances_total` | Counter | Reward issuance attempts, labelled by `status` (`success`/`failed`) |
+| `reward_queue_depth` | Gauge | Pending jobs in the reward issuance queue |
+| `nova_backup_last_success_timestamp_seconds` | Gauge | Unix timestamp of the last successful DB backup |
+| `nova_backup_last_exit_code` | Gauge | Exit code of the last backup job (`0` = success) |
+| `nova_backup_duration_seconds` | Gauge | Duration of the last backup job |
+
+Verify targets are being scraped:
+
+```bash
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
+```
+
+---
+
+## Alertmanager Configuration & Notification Channels
+
+Configuration file: `alertmanager/alertmanager.yml`
+
+### Routing
+
+| Condition | Receiver | Channel |
+|-----------|----------|---------|
+| `severity=critical` | `pagerduty-critical` + `slack-critical` | PagerDuty page **and** `#nova-critical` |
+| `severity=warning` | `slack-warnings` | `#nova-alerts` |
+| `component=database` | `slack-database` | `#nova-database` |
+| `component=infrastructure` | `slack-infrastructure` | `#nova-infrastructure` |
+| (default) | `default` | `#nova-alerts` |
+
+Alerts are grouped by `alertname`, `cluster`, and `service`. Resolved notifications are sent for all Slack receivers.
+
+### Inhibition rules
+
+- A `critical` alert suppresses the matching `warning` alert on the same `instance`.
+- A `ServiceDown` alert suppresses all other alerts on the same `instance` to prevent noise.
+
+### Configuring Slack
+
+1. Create an [Incoming Webhook](https://api.slack.com/messaging/webhooks) in your Slack workspace.
+2. Set `SLACK_WEBHOOK_URL` in `monitoring/.env`.
+3. Reload Alertmanager:
+   ```bash
+   curl -X POST http://localhost:9093/-/reload
+   ```
+
+### Configuring PagerDuty
+
+1. In PagerDuty, create a service with **Events API v2** integration.
+2. Copy the integration key and set `PAGERDUTY_SERVICE_KEY` in `monitoring/.env`.
+3. Reload Alertmanager (same command as above).
+
+### Configuring Email
+
+Add an `email_configs` block to the relevant receiver in `alertmanager/alertmanager.yml`:
+
 ```yaml
-# In your main docker-compose.yml, add monitoring network
-networks:
-  monitoring:
-    external: true
-    name: nova-rewards_monitoring
-
-# Connect backend to monitoring network
-services:
-  backend:
-    networks:
-      - default
-      - monitoring
+receivers:
+  - name: 'slack-critical'
+    slack_configs: [...]          # existing
+    email_configs:
+      - to: 'oncall@example.com'
+        from: 'alerts@example.com'
+        smarthost: 'smtp.example.com:587'
+        auth_username: 'alerts@example.com'
+        auth_password: '${SMTP_PASSWORD}'
+        require_tls: true
 ```
 
-### Kubernetes Integration (if applicable)
-```yaml
-# ServiceMonitor for Prometheus Operator
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: nova-backend
-spec:
-  selector:
-    matchLabels:
-      app: nova-backend
-  endpoints:
-  - port: metrics
-    path: /metrics
-```
+### Testing alerts
 
-## Maintenance
+Send a synthetic alert to Alertmanager to verify routing:
 
-### Backup Prometheus Data
 ```bash
-# Backup Prometheus data
-docker run --rm -v nova-rewards_prometheus_data:/data -v $(pwd):/backup \
-  alpine tar czf /backup/prometheus-backup-$(date +%Y%m%d).tar.gz /data
-```
-
-### Update Alert Rules
-```bash
-# Edit alert rules
-vim prometheus/rules/alerts.yml
-
-# Reload Prometheus configuration
-curl -X POST http://localhost:9090/-/reload
-```
-
-### Test Alerts
-```bash
-# Trigger test alert
 curl -X POST http://localhost:9093/api/v1/alerts \
   -H "Content-Type: application/json" \
   -d '[{
     "labels": {"alertname": "TestAlert", "severity": "warning"},
-    "annotations": {"summary": "Test alert"}
+    "annotations": {"summary": "Test alert — routing check"}
   }]'
 ```
 
+Use the helper script for a more complete test:
+
+```bash
+bash monitoring/scripts/test-alerts.sh
+```
+
+---
+
+## Adding New Metrics and Alerts
+
+### 1. Expose a metric from the backend
+
+In `novaRewards/backend/`, use the `prom-client` library:
+
+```js
+const { Counter, Histogram, register } = require('prom-client');
+
+// Counter example
+const myCounter = new Counter({
+  name: 'nova_my_event_total',
+  help: 'Total number of my events',
+  labelNames: ['status'],
+});
+
+// Histogram example
+const myHistogram = new Histogram({
+  name: 'nova_my_operation_duration_seconds',
+  help: 'Duration of my operation in seconds',
+  buckets: [0.05, 0.1, 0.5, 1, 2, 5],
+});
+
+// Increment / observe in your handler
+myCounter.inc({ status: 'success' });
+myHistogram.observe(durationInSeconds);
+```
+
+The `/metrics` endpoint is already wired to `register.metrics()` — no additional setup needed.
+
+**Naming conventions:**
+- Prefix all custom metrics with `nova_`.
+- Use `_total` suffix for counters, `_seconds` for durations, `_bytes` for sizes.
+- Keep label cardinality low — avoid user IDs or request IDs as label values.
+
+### 2. Verify the metric appears in Prometheus
+
+```bash
+# Check the raw scrape output
+curl -s http://backend:4000/metrics | grep nova_my_
+
+# Query via Prometheus API
+curl -G 'http://localhost:9090/api/v1/query' \
+  --data-urlencode 'query=nova_my_event_total'
+```
+
+### 3. Add an alert rule
+
+Create or edit a file in `prometheus/rules/`. Group related alerts together:
+
+```yaml
+# prometheus/rules/my-feature-alerts.yml
+groups:
+  - name: my_feature_alerts
+    interval: 30s
+    rules:
+      - alert: MyEventFailureRateHigh
+        expr: |
+          rate(nova_my_event_total{status="failed"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "My event failure rate is elevated"
+          description: "Failure rate is {{ $value | humanize }}/s (threshold: 0.5/s)"
+          runbook: "https://github.com/barry01-hash/Nova-Rewards/blob/main/monitoring/runbooks/my-event.md"
+```
+
+Reload Prometheus to pick up the new rule:
+
+```bash
+curl -X POST http://localhost:9090/-/reload
+```
+
+Verify the rule loaded without errors:
+
+```bash
+curl -s http://localhost:9090/api/v1/rules | jq '.data.groups[].rules[] | select(.name=="MyEventFailureRateHigh")'
+```
+
+### 4. Add a recording rule (optional, for expensive queries)
+
+```yaml
+# prometheus/rules/recording-rules.yml  (append to existing file)
+groups:
+  - name: nova_recording_rules
+    rules:
+      - record: job:nova_my_event_total:rate5m
+        expr: sum(rate(nova_my_event_total[5m])) by (status)
+```
+
+Use the recorded metric name in dashboards and alerts instead of the raw expression.
+
+### 5. Add a Grafana panel
+
+1. Open the target dashboard in Grafana.
+2. Click **Add panel** → **Add new panel**.
+3. Enter the PromQL expression in the query editor.
+4. Save the dashboard and export the updated JSON to `grafana/dashboards/`.
+
+---
+
 ## Troubleshooting
 
-### Prometheus Not Scraping Targets
+**Prometheus not scraping a target**
 ```bash
-# Check Prometheus targets
-curl http://localhost:9090/api/v1/targets
+# List all targets and their health
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job:.labels.job, health:.health, lastError:.lastError}'
 
-# Check network connectivity
-docker exec -it nova-prometheus wget -O- http://backend:4000/metrics
+# Test connectivity from inside the Prometheus container
+docker exec nova-prometheus wget -qO- http://backend:4000/metrics | head
 ```
 
-### Grafana Not Showing Data
+**Grafana shows "No data"**
 ```bash
-# Verify Prometheus datasource
+# Confirm the Prometheus datasource is reachable
 curl http://localhost:3000/api/datasources
 
-# Test Prometheus query
-curl -G 'http://localhost:9090/api/v1/query' \
-  --data-urlencode 'query=up'
+# Run a simple query directly against Prometheus
+curl -G 'http://localhost:9090/api/v1/query' --data-urlencode 'query=up'
 ```
 
-### Alerts Not Firing
+**Alerts not firing / not reaching Slack or PagerDuty**
 ```bash
-# Check alert rules
-curl http://localhost:9090/api/v1/rules
+# Check evaluated alert rules
+curl -s http://localhost:9090/api/v1/rules | jq '.data.groups[].rules[] | {name:.name, state:.state}'
 
-# Check Alertmanager status
+# Check Alertmanager status and config
 curl http://localhost:9093/api/v1/status
 
-# View Alertmanager logs
-docker logs nova-alertmanager
+# Tail Alertmanager logs
+docker logs nova-alertmanager --tail 50
 ```
 
-## Best Practices
-
-### 1. Alert Fatigue Prevention
-- Set appropriate thresholds
-- Use inhibition rules
-- Group related alerts
-- Set proper evaluation periods
-
-### 2. Dashboard Organization
-- Create role-specific dashboards
-- Use consistent naming conventions
-- Add documentation panels
-- Set appropriate time ranges
-
-### 3. Metric Naming
-- Follow Prometheus naming conventions
-- Use consistent labels
-- Document custom metrics
-- Avoid high-cardinality labels
-
-### 4. Performance
-- Limit scrape frequency for expensive metrics
-- Use recording rules for complex queries
-- Set appropriate retention periods
-- Monitor Prometheus resource usage
-
-## Security
-
-### 1. Access Control
-```yaml
-# Enable Grafana authentication
-GF_AUTH_ANONYMOUS_ENABLED=false
-GF_AUTH_BASIC_ENABLED=true
-```
-
-### 2. Network Security
-```yaml
-# Restrict Prometheus access
-- "127.0.0.1:9090:9090"  # Only localhost
-
-# Use reverse proxy with authentication
-```
-
-### 3. Secrets Management
+**Reload configs without restarting containers**
 ```bash
-# Use environment variables for sensitive data
-# Never commit credentials to git
-# Rotate credentials regularly
+curl -X POST http://localhost:9090/-/reload   # Prometheus
+curl -X POST http://localhost:9093/-/reload   # Alertmanager
 ```
 
-## Support
+---
 
-For issues or questions:
-- Check runbooks in `runbooks/` directory
-- Review Prometheus logs: `docker logs nova-prometheus`
-- Review Grafana logs: `docker logs nova-grafana`
-- Contact DevOps team: [Contact info]
+## Runbooks
+
+Detailed incident response procedures:
+
+| Alert | Runbook |
+|-------|---------|
+| HighErrorRate | [runbooks/high-error-rate.md](./runbooks/high-error-rate.md) |
+| HighLatency | [runbooks/high-latency.md](./runbooks/high-latency.md) |
+| ServiceDown | [runbooks/service-down.md](./runbooks/service-down.md) |
+| PostgreSQLDown | [runbooks/postgres-down.md](./runbooks/postgres-down.md) |
+| RedisDown | [runbooks/redis-down.md](./runbooks/redis-down.md) |
+| HighCPUUsage | [runbooks/high-cpu.md](./runbooks/high-cpu.md) |
+| HighMemoryUsage | [runbooks/high-memory.md](./runbooks/high-memory.md) |
+| DiskSpaceLow | [runbooks/low-disk-space.md](./runbooks/low-disk-space.md) |
+| HighDatabaseConnections | [runbooks/high-db-connections.md](./runbooks/high-db-connections.md) |
+
+---
 
 ## References
 
-- [Prometheus Documentation](https://prometheus.io/docs/)
-- [Grafana Documentation](https://grafana.com/docs/)
-- [Alertmanager Documentation](https://prometheus.io/docs/alerting/latest/alertmanager/)
-- [Node Exporter](https://github.com/prometheus/node_exporter)
-- [PostgreSQL Exporter](https://github.com/prometheus-community/postgres_exporter)
-- [Redis Exporter](https://github.com/oliver006/redis_exporter)
+- [Prometheus docs](https://prometheus.io/docs/)
+- [Grafana docs](https://grafana.com/docs/)
+- [Alertmanager docs](https://prometheus.io/docs/alerting/latest/alertmanager/)
+- [prom-client (Node.js)](https://github.com/siimon/prom-client)
+- [postgres_exporter](https://github.com/prometheus-community/postgres_exporter)
+- [redis_exporter](https://github.com/oliver006/redis_exporter)
