@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "node ./scripts/frontendSmokeTest.js"
   },
   "dependencies": {
     "@stellar/freighter-api": "^2.0.0",

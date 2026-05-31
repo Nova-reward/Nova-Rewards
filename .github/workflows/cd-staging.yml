@@ -1,0 +1,62 @@
+name: CD Staging
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push-image:
+    name: Build and push staging image
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_NAME: ${{ secrets.REGISTRY_IMAGE_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY_HOST }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Build production image
+        run: |
+          docker build -f novaRewards/Dockerfile novaRewards -t $IMAGE_NAME:${{ github.sha }}
+          docker tag $IMAGE_NAME:${{ github.sha }} $IMAGE_NAME:latest
+      - name: Push image
+        run: |
+          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:latest
+      - name: Export image tag
+        run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy to staging
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Deploy to staging host
+        if: ${{ secrets.STAGING_SSH_HOST && secrets.STAGING_SSH_USER && secrets.STAGING_SSH_KEY }}
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          username: ${{ secrets.STAGING_SSH_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.REGISTRY_IMAGE_NAME }}:${{ needs.build-and-push-image.outputs.IMAGE_TAG }}
+            docker stop nova-rewards || true
+            docker rm nova-rewards || true
+            docker run -d --restart unless-stopped --name nova-rewards -p 3001:3001 ${{ secrets.REGISTRY_IMAGE_NAME }}:${{ needs.build-and-push-image.outputs.IMAGE_TAG }}
+      - name: Run staging smoke test
+        if: ${{ secrets.STAGING_HOST }}
+        run: |
+          curl --fail --silent --show-error https://${{ secrets.STAGING_HOST }}/health
+      - name: Alert on failure
+        if: failure() && secrets.DEPLOY_ALERT_WEBHOOK
+        run: |
+          curl -X POST -H 'Content-Type: application/json' -d '{"text":"Nova Rewards staging deployment failed on main."}' "${{ secrets.DEPLOY_ALERT_WEBHOOK }}"

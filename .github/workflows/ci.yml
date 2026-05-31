@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            novaRewards/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('novaRewards/package-lock.json', 'novaRewards/**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - name: Install dependencies
+        run: cd novaRewards && npm ci
+      - name: Run ESLint
+        run: cd novaRewards && npm run lint
+
+  type-check:
+    name: Type check
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            novaRewards/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('novaRewards/package-lock.json', 'novaRewards/**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/checkouts
+            ~/.cargo/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Install dependencies
+        run: cd novaRewards && npm ci
+      - name: Run TypeScript check
+        run: cd novaRewards && npm run type-check
+
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    needs: type-check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            novaRewards/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('novaRewards/package-lock.json', 'novaRewards/**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - name: Install dependencies
+        run: cd novaRewards && npm ci
+      - name: Run backend tests
+        run: cd novaRewards && npm run test:backend
+
+  frontend-tests:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    needs: backend-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            novaRewards/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('novaRewards/package-lock.json', 'novaRewards/**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - name: Install dependencies
+        run: cd novaRewards && npm ci
+      - name: Run frontend smoke tests
+        run: cd novaRewards && npm run test:frontend
+
+  contract-tests:
+    name: Contract tests
+    runs-on: ubuntu-latest
+    needs: frontend-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            novaRewards/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('novaRewards/package-lock.json', 'novaRewards/**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+      - name: Install dependencies
+        run: cd novaRewards && npm ci
+      - name: Run contract package tests
+        run: cd novaRewards && npm run test:blockchain

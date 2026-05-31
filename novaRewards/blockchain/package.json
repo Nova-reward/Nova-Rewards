@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "NovaRewards Stellar blockchain layer",
   "main": "stellarService.js",
+  "scripts": {
+    "test": "node ./scripts/blockchainSmokeTest.js"
+  },
   "dependencies": {
     "dotenv": "^16.4.5",
     "stellar-sdk": "^12.3.0"

@@ -10,8 +10,18 @@
   ],
   "scripts": {
     "test": "cd backend && npm test",
+    "lint": "eslint . --ext .js,.jsx",
+    "type-check": "tsc --project tsconfig.json",
+    "build": "cd frontend && npm run build",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && node ./scripts/frontendSmokeTest.js",
+    "test:blockchain": "cd blockchain && node ./scripts/blockchainSmokeTest.js",
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
     "migrate": "node database/migrate.js"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "typescript": "^5.6.0"
   }
 }
