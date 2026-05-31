@@ -1,254 +1,76 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useTransactions } from '../lib/useApi';
+import { useCallback, useRef } from 'react';
+import { useInfiniteScroll, useSentinel } from '../hooks/useInfiniteScroll';
+import { useScrollRestoration } from '../hooks/useScrollRestoration';
+import { transactionAPI } from '../lib/transactionAPI';
 import EmptyState from './EmptyState';
 import { SkeletonTransactionHistory } from './Skeleton';
 import MobileCardList from './MobileCardList';
 
-const PAGE_SIZE = 20;
-const TRANSACTION_TYPES = ['all', 'issuance', 'redemption', 'transfer'];
+const PAGE_SIZE = 25;
 
 /**
- * Cursor-based pagination utilities
- */
-const PaginationManager = {
-  createCursor: (id, timestamp) => Buffer.from(`${id}:${timestamp}`).toString('base64'),
-  decodeCursor: (cursor) => {
-    try {
-      const [id, timestamp] = Buffer.from(cursor, 'base64').toString().split(':');
-      return { id, timestamp };
-    } catch {
-      return null;
-    }
-  },
-};
-
-/**
- * CSV Export utility
- */
-function exportToCSV(transactions) {
-  const headers = ['Date', 'Type', 'Amount', 'Campaign', 'Status', 'TX Hash', 'Explorer Link'];
-  const rows = transactions.map((tx) => [
-    new Date(tx.createdAt).toISOString(),
-    tx.type,
-    tx.amount,
-    tx.campaign?.name || 'N/A',
-    tx.status,
-    tx.txHash || 'N/A',
-    tx.txHash ? `https://stellar.expert/explorer/public/tx/${tx.txHash}` : 'N/A',
-  ]);
-
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(row =>
-      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
-    ),
-  ].join('\n');
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', `transaction-history-${Date.now()}.csv`);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
-/**
- * Paginated Transaction History Component
- * Features:
- * - Cursor-based pagination (20 transactions per page)
- * - Filters: type, date range, campaign
- * - CSV export functionality
- * - Stellar Explorer integration
- * - Empty state handling
+ * TransactionHistory — infinite scroll with cursor-based pagination.
+ * Closes #842
  */
 export default function TransactionHistory({ userId }) {
-  const [currentPage, setCurrentPage] = useState(0);
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [campaignFilter, setCampaignFilter] = useState('all');
-  const [allTransactions, setAllTransactions] = useState([]);
-  const [campaigns, setCampaigns] = useState([]);
-  const [isExporting, setIsExporting] = useState(false);
+  useScrollRestoration('history');
 
-  // Build filter params
-  const filters = {
-    limit: PAGE_SIZE,
-    offset: currentPage * PAGE_SIZE,
-    ...(typeFilter !== 'all' && { type: typeFilter }),
-    ...(startDate && { dateFrom: startDate }),
-    ...(endDate && { dateTo: endDate }),
-    ...(campaignFilter !== 'all' && { campaignId: campaignFilter }),
-  };
+  // Cursors indexed by page number so useInfiniteScroll can re-fetch any page
+  const cursors = useRef({ 1: undefined });
 
-  const { data: transactions, error, isLoading } = useTransactions(userId, filters);
-
-  // Handle filter changes
-  const handleFilterReset = useCallback(() => {
-    setCurrentPage(0);
-  }, []);
-
-  useEffect(() => {
-    handleFilterReset();
-  }, [typeFilter, startDate, endDate, campaignFilter, handleFilterReset]);
-
-  // Handle CSV export
-  const handleExportCSV = async () => {
-    setIsExporting(true);
-    try {
-      // Fetch all transactions without pagination for export
-      const allData = await fetch(
-        `/api/transactions?userId=${userId}&limit=10000&type=${typeFilter}${
-          startDate ? `&dateFrom=${startDate}` : ''
-        }${endDate ? `&dateTo=${endDate}` : ''}${
-          campaignFilter !== 'all' ? `&campaignId=${campaignFilter}` : ''
-        }`
-      ).then(r => r.json());
-
-      if (allData.data) {
-        exportToCSV(allData.data);
+  const fetchPage = useCallback(
+    async (page) => {
+      const cursor = cursors.current[page];
+      const res = await transactionAPI.getTransactionsCursor(userId, {
+        limit: PAGE_SIZE,
+        cursor,
+      });
+      // Store the cursor for the next page
+      if (res.nextCursor) {
+        cursors.current[page + 1] = res.nextCursor;
       }
-    } catch (err) {
-      console.error('Export failed:', err);
-    } finally {
-      setIsExporting(false);
-    }
-  };
+      return {
+        items: res.data ?? [],
+        hasMore: !!res.nextCursor,
+      };
+    },
+    [userId]
+  );
 
-  if (error) {
+  const { items, loading, error, hasMore, loadMore, retry } = useInfiniteScroll(fetchPage);
+
+  const sentinelRef = useSentinel(loadMore, {
+    enabled: hasMore && !loading && !error,
+    rootMargin: '200px',
+  });
+
+  if (error && items.length === 0) {
     return (
-      <div className="error-container" style={{ padding: '2rem', textAlign: 'center' }}>
-        <p className="error-message">Failed to load transactions: {error.message}</p>
+      <div className="p-8 text-center">
+        <p className="text-red-500 mb-4">Failed to load transactions: {error}</p>
+        <button
+          onClick={retry}
+          className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }
 
   return (
     <div className="transaction-history-container" style={{ padding: '1.5rem' }}>
-      {/* Header */}
-      <div className="history-header" style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1rem' }}>
-          Transaction History
-        </h2>
+      <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem' }}>
+        Transaction History
+      </h2>
 
-        {/* Filter Controls */}
-        <div
-          className="filter-controls"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '1rem',
-            marginBottom: '1.5rem',
-          }}
-        >
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="filter-select"
-            style={{
-              padding: '0.5rem',
-              borderRadius: '0.375rem',
-              border: '1px solid #d1d5db',
-            }}
-          >
-            <option value="all">All Types</option>
-            {TRANSACTION_TYPES.slice(1).map((type) => (
-              <option key={type} value={type}>
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </option>
-            ))}
-          </select>
+      {/* Initial skeleton */}
+      {loading && items.length === 0 && <SkeletonTransactionHistory rows={5} />}
 
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="filter-input"
-            style={{
-              padding: '0.5rem',
-              borderRadius: '0.375rem',
-              border: '1px solid #d1d5db',
-            }}
-          />
-
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="filter-input"
-            style={{
-              padding: '0.5rem',
-              borderRadius: '0.375rem',
-              border: '1px solid #d1d5db',
-            }}
-          />
-
-          <select
-            value={campaignFilter}
-            onChange={(e) => setCampaignFilter(e.target.value)}
-            className="filter-select"
-            style={{
-              padding: '0.5rem',
-              borderRadius: '0.375rem',
-              border: '1px solid #d1d5db',
-            }}
-          >
-            <option value="all">All Campaigns</option>
-            {campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>
-                {campaign.name}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={handleExportCSV}
-            disabled={isExporting}
-            className="btn btn-primary"
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.375rem',
-              backgroundColor: '#3b82f6',
-              color: '#fff',
-              cursor: isExporting ? 'not-allowed' : 'pointer',
-              opacity: isExporting ? 0.6 : 1,
-            }}
-          >
-            {isExporting ? 'Exporting...' : 'Export CSV'}
-          </button>
-        </div>
-      </div>
-
-      {/* Transaction Table / Card List */}
-      {isLoading ? (
-        <SkeletonTransactionHistory rows={5} />
-      ) : transactions && transactions.length > 0 ? (
-        <div className="mb-8">
-          <MobileCardList
-            columns={[
-              { key: 'type',     label: 'Type',     render: (v) => <span className="font-semibold capitalize">{v}</span> },
-              { key: 'amount',   label: 'Amount',   render: (v) => <span className="font-medium">{v}</span> },
-              { key: 'campaign', label: 'Campaign', render: (v) => v?.name || 'N/A' },
-              { key: 'createdAt',label: 'Date',     render: (v) => new Date(v).toLocaleDateString() },
-              { key: 'status',   label: 'Status',   render: (v) => <span className="capitalize font-semibold">{v}</span> },
-              {
-                key: 'txHash',
-                label: 'Explorer',
-                render: (v) => v
-                  ? <a href={`https://stellar.expert/explorer/public/tx/${v}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 font-medium">View</a>
-                  : '—',
-              },
-            ]}
-            data={transactions}
-            emptyMessage="No transactions found."
-          />
-        </div>
-      ) : (
+      {/* Empty state */}
+      {!loading && items.length === 0 && (
         <EmptyState
           icon="transactions"
           title="No transactions yet"
@@ -256,75 +78,113 @@ export default function TransactionHistory({ userId }) {
         />
       )}
 
-      {/* Pagination Controls */}
-      {transactions && transactions.length >= PAGE_SIZE && (
+      {/* Transaction list */}
+      {items.length > 0 && (
+        <MobileCardList
+          columns={[
+            {
+              key: 'action_type',
+              label: 'Type',
+              render: (v) => <span className="font-semibold capitalize">{v}</span>,
+            },
+            {
+              key: 'amount',
+              label: 'Amount',
+              render: (v) => <span className="font-medium">{v}</span>,
+            },
+            {
+              key: 'campaign_name',
+              label: 'Campaign',
+              render: (v) => v || 'N/A',
+            },
+            {
+              key: 'timestamp',
+              label: 'Date',
+              render: (v) => new Date(v).toLocaleDateString(),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              render: (v) => <span className="capitalize font-semibold">{v}</span>,
+            },
+            {
+              key: 'tx_hash',
+              label: 'Explorer',
+              render: (v) =>
+                v ? (
+                  <a
+                    href={`https://stellar.expert/explorer/public/tx/${v}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 font-medium"
+                  >
+                    View
+                  </a>
+                ) : (
+                  '—'
+                ),
+            },
+          ]}
+          data={items}
+          emptyMessage="No transactions found."
+        />
+      )}
+
+      {/* Sentinel — triggers next page load when scrolled within 200px */}
+      <div ref={sentinelRef} aria-hidden="true" />
+
+      {/* Loading spinner for subsequent pages */}
+      {loading && items.length > 0 && (
         <div
-          className="pagination-controls"
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '1rem',
-            alignItems: 'center',
-            marginTop: '2rem',
-          }}
+          role="status"
+          aria-label="Loading more transactions"
+          className="flex justify-center py-6"
         >
-          <button
-            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-            disabled={currentPage === 0}
-            className="btn btn-secondary"
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.375rem',
-              border: '1px solid #d1d5db',
-              cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
-              opacity: currentPage === 0 ? 0.5 : 1,
-            }}
+          <svg
+            className="animate-spin h-6 w-6 text-blue-500"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
           >
-            ← Previous
-          </button>
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8H4z"
+            />
+          </svg>
+        </div>
+      )}
 
-          <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-            Page {currentPage + 1}
-          </span>
-
+      {/* Error on subsequent pages */}
+      {error && items.length > 0 && (
+        <div className="flex justify-center py-4 gap-3 items-center">
+          <span className="text-red-500 text-sm">Failed to load more.</span>
           <button
-            onClick={() => setCurrentPage(currentPage + 1)}
-            disabled={transactions.length < PAGE_SIZE}
-            className="btn btn-secondary"
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.375rem',
-              border: '1px solid #d1d5db',
-              cursor: transactions.length < PAGE_SIZE ? 'not-allowed' : 'pointer',
-              opacity: transactions.length < PAGE_SIZE ? 0.5 : 1,
-            }}
+            onClick={retry}
+            className="text-sm px-3 py-1 rounded border border-red-400 text-red-500 hover:bg-red-50"
           >
-            Next →
+            Retry
           </button>
         </div>
       )}
+
+      {/* End of list */}
+      {!hasMore && !loading && items.length > 0 && (
+        <p
+          role="status"
+          className="text-center text-sm text-gray-500 py-6"
+        >
+          All transactions loaded
+        </p>
+      )}
     </div>
   );
-}
-
-/**
- * Helper functions for styling
- */
-function getBadgeColor(type) {
-  const colors = {
-    issuance: '#10b981',
-    redemption: '#f59e0b',
-    transfer: '#3b82f6',
-  };
-  return colors[type] || '#6b7280';
-}
-
-function getStatusColor(status) {
-  const colors = {
-    pending: '#f59e0b',
-    confirmed: '#10b981',
-    failed: '#ef4444',
-    completed: '#10b981',
-  };
-  return colors[status] || '#6b7280';
 }
