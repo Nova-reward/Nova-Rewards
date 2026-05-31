@@ -250,6 +250,24 @@ export default function TokenTransferForm({ onSuccess }) {
       addToast('Requesting wallet signature...', 'info');
 
       const result = await signAndSubmit(tx.toXDR());
+      setTxHash(result.txHash);
+
+      // Record in backend
+      await api.post('/api/transactions/record', {
+        txHash: result.txHash,
+        txType: 'transfer',
+        amount,
+        fromWallet: senderPublicKey,
+        toWallet: recipient,
+      });
+
+      // Refresh balance from API after successful transaction
+      await fetchBalanceFromAPI();
+
+      setStatus('done');
+      setMessage('Transfer successful!');
+      setRecipient('');
+      setAmount('');
       const hash = result.txHash;
       setTxHash(hash);
 
