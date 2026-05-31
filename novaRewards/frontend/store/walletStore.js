@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
 import { connectWallet, isFreighterInstalled, sign, getNetworkPassphrase } from '../lib/freighter';
 import { getNOVABalance, getTransactionHistory } from '../lib/horizonClient';
+import api from '../lib/api';
 
 const STELLAR_NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet';
 
@@ -15,6 +16,7 @@ const ERROR_MESSAGES = {
   sign_rejected: 'You rejected the signing request. Please try again.',
   sign_failed: 'Failed to sign transaction. Please try again.',
   refresh_failed: 'Failed to refresh wallet balance. Please check your connection.',
+  balance_fetch_failed: 'Failed to fetch balance from server. Please check your connection.',
   generic: 'Something went wrong with your wallet. Please try again.',
 };
 
@@ -40,12 +42,35 @@ export const useWalletStore = create(
         walletType: null,
         network: STELLAR_NETWORK,
         balance: '0',
+        balanceLoading: false,
+        balanceError: null,
         transactions: [],
         freighterInstalled: null,
         isLoading: false,
         isSigning: false,
         error: null,
         hydrated: false,
+
+        /**
+         * Fetches balance from the authenticated /api/wallet/balance endpoint.
+         * This is the primary method for getting live balance in the header.
+         * Shows loading skeleton while fetching, error state on failure.
+         */
+        fetchBalanceFromAPI: async () => {
+          set({ balanceLoading: true, balanceError: null }, false, 'wallet/fetchBalanceStart');
+          try {
+            const response = await api.get('/api/wallet/balance');
+            if (response.data?.success) {
+              set({ balance: response.data.balance }, false, 'wallet/fetchBalanceSuccess');
+            } else {
+              set({ balanceError: ERROR_MESSAGES.balance_fetch_failed }, false, 'wallet/fetchBalanceError');
+            }
+          } catch (err) {
+            set({ balanceError: ERROR_MESSAGES.balance_fetch_failed }, false, 'wallet/fetchBalanceError');
+          } finally {
+            set({ balanceLoading: false }, false, 'wallet/fetchBalanceEnd');
+          }
+        },
 
         /**
          * Called after rehydration to refresh balance from the network.

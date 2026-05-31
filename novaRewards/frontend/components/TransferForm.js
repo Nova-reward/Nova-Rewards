@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } from 'stellar-sdk';
 import { signAndSubmit } from '../lib/freighter';
+import { useWalletStore } from '../store/walletStore';
 import api from '../lib/api';
 import TransactionLink from './TransactionLink';
 import ConfirmationModal from './ConfirmationModal';
@@ -16,7 +17,7 @@ const NETWORK_PASSPHRASE =
  * Requirements: 5.1, 5.2, 5.3, 5.6
  */
 export default function TransferForm({ onSuccess }) {
-  const { publicKey: senderPublicKey, balance: senderBalance } = useWalletStore();
+  const { publicKey: senderPublicKey, balance: senderBalance, fetchBalanceFromAPI } = useWalletStore();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');
@@ -88,6 +89,9 @@ export default function TransferForm({ onSuccess }) {
         fromWallet: senderPublicKey,
         toWallet: recipient,
       });
+
+      // Refresh balance from API after successful transaction
+      await fetchBalanceFromAPI();
 
       setStatus('done');
       setMessage('Transfer successful!');
