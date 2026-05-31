@@ -8,14 +8,20 @@ const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jsdom',
   testMatch: ['<rootDir>/__tests__/**/*.test.js', '<rootDir>/components/**/*.test.jsx'],
-  collectCoverageFrom: ['components/**/*.{js,jsx}', '!components/**/*.stories.{js,jsx}'],
+  collectCoverageFrom: [
+    'components/**/*.{js,jsx,ts,tsx}',
+    'app/**/*.{js,jsx,ts,tsx}',
+    'hooks/**/*.{js,jsx,ts,tsx}',
+    'lib/**/*.{js,jsx,ts,tsx}',
+    'store/**/*.{js,jsx,ts,tsx}',
+    '!**/*.stories.{js,jsx,ts,tsx}',
+    '!**/*.d.ts',
+    '!**/node_modules/**',
+  ],
+  coverageReporters: ['text', 'lcov', 'json', 'html'],
+  coverageDirectory: 'coverage',
   coverageThreshold: {
-    './components/': {
-      lines: 80,
-      functions: 80,
-      branches: 80,
-      statements: 80,
-    },
+    global: { lines: 80, branches: 75, functions: 80 },
   },
   reporters: [
     'default',

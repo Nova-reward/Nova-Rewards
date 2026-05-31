@@ -70,3 +70,11 @@ module "ec2" {
   redis_endpoint      = module.elasticache.endpoint
   app_secret_name     = var.app_secret_name
 }
+
+module "cloudwatch" {
+  source = "./modules/cloudwatch"
+
+  environment          = var.environment
+  error_rate_threshold = var.cloudwatch_error_threshold
+  alarm_sns_topic_arn  = var.cloudwatch_alarm_sns_arn
+}

@@ -1,0 +1,1 @@
+{"parameters":[{"in":"query","name":"period","schema":{"type":"string","enum":["weekly","alltime"],"default":"weekly","example":"weekly"}},{"in":"query","name":"limit","schema":{"type":"integer","default":50,"maximum":100,"example":50}}]}

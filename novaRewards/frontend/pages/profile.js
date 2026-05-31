@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
+import VestingSchedule from '../components/VestingSchedule';
 import { withAuth, useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 
@@ -223,6 +224,9 @@ function UserProfileContent() {
             {savingNotif ? 'Saving…' : 'Save Preferences'}
           </button>
         </div>
+
+        {/* ── Vesting Schedule ── */}
+        {user?.id && <VestingSchedule userId={user.id} />}
 
         {/* ── Account Stats ── */}
         <div className="card">

@@ -1,5 +1,16 @@
 'use client';
+/**
+ * Referral Program Page
+ * - Referral link with copy button
+ * - Stats: total referrals, pending, confirmed, rewards earned
+ * - Referred users list with status badges
+ * - Share buttons: Twitter/X, Telegram, WhatsApp
+ * - URL param tracking: stores ?ref= in sessionStorage on landing
+ *
+ * Closes #608
+ */
 
+import { useState, useEffect } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ReferralLink from '../components/ReferralLink';
@@ -37,7 +48,7 @@ function ReferralContent() {
 function Referral() {
   return (
     <ErrorBoundary>
-      <ReferralContent />
+      <ReferralPage />
     </ErrorBoundary>
   );
 }

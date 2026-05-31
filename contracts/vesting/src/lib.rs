@@ -23,6 +23,14 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
+// ── Errors ────────────────────────────────────────────────────────────────────
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 #[contracttype]
 #[derive(Clone)]
@@ -38,6 +46,7 @@ pub struct VestingSchedule {
 #[contracttype]
 pub enum DataKey {
     Admin,
+    Initialized,
     /// Pool balance available for vesting payouts
     PoolBalance,
     /// Composite key: (beneficiary, schedule_id)
@@ -64,8 +73,10 @@ impl VestingContract {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
         }
+        env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::PoolBalance, &0_i128);
+        Ok(())
     }
 
     /// Returns the admin address allowed to manage schedules.
@@ -327,5 +338,13 @@ mod tests {
         env.ledger().set_timestamp(500);
         client.release(&beneficiary, &sid);
         let _ = env.events().all(); // drain; event emission verified via snapshot
+    }
+
+    #[test]
+    #[should_panic(expected = "AlreadyInitialized")]
+    fn test_reinitialize_is_blocked() {
+        let (env, admin, client) = setup();
+        // second call must revert with AlreadyInitialized
+        client.initialize(&admin);
     }
 }
