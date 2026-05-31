@@ -226,6 +226,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "campaign"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -269,6 +276,13 @@ name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
+
+[[package]]
+name = "contract_state"
+version = "1.0.0"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "core-foundation-sys"
@@ -491,6 +505,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "distribution"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -590,6 +611,13 @@ name = "escape-bytes"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bfcf67fea2815c2fc3b90873fae90957be12ff417335dfadc7f52927feb03b2"
+
+[[package]]
+name = "escrow"
+version = "1.0.0"
+dependencies = [
+ "soroban-sdk",
+]
 
 [[package]]
 name = "ethnum"
@@ -788,6 +816,17 @@ name = "indexmap-nostd"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
+
+[[package]]
+name = "integration_tests"
+version = "0.1.0"
+dependencies = [
+ "escrow",
+ "nova-rewards",
+ "nova_token",
+ "reward_pool",
+ "soroban-sdk",
+]
 
 [[package]]
 name = "itertools"
@@ -1043,6 +1082,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom",
+]
+
+[[package]]
+name = "redemption"
+version = "1.0.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]

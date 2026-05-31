@@ -52,7 +52,7 @@ lto = true
 inherits = "release"
 debug-assertions = true
 
-[package.metadata.tarpaulin]
+[workspace.metadata.tarpaulin]
 exclude = ["nova-rewards"]
 out = ["Html", "Lcov"]
 output-dir = "coverage"
