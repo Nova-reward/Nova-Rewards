@@ -358,6 +358,7 @@ impl NovaRewardsContract {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
+        env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::RecoveryAdmin, &admin);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);

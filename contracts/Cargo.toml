@@ -11,6 +11,8 @@ members = [
     "redemption",
     "escrow",
     "contract_state",
+    "distribution",
+    "integration_tests",
 ]
 default-members = [
     "nova_token",
@@ -22,6 +24,8 @@ default-members = [
     "redemption",
     "escrow",
     "contract_state",
+    "distribution",
+    "integration_tests",
 ]
 
 [workspace.package]
@@ -44,3 +48,9 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+
+[package.metadata.tarpaulin]
+exclude = ["nova-rewards"]
+out = ["Html", "Lcov"]
+output-dir = "coverage"
+timeout = "120"

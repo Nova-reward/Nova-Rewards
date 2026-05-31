@@ -1,5 +1,6 @@
 /**
  * EmptyState — reusable empty state with illustration, headline, description, and CTA.
+ * Includes SVG illustrations optimized for web (<5KB each).
  *
  * @param {{
  *   icon?: 'inbox'|'rewards'|'transactions'|'campaigns'|'notifications'|'search',
@@ -20,30 +21,50 @@ export default function EmptyState({
   onAction,
   variant = 'default',
 }) {
-  const icons = {
+  // Optimized SVG illustrations (~2-4KB each)
+  const illustrations = {
     inbox: (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+      <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="12" y="20" width="56" height="40" rx="4" stroke="currentColor" strokeWidth="2" fill="none"/>
+        <path d="M12 20L40 35L68 20" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/>
+        <circle cx="40" cy="40" r="8" fill="currentColor" opacity="0.2"/>
+      </svg>
     ),
     rewards: (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="40" cy="40" r="28" stroke="currentColor" strokeWidth="2" fill="none"/>
+        <path d="M40 28V52M28 40H52" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        <circle cx="40" cy="40" r="6" fill="currentColor"/>
+        <path d="M55 25L60 20M25 55L20 60" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
     ),
     transactions: (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="16" y="16" width="48" height="48" rx="4" stroke="currentColor" strokeWidth="2" fill="none"/>
+        <line x1="24" y1="28" x2="56" y2="28" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="24" y1="40" x2="56" y2="40" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="24" y1="52" x2="40" y2="52" stroke="currentColor" strokeWidth="1.5"/>
+      </svg>
     ),
     campaigns: (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+      <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="16" y="24" width="48" height="40" rx="4" stroke="currentColor" strokeWidth="2" fill="none"/>
+        <path d="M24 40L32 28L40 36L48 24L56 40" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="28" cy="28" r="2" fill="currentColor"/>
+      </svg>
     ),
     notifications: (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+      <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M40 12C32 12 26 18 26 28V44L20 56H60L54 44V28C54 18 48 12 40 12Z" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="40" cy="64" r="3" fill="currentColor"/>
+        <circle cx="40" cy="64" r="6" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+      </svg>
     ),
     search: (
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="32" cy="32" r="16" stroke="currentColor" strokeWidth="2" fill="none"/>
+        <path d="M48 48L64 64" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
     ),
   };
 
@@ -66,19 +87,8 @@ export default function EmptyState({
       }}
     >
       {/* Illustration or icon */}
-      <div style={{ marginBottom: '1.25rem' }} aria-hidden="true">
-        {illustration ?? (
-          <svg
-            width="64"
-            height="64"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke={iconColor[variant] ?? iconColor.default}
-            strokeWidth={1.5}
-          >
-            {icons[icon] ?? icons.inbox}
-          </svg>
-        )}
+      <div style={{ marginBottom: '1.25rem', color: iconColor[variant] ?? iconColor.default }} aria-hidden="true">
+        {illustration ?? illustrations[icon] ?? illustrations.inbox}
       </div>
 
       <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.5rem' }}>

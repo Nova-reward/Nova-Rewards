@@ -1,0 +1,98 @@
+---
+id: authenticate-and-obtain-jwt-tokens
+title: "Authenticate and obtain JWT tokens"
+description: "Authenticate and obtain JWT tokens"
+sidebar_label: "Authenticate and obtain JWT tokens"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVttu4zYQ/RV2nlpAlu1kd4Hqab1BWjjdS5A4u0UDIxlTY4sbitSSlBPX8L8XQ/kib4wkQBd9ql5sUcO5nDNnyCUEnHnIrmFQhwLGCTj6VpMP72y+gGwZX5WjHLLgakpAWhPIBP6EVaWVxKCs6X711vCalwWVyP/CoiLIwE6+kgyQtBxdA5WoNCRQoff31uUct3K2IhcUed7dWOzc+OCUmUECU+tKDJBtfdADlpVmG9RK0tv1eyptCatWiAO+dlsvj2Xtjs/fev8TrOLDCfvKGt/kc9Tr8U9OXjpVccmQwXs7U0b4WkryflrrFP4FPvv1r522DCfWakLTTpsZWSWQY3iBR4wOR/aOzNNY0OKsmPwu1Sd1Nrz6e9j/qIZ+aC5ey5Phm+Fd9efnk7Nf0zSFCNHUkS9+rNPak3u+HNVmVJlAM3LtiK+OVsmP66Kpcj7cGCzp6TIHvJk3aHyR/WWpQhGRtPqwqalLVkwEJQHMS2VYLTsX8csqAekIA+U3GJ4sOMdAnaBK2svjqHf0utPrd/qvR/1edtzLer2/gEUQVIgGVzFKa4HHReTdbwXz6pBGPqNWedSAIOes+681MkXtWSQx+NNkzLep3jTWqwRK8h5nz7B4j1pTGOS5I++F8mI769qInbLPi/VQgQ1k/ceQDU3MREhHOZmgUPv/UduhxhNvDy9uRcZJYiCBJhd2ElAZcfZlJELTopxSKGwOGVTWR1AwFJBBF+tQdDUPckjAk5uT4+NwCbXTkEERQpV1u9pK1IX1ITvu9fpdrBR8n8V7NhE5zUnbqmSiVknbi8+6vC81do6O7tHlPlX2oKtzZ/NaxpfVmLOStVNhcckMNyROCB25eGTvMOYoXEQ0Y16jESTrP79tRsDZl9GjkIxVc0I0kK0xpFxMnS3F7fmny5FogXWbNjw7WaAJg0r9QYtWKtgsJKDYeUGYx0SagQgPHaxU5y4a7KfxYe1QDM6H4o4WwlGoHadhjXA0Uz64Zpj87At7b4Q1kn5JY8ewEC52l5fTTaNtLxMHRnv7frB/CeDUpzaWtO7Ej3aOFw1xnB4kwL3S5N1Pe2nvUTUXp5ejWMnUOhEKEuxCbHxMtJV3suBO1XaBOixEpTHwpE7FQGtRORtIBsoFmbyyyoStRgSKd5HU2OTPciW2uB7wZMTtlpBb0XAllPGBMN/MHZRx7qz52ytjRBiPSMaWJboz+zAcRWJYcSWa1pcXKXYPy21nBXoI3UqjMvGu4OLx3oj5GrhmSKCR8zgBViyvL5cT9HTl9GrFy99qcgvIrscJzNEpnDC/1+NVsulU1j+3ZwYnzdDtjDg6m+u66e/vBjBrvdkxkJKq8KTtuDWOmCyW6Pq6Xdqc9zi85ysz3kMGkICNKETlx7UlaDSzOo5YaHzy8w+rEA0b
+sidebar_class_name: "post api-method"
+info_path: docs/api/novarewards-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Authenticate and obtain JWT tokens"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"post"}
+  path={"/auth/login"}
+  context={"endpoint"}
+>
+</MethodEndpoint>
+
+Authenticate and obtain JWT tokens
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails>
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./authenticate-and-obtain-jwt-tokens.RequestSchema.json")}
+>
+</RequestSchema>
+
+<StatusCodes
+  {...require("./authenticate-and-obtain-jwt-tokens.StatusCodes.json")}
+>
+</StatusCodes>
+
+## Example (cURL)
+
+```bash
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"password"}'
+```
+
+## Example (JavaScript)
+
+```javascript
+const res = await fetch("http://localhost:3001/api/auth/login", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    email: "alice@example.com",
+    password: "password"
+  })
+});
+
+const data = await res.json();
+console.log(data);
+```
+
+## Example (Python)
+
+```python
+import requests
+
+res = requests.post(
+  "http://localhost:3001/api/auth/login",
+  json={
+    "email": "alice@example.com",
+    "password": "password"
+  }
+)
+
+print(res.json())
+```

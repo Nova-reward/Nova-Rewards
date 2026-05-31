@@ -12,7 +12,14 @@ const preview = {
     a11y: {
       config: {},
       options: {
+ feat/storybook-components-setup
+        runOnly: {
+          type: 'tag',
+          values: ['wcag2a', 'wcag2aa'],
+        },
+
         runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] },
+ main
       },
     },
   },

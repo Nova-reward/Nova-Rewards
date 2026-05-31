@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { getTransactions } = require('../db/transactionRepository');
+const { getRewardsHistoryCursor, getTransactionHistory } = require('../db/transactionRepository');
 const { getCampaigns } = require('../db/campaignRepository');
 
 /**
@@ -7,10 +7,10 @@ const { getCampaigns } = require('../db/campaignRepository');
  * /transactions/history:
  *   get:
  *     tags: [Transactions]
- *     summary: Get paginated transaction history
+ *     summary: Get cursor-paginated transaction history
  *     description: |
- *       Retrieve paginated transaction history with filtering support.
- *       Uses offset-based pagination with 20 transactions per page.
+ *       Retrieve transaction history using cursor-based pagination.
+ *       Returns 25 transactions per page by default.
  *     parameters:
  *       - name: userId
  *         in: query
@@ -19,31 +19,15 @@ const { getCampaigns } = require('../db/campaignRepository');
  *         description: User ID
  *       - name: limit
  *         in: query
- *         schema: { type: integer, default: 20, maximum: 100 }
+ *         schema: { type: integer, default: 25, maximum: 100 }
  *         description: Number of transactions per page
- *       - name: offset
+ *       - name: cursor
  *         in: query
- *         schema: { type: integer, default: 0 }
- *         description: Number of transactions to skip
- *       - name: type
- *         in: query
- *         schema: { type: string, enum: [issuance, redemption, transfer] }
- *         description: Filter by transaction type
- *       - name: dateFrom
- *         in: query
- *         schema: { type: string, format: date-time }
- *         description: Filter transactions from this date
- *       - name: dateTo
- *         in: query
- *         schema: { type: string, format: date-time }
- *         description: Filter transactions until this date
- *       - name: campaignId
- *         in: query
- *         schema: { type: integer }
- *         description: Filter by campaign ID
+ *         schema: { type: string }
+ *         description: Opaque cursor from previous response for pagination
  *     responses:
  *       200:
- *         description: Paginated transaction history
+ *         description: Cursor-paginated transaction history
  *         content:
  *           application/json:
  *             schema:
@@ -53,13 +37,7 @@ const { getCampaigns } = require('../db/campaignRepository');
  *                 data:
  *                   type: array
  *                   items: { $ref: '#/components/schemas/Transaction' }
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     limit: { type: integer }
- *                     offset: { type: integer }
- *                     total: { type: integer }
- *                     hasMore: { type: boolean }
+ *                 nextCursor: { type: string, nullable: true }
  *       400:
  *         description: Invalid parameters
  *       401:
@@ -69,7 +47,7 @@ const { getCampaigns } = require('../db/campaignRepository');
  */
 router.get('/history', async (req, res, next) => {
   try {
-    const { userId, limit = 20, offset = 0, type, dateFrom, dateTo, campaignId } = req.query;
+    const { userId, limit = 25, cursor } = req.query;
 
     if (!userId) {
       return res.status(400).json({
@@ -79,44 +57,14 @@ router.get('/history', async (req, res, next) => {
       });
     }
 
-    // Validate pagination parameters
-    const parsedLimit = Math.min(Math.max(1, parseInt(limit) || 20), 100);
-    const parsedOffset = Math.max(0, parseInt(offset) || 0);
+    const parsedLimit = Math.min(Math.max(1, parseInt(limit) || 25), 100);
 
-    // Validate transaction type if provided
-    const validTypes = ['issuance', 'redemption', 'transfer'];
-    if (type && !validTypes.includes(type)) {
-      return res.status(400).json({
-        success: false,
-        error: 'validation_error',
-        message: `Invalid type. Must be one of: ${validTypes.join(', ')}`,
-      });
-    }
-
-    // Build filter object
-    const filters = {
-      userId,
-      limit: parsedLimit,
-      offset: parsedOffset,
-    };
-
-    if (type) filters.type = type;
-    if (dateFrom) filters.dateFrom = new Date(dateFrom);
-    if (dateTo) filters.dateTo = new Date(dateTo);
-    if (campaignId) filters.campaignId = parseInt(campaignId);
-
-    // Fetch transactions with filters
-    const result = await getTransactions(filters);
+    const result = await getRewardsHistoryCursor(userId, { limit: parsedLimit, cursor });
 
     return res.status(200).json({
       success: true,
-      data: result.transactions,
-      pagination: {
-        limit: parsedLimit,
-        offset: parsedOffset,
-        total: result.total,
-        hasMore: parsedOffset + parsedLimit < result.total,
-      },
+      data: result.data,
+      nextCursor: result.nextCursor,
     });
   } catch (error) {
     next(error);
@@ -182,8 +130,8 @@ router.get('/stats', async (req, res, next) => {
     if (dateTo) filters.dateTo = new Date(dateTo);
 
     // Aggregate statistics
-    const result = await getTransactions({ ...filters, limit: 10000, offset: 0 });
-    const transactions = result.transactions;
+    const result = await getTransactionHistory({ ...filters, limit: 10000, page: 1 });
+    const transactions = result.data;
 
     const stats = {
       totalTransactions: transactions.length,
@@ -275,14 +223,14 @@ router.get('/export/csv', async (req, res, next) => {
       });
     }
 
-    const filters = { userId, limit: 10000, offset: 0 };
+    const filters = { userId, limit: 10000, page: 1 };
     if (type) filters.type = type;
     if (dateFrom) filters.dateFrom = new Date(dateFrom);
     if (dateTo) filters.dateTo = new Date(dateTo);
     if (campaignId) filters.campaignId = parseInt(campaignId);
 
-    const result = await getTransactions(filters);
-    const transactions = result.transactions;
+    const result = await getTransactionHistory(filters);
+    const transactions = result.data;
 
     // Build CSV content
     const headers = ['Date', 'Type', 'Amount', 'Campaign', 'Status', 'TX Hash', 'Explorer Link'];

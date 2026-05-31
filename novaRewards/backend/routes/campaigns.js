@@ -17,6 +17,11 @@ const {
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 const { getRedisClient } = require('../cache/redisClient');
 const { metrics } = require('../middleware/metricsMiddleware');
+const {
+  validateCreateCampaign,
+  validateUpdateCampaign,
+  validateCampaignId,
+} = require('../dtos/middleware');
 
 const CAMPAIGN_TTL = 60; // 60s TTL per issue #576
 
@@ -57,7 +62,7 @@ async function cacheDel(key) {
 // ---------------------------------------------------------------------------
 // POST /campaigns — create campaign in DB then register on-chain
 // ---------------------------------------------------------------------------
-router.post('/', authenticateMerchant, async (req, res, next) => {
+router.post('/', authenticateMerchant, validateCreateCampaign, async (req, res, next) => {
   try {
     const { name, rewardRate, startDate, endDate } = req.body;
     const merchantId = req.merchant.id;
@@ -106,7 +111,7 @@ router.post('/', authenticateMerchant, async (req, res, next) => {
 // ---------------------------------------------------------------------------
 // GET /campaigns/:id — return campaign including on-chain status
 // ---------------------------------------------------------------------------
-router.get('/:id', authenticateMerchant, async (req, res, next) => {
+router.get('/:id', authenticateMerchant, validateCampaignId, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id) || id <= 0) {
@@ -132,7 +137,7 @@ router.get('/:id', authenticateMerchant, async (req, res, next) => {
 // ---------------------------------------------------------------------------
 // PATCH /campaigns/:id — update mutable fields + on-chain update
 // ---------------------------------------------------------------------------
-router.patch('/:id', authenticateMerchant, async (req, res, next) => {
+router.patch('/:id', authenticateMerchant, validateCampaignId, validateUpdateCampaign, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id) || id <= 0) {
@@ -193,7 +198,7 @@ router.patch('/:id', authenticateMerchant, async (req, res, next) => {
 // ---------------------------------------------------------------------------
 // DELETE /campaigns/:id — pause on-chain then soft-delete in DB
 // ---------------------------------------------------------------------------
-router.delete('/:id', authenticateMerchant, async (req, res, next) => {
+router.delete('/:id', authenticateMerchant, validateCampaignId, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id) || id <= 0) {

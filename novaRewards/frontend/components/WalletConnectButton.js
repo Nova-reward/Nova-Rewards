@@ -10,6 +10,7 @@ import { Wallet, Unplug, AlertCircle, Loader2, Wifi } from 'lucide-react';
  *   connecting → spinner + "Connecting…"
  *   connected  → truncated address + balance + network badge + disconnect
  *   error      → error message with dismiss button
+ *   networkMismatch → warning badge when Freighter is on wrong network
  *
  * Uses the enhanced useWalletStore (Zustand) which persists publicKey,
  * walletType, and network to localStorage and rehydrates on page load.
@@ -23,6 +24,8 @@ export default function WalletConnectButton() {
     isLoading,
     error,
     hydrated,
+    networkMismatch,
+    freighterNetwork,
     connect,
     disconnect,
     clearError,
@@ -62,7 +65,7 @@ export default function WalletConnectButton() {
     const isTestnet = network !== 'mainnet';
 
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-1.5 dark:border-brand-border dark:bg-brand-dark">
           <Wallet className="h-4 w-4 text-primary-600" aria-hidden="true" />
           <div className="hidden sm:flex flex-col leading-none">
@@ -93,6 +96,17 @@ export default function WalletConnectButton() {
           <Unplug className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="hidden sm:inline">Disconnect</span>
         </button>
+        {/* Network mismatch warning */}
+        {networkMismatch && (
+          <div
+            className="w-full rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400"
+            role="alert"
+          >
+            <span className="font-semibold">Network mismatch:</span> Freighter is on{' '}
+            {freighterNetwork || 'unknown'}. Please switch to{' '}
+            {isTestnet ? 'Testnet' : 'Mainnet'}.
+          </div>
+        )}
       </div>
     );
   }

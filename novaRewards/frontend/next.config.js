@@ -75,8 +75,36 @@ const nextConfig = {
     minimumCacheTTL: 86400,
   },
   sentry: {
-    hideSourceMaps: true,
-    widenClientFileUpload: true,
+    // Deprecated in v10 — options moved to sentryWebpackPluginOptions below
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+        ],
+      },
+    ];
   },
 };
 
@@ -85,6 +113,9 @@ const sentryWebpackPluginOptions = {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
+  // v10: source map options moved here from the `sentry` key in nextConfig
+  hideSourceMaps: true,
+  widenClientFileUpload: true,
 };
 
 module.exports = withSentryConfig(

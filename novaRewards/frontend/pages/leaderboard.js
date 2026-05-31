@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useWallet } from "../context/WalletContext";
 import { useAuth } from "../context/AuthContext";
 import DashboardLayout from "../components/DashboardLayout";
-import LoadingSkeleton from "../components/LoadingSkeleton";
+import { SkeletonLeaderboard } from "../components/Skeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 
 const Leaderboard = dynamic(() => import("../components/Leaderboard"), { ssr: false });
@@ -20,7 +20,7 @@ function LeaderboardPage() {
   }, [publicKey, walletLoading, isAuthenticated, authLoading, router]);
 
   if (authLoading || walletLoading || !isAuthenticated || !publicKey) {
-    return <LoadingSkeleton />;
+    return <SkeletonLeaderboard />;
   }
 
   return (
