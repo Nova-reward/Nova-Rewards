@@ -59,6 +59,41 @@ const EVENT_TYPES = {
     'clawback:clawback':   { contract: 'distribution', description: 'Distribution clawed back' },
     'adm_roles:adm_prop':  { contract: 'admin_roles',  description: 'Admin transfer proposed' },
     'adm_roles:adm_xfer':  { contract: 'admin_roles',  description: 'Admin transfer completed' },
+    'adm_roles:role_chg':  { contract: 'admin_roles',  description: 'Privileged role operation' },
+    'adm_roles:upgraded':  { contract: 'admin_roles',  description: 'Contract WASM upgraded' },
+    // Campaign events
+    'camp:created':        { contract: 'campaign',     description: 'Campaign created' },
+    'camp:activated':      { contract: 'campaign',     description: 'Campaign activated' },
+    'camp:deactivated':    { contract: 'campaign',     description: 'Campaign deactivated' },
+    'camp:joined':         { contract: 'campaign',     description: 'Participant joined campaign' },
+    'camp:rwd_issued':     { contract: 'campaign',     description: 'Reward issued to participant' },
+    'camp:paused':         { contract: 'campaign',     description: 'Campaign contract paused' },
+    'camp:unpaused':       { contract: 'campaign',     description: 'Campaign contract unpaused' },
+    'camp:upgraded':       { contract: 'campaign',     description: 'Campaign contract WASM upgraded' },
+    // Escrow events
+    'escrow:created':      { contract: 'escrow',       description: 'Escrow created' },
+    'escrow:funded':       { contract: 'escrow',       description: 'Escrow funded' },
+    'escrow:released':     { contract: 'escrow',       description: 'Escrow released to beneficiary' },
+    'escrow:refunded':     { contract: 'escrow',       description: 'Escrow refunded to depositor' },
+    'escrow:upgraded':     { contract: 'escrow',       description: 'Escrow contract WASM upgraded' },
+    // Distribution events (updated keys)
+    'dist:distributed':    { contract: 'distribution', description: 'Tokens distributed to recipient' },
+    'dist:batch_dist':     { contract: 'distribution', description: 'Batch distribution summary' },
+    'dist:clawback':       { contract: 'distribution', description: 'Distribution clawed back' },
+    'dist:upgraded':       { contract: 'distribution', description: 'Distribution contract WASM upgraded' },
+    // Governance upgrade event
+    'gov:upgraded':        { contract: 'governance',   description: 'Governance contract WASM upgraded' },
+    // ContractState events
+    'state:set':           { contract: 'contract_state', description: 'State entry written' },
+    'state:delete':        { contract: 'contract_state', description: 'State entry deleted' },
+    'state:snapshot':      { contract: 'contract_state', description: 'State snapshot captured' },
+    'state:migrate':       { contract: 'contract_state', description: 'Schema version bumped' },
+    'state:recover':       { contract: 'contract_state', description: 'State restored from snapshot' },
+    'state:upgraded':      { contract: 'contract_state', description: 'ContractState WASM upgraded' },
+    // NovaToken additional events
+    'nova_tok:transfer_from': { contract: 'nova_token', description: 'Allowance-based token transfer' },
+    'nova_tok:inc_allow':  { contract: 'nova_token',   description: 'Allowance increased' },
+    'nova_tok:dec_allow':  { contract: 'nova_token',   description: 'Allowance decreased' },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
