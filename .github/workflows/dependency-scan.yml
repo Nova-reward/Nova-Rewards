@@ -25,11 +25,11 @@ jobs:
           node-version: 20
 
       - name: Install backend deps
-        run: npm install
+        run: npm ci
         working-directory: novaRewards/backend
 
       - name: Install frontend deps
-        run: npm install
+        run: npm ci
         working-directory: novaRewards/frontend
 
       - name: Run npm audit (backend)

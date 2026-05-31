@@ -1,0 +1,1 @@
+{"parameters":[{"in":"path","name":"merchantId","required":true,"schema":{"type":"integer","example":7}}]}

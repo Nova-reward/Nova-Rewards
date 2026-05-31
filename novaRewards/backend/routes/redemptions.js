@@ -5,6 +5,11 @@ const { getUserById } = require('../db/userRepository');
 const { getRewardById } = require('../db/adminRepository');
 const appEvents = require('../services/eventEmitter');
 const { logAudit } = require('../db/auditLogRepository');
+const {
+  validateCreateRedemption,
+  validateRedemptionId,
+  validateRedemptionQuery,
+} = require('../dtos/middleware');
 
 // All redemption routes require an authenticated user
 router.use(authenticateUser);
@@ -73,7 +78,7 @@ router.use(authenticateUser);
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/', async (req, res, next) => {
+router.post('/', validateCreateRedemption, async (req, res, next) => {
   try {
     // ── Idempotency key ───────────────────────────────────────────────────
     const idempotencyKey = req.headers['x-idempotency-key'];
@@ -208,10 +213,7 @@ router.post('/', async (req, res, next) => {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get('/', async (req, res, next) => {
-  try {
-    const page  = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+router.get('/', validateRedemptionQuery, async (req, res, next) => {
 
     const result = await getUserRedemptions(req.user.id, { page, limit });
     res.json({ success: true, ...result });
@@ -259,7 +261,7 @@ router.get('/', async (req, res, next) => {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', validateRedemptionId, async (req, res, next) => {
   try {
     const redemptionId = parseInt(req.params.id, 10);
     if (isNaN(redemptionId) || redemptionId <= 0) {

@@ -1,225 +1,118 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TransactionHistory from '../components/TransactionHistory';
-import * as useApi from '../lib/useApi';
+import * as useInfiniteScrollModule from '../hooks/useInfiniteScroll';
+import * as useScrollRestorationModule from '../hooks/useScrollRestoration';
 
-// Mock the useApi hook
-jest.mock('../lib/useApi');
+jest.mock('../hooks/useInfiniteScroll');
+jest.mock('../hooks/useScrollRestoration', () => ({
+  useScrollRestoration: jest.fn(),
+}));
 
-const mockTransactions = [
+const mockItems = [
   {
     id: '1',
-    type: 'issuance',
+    action_type: 'issuance',
     amount: '100.00',
-    campaign: { id: '1', name: 'Summer Campaign' },
-    createdAt: '2024-01-15T10:00:00Z',
+    campaign_name: 'Summer Campaign',
+    timestamp: '2024-01-15T10:00:00Z',
     status: 'confirmed',
-    txHash: 'abc123def456',
+    tx_hash: 'abc123def456',
   },
   {
     id: '2',
-    type: 'redemption',
+    action_type: 'redemption',
     amount: '50.00',
-    campaign: { id: '2', name: 'Winter Campaign' },
-    createdAt: '2024-01-14T15:30:00Z',
+    campaign_name: 'Winter Campaign',
+    timestamp: '2024-01-14T15:30:00Z',
     status: 'confirmed',
-    txHash: 'ghi789jkl012',
+    tx_hash: 'ghi789jkl012',
   },
 ];
+
+function mockScroll(overrides = {}) {
+  useInfiniteScrollModule.useInfiniteScroll.mockReturnValue({
+    items: mockItems,
+    loading: false,
+    error: null,
+    hasMore: true,
+    loadMore: jest.fn(),
+    retry: jest.fn(),
+    ...overrides,
+  });
+  useInfiniteScrollModule.useSentinel.mockReturnValue({ current: null });
+}
 
 describe('TransactionHistory Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useScrollRestorationModule.useScrollRestoration.mockImplementation(() => {});
   });
 
-  test('renders transaction history with data', () => {
-    useApi.useTransactions.mockReturnValue({
-      data: mockTransactions,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
+  test('renders transaction list', () => {
+    mockScroll();
     render(<TransactionHistory userId="user-123" />);
-
     expect(screen.getByText('Transaction History')).toBeInTheDocument();
     expect(screen.getByText('Summer Campaign')).toBeInTheDocument();
     expect(screen.getByText('Winter Campaign')).toBeInTheDocument();
   });
 
-  test('displays empty state when no transactions', () => {
-    useApi.useTransactions.mockReturnValue({
-      data: [],
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
+  test('shows initial loading skeleton when items is empty', () => {
+    mockScroll({ items: [], loading: true });
     render(<TransactionHistory userId="user-123" />);
-
-    expect(screen.getByText(/No Transactions/i)).toBeInTheDocument();
+    // SkeletonTransactionHistory renders; no list items
+    expect(screen.queryByText('Summer Campaign')).not.toBeInTheDocument();
   });
 
-  test('displays loading state', () => {
-    useApi.useTransactions.mockReturnValue({
-      data: null,
-      error: null,
-      isLoading: true,
-      mutate: jest.fn(),
-    });
-
+  test('shows empty state when no transactions', () => {
+    mockScroll({ items: [], loading: false, hasMore: false });
     render(<TransactionHistory userId="user-123" />);
-
-    expect(screen.getByText(/Loading/i)).toBeInTheDocument();
+    expect(screen.getByText(/No transactions yet/i)).toBeInTheDocument();
   });
 
-  test('displays error message on fetch failure', () => {
-    const errorMsg = 'Failed to load transactions';
-    useApi.useTransactions.mockReturnValue({
-      data: null,
-      error: { message: errorMsg },
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
+  test('shows error state with retry button when initial load fails', () => {
+    mockScroll({ items: [], loading: false, error: 'Network error' });
     render(<TransactionHistory userId="user-123" />);
-
-    expect(screen.getByText(new RegExp(errorMsg))).toBeInTheDocument();
+    expect(screen.getByText(/Failed to load transactions/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
   });
 
-  test('filters by transaction type', async () => {
-    useApi.useTransactions.mockReturnValue({
-      data: mockTransactions,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
-    const { rerender } = render(<TransactionHistory userId="user-123" />);
-
-    const typeFilter = screen.getByDisplayValue('All Types');
-    await userEvent.selectOption(typeFilter, 'issuance');
-
-    // Verify filter element is updated
-    expect(screen.getByDisplayValue('Issuance')).toBeInTheDocument();
+  test('calls retry when retry button clicked', async () => {
+    const retry = jest.fn();
+    mockScroll({ items: [], loading: false, error: 'Network error', retry });
+    render(<TransactionHistory userId="user-123" />);
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
-  test('filters by date range', async () => {
-    useApi.useTransactions.mockReturnValue({
-      data: mockTransactions,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
+  test('shows loading spinner during subsequent page loads', () => {
+    mockScroll({ loading: true });
     render(<TransactionHistory userId="user-123" />);
-
-    const dateInputs = screen.getAllByRole('textbox');
-    const startDateInput = dateInputs[0];
-
-    await userEvent.type(startDateInput, '2024-01-01');
-    await waitFor(() => {
-      expect(startDateInput).toHaveValue('2024-01-01');
-    });
+    expect(screen.getByRole('status', { name: /loading more/i })).toBeInTheDocument();
   });
 
-  test('exports CSV when button clicked', async () => {
-    useApi.useTransactions.mockReturnValue({
-      data: mockTransactions,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        json: () => Promise.resolve({ data: mockTransactions }),
-      })
-    );
-
+  test('shows "All transactions loaded" when hasMore is false', () => {
+    mockScroll({ hasMore: false, loading: false });
     render(<TransactionHistory userId="user-123" />);
-
-    const exportButton = screen.getByText('Export CSV');
-    await userEvent.click(exportButton);
-
-    await waitFor(() => {
-      expect(exportButton).toHaveTextContent('Export CSV');
-    });
+    expect(screen.getByText(/All transactions loaded/i)).toBeInTheDocument();
   });
 
-  test('displays Stellar Explorer links for verified transactions', () => {
-    useApi.useTransactions.mockReturnValue({
-      data: mockTransactions,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
+  test('renders Stellar Explorer links for transactions with tx_hash', () => {
+    mockScroll();
     render(<TransactionHistory userId="user-123" />);
-
     const links = screen.getAllByText('View');
     expect(links.length).toBeGreaterThan(0);
-
     links.forEach((link) => {
       expect(link).toHaveAttribute('href', expect.stringContaining('stellar.expert'));
       expect(link).toHaveAttribute('target', '_blank');
     });
   });
 
-  test('shows correct status badges', () => {
-    useApi.useTransactions.mockReturnValue({
-      data: mockTransactions,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
+  test('shows inline error with retry on subsequent page failure', () => {
+    const retry = jest.fn();
+    mockScroll({ error: 'Timeout', retry });
     render(<TransactionHistory userId="user-123" />);
-
-    expect(screen.getAllByText('confirmed')).toHaveLength(2);
-  });
-
-  test('pagination works correctly', async () => {
-    const paginatedMockData = Array.from({ length: 20 }, (_, i) => ({
-      id: `${i}`,
-      type: 'issuance',
-      amount: '100.00',
-      campaign: { id: '1', name: 'Campaign' },
-      createdAt: '2024-01-15T10:00:00Z',
-      status: 'confirmed',
-      txHash: `hash${i}`,
-    }));
-
-    useApi.useTransactions.mockReturnValue({
-      data: paginatedMockData,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
-    render(<TransactionHistory userId="user-123" />);
-
-    expect(screen.getByText('Page 1')).toBeInTheDocument();
-
-    const nextButton = screen.getByText(/Next/);
-    expect(nextButton).not.toBeDisabled();
-  });
-
-  test('resets page on filter change', async () => {
-    useApi.useTransactions.mockReturnValue({
-      data: mockTransactions,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    });
-
-    const { rerender } = render(<TransactionHistory userId="user-123" />);
-
-    // Change filter
-    const typeFilter = screen.getByDisplayValue('All Types');
-    await userEvent.selectOption(typeFilter, 'redemption');
-
-    // Verify page is reset (would be tested via integration)
-    expect(screen.getByText('Page 1')).toBeInTheDocument();
+    expect(screen.getByText(/Failed to load more/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
   });
 });

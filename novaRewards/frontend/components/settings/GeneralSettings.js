@@ -11,9 +11,11 @@ const LANGUAGES = [
 
 /**
  * General settings: language selection and theme toggle.
+ * 
+ * Closes #847
  */
 export default function GeneralSettings({ prefs, onChange }) {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme, theme } = useTheme();
 
   return (
     <div>
@@ -40,16 +42,42 @@ export default function GeneralSettings({ prefs, onChange }) {
         <div className="settings-row-info">
           <span className="settings-row-label">Theme</span>
           <span className="settings-row-desc">
-            Current: {resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode
+            Current: {resolvedTheme === 'dark' ? 'Dark' : 'Light'} mode {theme === 'system' && '(System)'}
           </span>
         </div>
-        <button
-          className="btn btn-secondary"
-          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
-        >
-          {resolvedTheme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
-        </button>
+        <div className="theme-toggle-buttons">
+          <button
+            className={`btn btn-sm ${theme === 'light' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTheme('light')}
+            aria-label="Light mode"
+            title="Light mode"
+          >
+            ☀️ Light
+          </button>
+          <button
+            className={`btn btn-sm ${theme === 'dark' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTheme('dark')}
+            aria-label="Dark mode"
+            title="Dark mode"
+          >
+            🌙 Dark
+          </button>
+          <button
+            className={`btn btn-sm ${theme === 'system' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setTheme('system')}
+            aria-label="System preference"
+            title="Use system preference"
+          >
+            💻 System
+          </button>
+          <style jsx>{`
+            .theme-toggle-buttons {
+              display: flex;
+              gap: 0.5rem;
+              flex-wrap: wrap;
+            }
+          `}</style>
+        </div>
       </div>
     </div>
   );
