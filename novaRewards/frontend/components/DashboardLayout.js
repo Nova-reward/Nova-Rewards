@@ -136,13 +136,12 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      {/* Mobile overlay */}
-      {mobileMenuOpen && (
-        <div
-          className="mobile-overlay"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
+      {/* Mobile overlay — shown when sidebar is open on mobile/tablet */}
+      <div
+        className={`mobile-overlay${mobileMenuOpen ? ' active' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
 
       {/* Main content area */}
       <div className={`main-wrapper ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
