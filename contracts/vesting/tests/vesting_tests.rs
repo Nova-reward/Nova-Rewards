@@ -40,7 +40,6 @@ fn initialize_twice_panics() {
 #[test]
 fn fund_pool_increases_balance() {
     let (_env, _admin, client) = setup();
-    // setup already funded 1_000_000
     assert_eq!(client.pool_balance(), 1_000_000);
     client.fund_pool(&500_000);
     assert_eq!(client.pool_balance(), 1_500_000);
@@ -76,6 +75,7 @@ fn create_schedule_stores_correct_fields() {
     assert_eq!(s.cliff_duration, 200);
     assert_eq!(s.total_duration, 1_000);
     assert_eq!(s.released, 0);
+    assert!(!s.revoked);
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn create_schedule_zero_amount_panics() {
     client.create_schedule(&b, &0, &0, &0, &1_000);
 }
 
-// ── release ───────────────────────────────────────────────────────────────────
+// ── claim_vested ──────────────────────────────────────────────────────────────
 
 #[test]
 fn release_before_cliff_nothing_vested() {
@@ -103,7 +103,6 @@ fn release_before_cliff_nothing_vested() {
     // cliff at start_time(100) + cliff_duration(200) = 300; ledger at 150
     let sid = client.create_schedule(&b, &1_000, &100, &200, &1_000);
     env.ledger().set_timestamp(150);
-    // schedule.released must still be 0 — nothing vested before cliff
     let s = client.get_schedule(&b, &sid);
     assert_eq!(s.released, 0);
 }
@@ -115,7 +114,7 @@ fn release_at_cliff_gives_proportional_amount() {
     // start=0, cliff=0, duration=1000, amount=1000
     let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
     env.ledger().set_timestamp(500);
-    let released = client.release(&b, &sid);
+    let released = client.claim_vested(&b, &sid);
     assert_eq!(released, 500);
     assert_eq!(client.pool_balance(), 999_500);
 }
@@ -126,7 +125,7 @@ fn release_after_full_duration_gives_total() {
     let b = Address::generate(&env);
     let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
     env.ledger().set_timestamp(1_000);
-    let released = client.release(&b, &sid);
+    let released = client.claim_vested(&b, &sid);
     assert_eq!(released, 1_000);
 }
 
@@ -136,7 +135,7 @@ fn release_beyond_duration_gives_total() {
     let b = Address::generate(&env);
     let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
     env.ledger().set_timestamp(9_999);
-    let released = client.release(&b, &sid);
+    let released = client.claim_vested(&b, &sid);
     assert_eq!(released, 1_000);
 }
 
@@ -146,10 +145,10 @@ fn release_twice_gives_incremental_amounts() {
     let b = Address::generate(&env);
     let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
     env.ledger().set_timestamp(400);
-    let r1 = client.release(&b, &sid);
+    let r1 = client.claim_vested(&b, &sid);
     assert_eq!(r1, 400);
     env.ledger().set_timestamp(800);
-    let r2 = client.release(&b, &sid);
+    let r2 = client.claim_vested(&b, &sid);
     assert_eq!(r2, 400); // 800 vested - 400 already released
 }
 
@@ -161,7 +160,7 @@ fn release_when_nothing_vested_panics() {
     // cliff at 500, ledger at 0
     let sid = client.create_schedule(&b, &1_000, &0, &500, &1_000);
     env.ledger().set_timestamp(0);
-    client.release(&b, &sid);
+    client.claim_vested(&b, &sid);
 }
 
 #[test]
@@ -172,7 +171,7 @@ fn release_before_cliff_panics() {
     // cliff at start(100) + cliff_duration(200) = 300; ledger at 150
     let sid = client.create_schedule(&b, &1_000, &100, &200, &1_000);
     env.ledger().set_timestamp(150);
-    client.release(&b, &sid);
+    client.claim_vested(&b, &sid);
 }
 
 #[test]
@@ -182,8 +181,8 @@ fn double_release_at_same_time_panics() {
     let b = Address::generate(&env);
     let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
     env.ledger().set_timestamp(1_000);
-    client.release(&b, &sid);
-    client.release(&b, &sid); // nothing left
+    client.claim_vested(&b, &sid);
+    client.claim_vested(&b, &sid); // nothing left
 }
 
 #[test]
@@ -191,7 +190,7 @@ fn double_release_at_same_time_panics() {
 fn release_nonexistent_schedule_panics() {
     let (env, _admin, client) = setup();
     let b = Address::generate(&env);
-    client.release(&b, &99);
+    client.claim_vested(&b, &99);
 }
 
 #[test]
@@ -207,7 +206,7 @@ fn release_when_pool_empty_panics() {
     let b = Address::generate(&env);
     let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
     env.ledger().set_timestamp(1_000);
-    client.release(&b, &sid);
+    client.claim_vested(&b, &sid);
 }
 
 // ── get_schedule ──────────────────────────────────────────────────────────────
@@ -230,9 +229,128 @@ fn multiple_beneficiaries_independent_schedules() {
     let s1 = client.create_schedule(&b1, &300, &0, &0, &300);
     let s2 = client.create_schedule(&b2, &700, &0, &0, &700);
     env.ledger().set_timestamp(300);
-    let r1 = client.release(&b1, &s1);
+    let r1 = client.claim_vested(&b1, &s1);
     assert_eq!(r1, 300);
     env.ledger().set_timestamp(700);
-    let r2 = client.release(&b2, &s2);
+    let r2 = client.claim_vested(&b2, &s2);
     assert_eq!(r2, 700);
+}
+
+// ── zero cliff / immediate full vest ─────────────────────────────────────────
+
+#[test]
+fn zero_cliff_vesting_starts_immediately() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
+    env.ledger().set_timestamp(1);
+    let released = client.claim_vested(&b, &sid);
+    assert_eq!(released, 1);
+}
+
+#[test]
+fn immediate_full_vest_with_duration_one() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    // duration=1, elapsed>=1 → fully vested
+    let sid = client.create_schedule(&b, &1_000, &0, &0, &1);
+    env.ledger().set_timestamp(1);
+    let released = client.claim_vested(&b, &sid);
+    assert_eq!(released, 1_000);
+}
+
+// ── revoke ────────────────────────────────────────────────────────────────────
+
+#[test]
+fn revoke_returns_unvested_to_pool() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
+    // at t=400: 400 vested, 600 unvested
+    env.ledger().set_timestamp(400);
+    let returned = client.revoke(&b, &sid);
+    assert_eq!(returned, 600);
+    assert_eq!(client.pool_balance(), 1_000_600);
+}
+
+#[test]
+fn revoke_allows_claiming_vested_portion() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
+    env.ledger().set_timestamp(500);
+    client.revoke(&b, &sid);
+    let claimed = client.claim_vested(&b, &sid);
+    assert_eq!(claimed, 500);
+}
+
+#[test]
+fn revoke_stops_further_vesting() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
+    env.ledger().set_timestamp(300);
+    client.revoke(&b, &sid);
+    // claim at a much later time — still capped at 300
+    env.ledger().set_timestamp(9_999);
+    let claimed = client.claim_vested(&b, &sid);
+    assert_eq!(claimed, 300);
+}
+
+#[test]
+#[should_panic(expected = "already revoked")]
+fn revoke_twice_panics() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
+    env.ledger().set_timestamp(500);
+    client.revoke(&b, &sid);
+    client.revoke(&b, &sid);
+}
+
+#[test]
+#[should_panic(expected = "schedule not found")]
+fn revoke_nonexistent_schedule_panics() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    client.revoke(&b, &99);
+}
+
+#[test]
+fn revoke_fully_vested_returns_zero() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
+    env.ledger().set_timestamp(1_000);
+    let returned = client.revoke(&b, &sid);
+    assert_eq!(returned, 0);
+}
+
+#[test]
+fn revoke_before_cliff_returns_all() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    // cliff=500; revoke at t=100 (before cliff)
+    let sid = client.create_schedule(&b, &1_000, &0, &500, &1_000);
+    env.ledger().set_timestamp(100);
+    let returned = client.revoke(&b, &sid);
+    assert_eq!(returned, 1_000);
+}
+
+#[test]
+fn revoke_partial_then_claim_then_no_more() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    let sid = client.create_schedule(&b, &1_000, &0, &0, &1_000);
+    // claim 200 first
+    env.ledger().set_timestamp(200);
+    let first = client.claim_vested(&b, &sid);
+    assert_eq!(first, 200);
+    // revoke at t=600: 600 vested total, 200 already released, 400 unvested returned
+    env.ledger().set_timestamp(600);
+    let returned = client.revoke(&b, &sid);
+    assert_eq!(returned, 400);
+    // claim remaining vested-but-not-released (600 - 200 = 400)
+    let second = client.claim_vested(&b, &sid);
+    assert_eq!(second, 400);
 }

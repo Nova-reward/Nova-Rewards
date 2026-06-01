@@ -78,18 +78,19 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile Menu Button */}
+      {/* Mobile Menu Button — only on mobile (<768px), not tablet */}
       <button 
         onClick={() => setIsMobileMenuOpen(true)}
-        className="fixed bottom-6 right-6 z-50 p-4 bg-violet-600 text-white rounded-full shadow-2xl lg:hidden active:scale-95 transition-transform"
+        className="fixed bottom-6 right-6 z-50 p-4 bg-violet-600 text-white rounded-full shadow-2xl md:hidden active:scale-95 transition-transform"
+        aria-label="Open navigation menu"
       >
         <Menu className="w-6 h-6" />
       </button>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile Sidebar Overlay — only on mobile */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:hidden transition-opacity animate-in fade-in"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm md:hidden transition-opacity animate-in fade-in"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -98,9 +99,10 @@ export default function Sidebar() {
       <aside 
         className={cn(
           "fixed top-0 left-0 z-50 h-full bg-white border-r transition-all duration-300 ease-in-out dark:bg-brand-card dark:border-brand-border",
-          "lg:sticky lg:top-0",
+          "md:sticky md:top-0",
           isCollapsed ? "w-20" : "w-64",
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          // On mobile: slide in/out. On tablet+: always visible (sticky)
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
         <div className="flex items-center justify-between h-16 px-6 border-b dark:border-brand-border">
