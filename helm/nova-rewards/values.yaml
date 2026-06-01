@@ -45,6 +45,18 @@ ingress:
   enabled: true
   host: nova-rewards.io
   tlsSecret: nova-rewards-tls
+  ingressClassName: nginx
+  forceSSLRedirect: true
+  hsts:
+    enabled: true
+    maxAge: 31536000
+    includeSubDomains: true
+    preload: true
+  certManager:
+    enabled: true
+    clusterIssuer: letsencrypt-prod
+    email: ops@nova-rewards.io
+    server: https://acme-v02.api.letsencrypt.org/directory
 
 autoscaling:
   enabled: true
