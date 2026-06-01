@@ -1,5 +1,6 @@
 'use client';
 
+import { SkeletonBlock } from '../Skeleton';
 import AnimatedCounter from '../ui/AnimatedCounter';
 
 const CARDS = [
@@ -24,7 +25,7 @@ export default function KpiCards({ kpis, loading }) {
             <div style={{ fontSize: '1.8rem', marginBottom: '0.4rem' }} aria-hidden="true">{icon}</div>
             <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '0.3rem' }}>{label}</div>
             {loading ? (
-              <div className="skeleton-block" style={{ height: '1.8rem', width: '70%', margin: '0 auto 0.4rem' }} />
+              <SkeletonBlock width="70%" height="1.8rem" style={{ margin: '0 auto 0.4rem' }} />
             ) : (
               <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)' }}>
                 <AnimatedCounter value={stat.value} format={fmt} />

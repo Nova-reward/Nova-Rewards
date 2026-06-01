@@ -85,6 +85,31 @@ export function SkeletonDashboard() {
     <div
       role="status"
       aria-label="Loading dashboard"
+      style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1rem' }}
+      className="grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+    >
+      {/* Balance card */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', textAlign: 'center' }}>
+        <SkeletonBlock width="60%" height="0.875rem" style={{ margin: '0 auto' }} />
+        <SkeletonBlock height="3rem" style={{ borderRadius: '8px' }} />
+        <SkeletonBlock width="35%" height="0.75rem" style={{ margin: '0 auto' }} />
+        <SkeletonBlock height="0.5rem" style={{ borderRadius: '4px' }} />
+      </div>
+
+      {/* Active campaigns card */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <SkeletonBlock width="50%" height="0.875rem" />
+        {[...Array(3)].map((_, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)' }}>
+            <SkeletonBlock width="70%" height="0.875rem" />
+            <SkeletonBlock width="90%" height="0.75rem" />
+          </div>
+        ))}
+      </div>
+
+      {/* Recent transactions card */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
+        <SkeletonBlock width="55%" height="0.875rem" style={{ marginBottom: '0.75rem' }} />
       className="space-y-4"
     >
       {/* Summary grid */}
@@ -115,6 +140,44 @@ export function SkeletonDashboard() {
   );
 }
 
+/**
+ * KPI cards skeleton — 4-card grid matching the merchant KpiCards layout.
+ */
+export function SkeletonKpiCards() {
+  return (
+    <div
+      aria-busy="true"
+      aria-label="Loading KPIs"
+      style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}
+    >
+      {[...Array(4)].map((_, i) => (
+        <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+          <SkeletonBlock width="2rem" height="2rem" style={{ borderRadius: '50%' }} />
+          <SkeletonBlock width="60%" height="0.75rem" />
+          <SkeletonBlock width="70%" height="1.8rem" style={{ borderRadius: '6px' }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Chart card skeleton — matches the merchant daily issuance chart area.
+ */
+export function SkeletonChartCard({ height = '15rem' }) {
+  return (
+    <SkeletonBlock
+      aria-busy="true"
+      aria-label="Loading chart"
+      height={height}
+      style={{ borderRadius: '8px' }}
+    />
+  );
+}
+
+/**
+ * Grid of SkeletonCards — used on rewards and campaigns pages.
+ */
 /** Grid of SkeletonCards — rewards / campaigns page. */
 export function SkeletonGrid({ count = 6, showImage = true }) {
   return (
