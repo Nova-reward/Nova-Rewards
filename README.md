@@ -97,12 +97,20 @@ graph TD
 
 ### Prerequisites
 
-| Tool | Version | Install |
-|------|---------|---------|
-| Docker Desktop | latest | [docker.com](https://www.docker.com/products/docker-desktop) |
-| Node.js | ≥ 20 | [nodejs.org](https://nodejs.org) (for running tests outside Docker) |
-| Rust (stable) | see `rust-toolchain.toml` | [rustup.rs](https://rustup.rs) (for contract development) |
-| Freighter wallet | latest | [freighter.app](https://www.freighter.app) |
+Install these tools before cloning. The versions listed are the minimum tested; newer patch releases are generally safe.
+
+| Tool | Minimum version | How to verify | Install |
+|------|----------------|---------------|---------|
+| Docker Desktop | 20.10 / Desktop 4.x | `docker --version` | [docker.com](https://www.docker.com/products/docker-desktop) |
+| Node.js | 20.x LTS | `node --version` | [nodejs.org](https://nodejs.org) — use `nvm` to manage versions |
+| npm | 10.x (bundled with Node 20) | `npm --version` | — |
+| Rust (stable toolchain) | 1.75+ (`stable` channel) | `rustc --version` | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+| Stellar CLI (`stellar`) | 21+ | `stellar --version` | installed by `setup-soroban-dev.sh` |
+| Freighter browser extension | latest | visit the extension page | [freighter.app](https://www.freighter.app) |
+
+> **Windows users:** use PowerShell 7+ and run the `.ps1` equivalents for shell scripts. WSL 2 also works.
+
+---
 
 ### 1 — Clone
 
@@ -111,12 +119,37 @@ git clone https://github.com/barry01-hash/Nova-Rewards.git
 cd Nova-Rewards
 ```
 
+**Expected output:**
+```
+Cloning into 'Nova-Rewards'...
+remote: Enumerating objects: …
+```
+
+---
+
 ### 2 — Configure environment
 
 ```bash
-cd novaRewards
-cp .env.example .env   # fill in secrets — see Environment Setup below
+cp novaRewards/.env.example novaRewards/.env
 ```
+
+Open `novaRewards/.env` and fill in the required values. For a local dev environment these are the only **strictly required** changes from the defaults:
+
+| Variable | What to set |
+|----------|-------------|
+| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` | Generate with `node novaRewards/backend/scripts/generate-jwt-keys.js` |
+| `FIELD_ENCRYPTION_KEY` | Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `ISSUER_PUBLIC` / `ISSUER_SECRET` | Generate a testnet keypair at [laboratory.stellar.org](https://laboratory.stellar.org/#account-creator?network=test) |
+| `DISTRIBUTION_PUBLIC` / `DISTRIBUTION_SECRET` | Second keypair from the same tool |
+
+Everything else (`DATABASE_URL`, `REDIS_URL`, `STELLAR_NETWORK`, etc.) defaults to the Docker Compose service addresses and can be left as-is for local development.
+
+**Verify the file was created:**
+```bash
+ls -la novaRewards/.env   # should exist and not be empty
+```
+
+---
 
 ### 3 — Start the full stack
 
@@ -124,59 +157,177 @@ cp .env.example .env   # fill in secrets — see Environment Setup below
 docker compose up --build
 ```
 
-This single command starts all services:
+Docker pulls images on first run — this takes 2–5 minutes. Subsequent starts take under 30 seconds.
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| Frontend | http://localhost:3000 | Next.js PWA (hot reload via `next dev`) |
-| Backend API | http://localhost:3001 | Express API (hot reload via nodemon) |
-| Nginx gateway | http://localhost:8080 | Reverse proxy |
-| PostgreSQL | localhost:5432 | Primary database (data persisted in `postgres_data` volume) |
-| Redis | localhost:6379 | Cache & rate limiting (data persisted in `redis_data` volume) |
-| Stellar standalone | http://localhost:8000 | Local Soroban/Stellar node (RPC at `/rpc`) |
+**Expected output (once healthy):**
+```
+nova-frontend-1  | ▲ Next.js 14.x
+nova-frontend-1  | - Local: http://localhost:3000
+nova-backend-1   | Server listening on port 3001
+nova-postgres-1  | database system is ready to accept connections
+nova-redis-1     | Ready to accept connections
+```
 
-Database migrations run automatically before the backend starts. Hot reload is active for both backend (nodemon) and frontend (Next.js dev server) — saving a file triggers an instant reload with no container restart needed.
+Services and ports:
 
-To run only the infrastructure services (no app):
+| Service | URL | Notes |
+|---------|-----|-------|
+| Frontend | http://localhost:3000 | Next.js — hot reload active |
+| Backend API | http://localhost:3001 | Express — hot reload via nodemon |
+| Health check | http://localhost:3001/health | Returns `{"status":"ok"}` when backend is up |
+| Nginx gateway | http://localhost:8080 | Reverse proxy (optional) |
+| PostgreSQL | localhost:5432 | Migrations run automatically on first start |
+| Redis | localhost:6379 | — |
+| Stellar standalone | http://localhost:8000 | Soroban RPC at `http://localhost:8000/rpc` |
 
+**Verify the stack is healthy:**
+```bash
+curl http://localhost:3001/health   # {"status":"ok"}
+curl http://localhost:3000          # returns HTML
+```
+
+To run only the infrastructure (no app containers):
 ```bash
 docker compose up postgres redis stellar
 ```
 
-To stop and remove containers (volumes are preserved):
-
+To stop without deleting data:
 ```bash
 docker compose down
 ```
 
-To also wipe persisted data:
-
+To also wipe persisted volumes (full reset):
 ```bash
 docker compose down -v
 ```
 
+---
+
 ### 4 — Set up Soroban contracts
 
+> Skip this step if you only need the frontend/backend — the app works without locally deployed contracts by pointing to testnet contract IDs.
+
 ```bash
-./scripts/setup-soroban-dev.sh   # installs wasm32v1-none target, registers local network
-./scripts/build-contracts.sh     # compiles all contracts to WASM
-./scripts/test-contracts.sh      # runs contract test suite
+./scripts/setup-soroban-dev.sh   # installs wasm32-unknown-unknown target, Stellar CLI, registers local network
+./scripts/build-contracts.sh     # compiles all contracts → target/wasm32-unknown-unknown/release/*.wasm
+./scripts/test-contracts.sh      # runs Rust unit tests for every contract
 ```
 
-**PowerShell:**
+**PowerShell (Windows):**
 ```powershell
 ./scripts/setup-soroban-dev.ps1
 ./scripts/build-contracts.ps1
 ./scripts/test-contracts.ps1
 ```
 
+**Expected output of `build-contracts.sh`:**
+```
+Compiling nova_token ...
+Compiling nova_rewards ...
+...
+Finished release [optimized] target(s)
+✓ All contracts compiled successfully
+```
+
+**Expected output of `test-contracts.sh`:**
+```
+running N tests
+test test_xxx ... ok
+...
+test result: ok. N passed; 0 failed
+```
+
+---
+
 ### 5 — Run application tests
+
+With Docker running (for the database), execute from the repo root:
 
 ```bash
 cd novaRewards
-npm run test:backend    # Jest — backend unit + integration
-npm run test:frontend   # Jest — frontend components
+npm run test:backend    # Jest — backend unit + integration tests
+npm run test:frontend   # Jest — frontend component tests
 ```
+
+**Expected output:**
+```
+Test Suites: N passed, N total
+Tests:       N passed, N total
+```
+
+---
+
+### Common setup failures
+
+#### Port already in use
+
+**Symptom:** `Error starting userland proxy: listen tcp4 0.0.0.0:5432: bind: address already in use`
+
+**Fix:** Stop the conflicting service or change the host port in `docker-compose.yml`:
+```bash
+# Find what's using port 5432:
+sudo lsof -i :5432
+# Then stop it, or change the port mapping in docker-compose.yml:
+#   "5433:5432"  # maps host 5433 → container 5432
+```
+Common conflicts: local PostgreSQL (`brew services stop postgresql`), local Redis (`brew services stop redis`).
+
+---
+
+#### Missing or invalid `.env` file
+
+**Symptom:** Backend exits immediately with `Missing required env var: JWT_PRIVATE_KEY` (or similar).
+
+**Fix:**
+```bash
+# Check the file exists:
+ls -la novaRewards/.env
+
+# Re-copy if missing:
+cp novaRewards/.env.example novaRewards/.env
+
+# Regenerate JWT keys:
+node novaRewards/backend/scripts/generate-jwt-keys.js
+# Then paste the output into .env for JWT_PRIVATE_KEY and JWT_PUBLIC_KEY
+```
+
+---
+
+#### Docker not running
+
+**Symptom:** `Cannot connect to the Docker daemon at unix:///var/run/docker.sock`
+
+**Fix:** Start Docker Desktop (macOS/Windows) or the Docker daemon (Linux):
+```bash
+# Linux:
+sudo systemctl start docker
+# macOS/Windows: open Docker Desktop from the Applications menu
+```
+
+---
+
+#### `docker compose up` hangs at database migrations
+
+**Symptom:** Backend container is `healthy` but frontend shows a connection error.
+
+**Fix:** The migration step can time out if PostgreSQL isn't ready. Restart just the backend:
+```bash
+docker compose restart backend
+```
+
+---
+
+#### Rust build fails: `error[E0463]: can't find crate for ...`
+
+**Symptom:** `./scripts/build-contracts.sh` exits with a linker or crate error.
+
+**Fix:** Ensure the `wasm32v1-none` target is installed:
+```bash
+rustup target add wasm32v1-none
+rustup update stable
+```
+
+---
 
 For disclosure policy, scope, severity, and reward tiers, see [SECURITY.md](./SECURITY.md).
 
