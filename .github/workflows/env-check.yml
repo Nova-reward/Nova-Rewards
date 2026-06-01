@@ -1,0 +1,39 @@
+name: Env Example Sync Check
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'novaRewards/.env.example'
+      - 'novaRewards/backend/middleware/validateEnv.js'
+      - 'novaRewards/frontend/lib/env.js'
+      - 'novaRewards/scripts/check-env-example.js'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'novaRewards/.env.example'
+      - 'novaRewards/backend/middleware/validateEnv.js'
+      - 'novaRewards/frontend/lib/env.js'
+      - 'novaRewards/scripts/check-env-example.js'
+
+jobs:
+  env-sync:
+    name: Verify .env.example is in sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run env sync check
+        run: node novaRewards/scripts/check-env-example.js
+
+      - name: Annotate failure
+        if: failure()
+        run: |
+          echo "::error file=novaRewards/.env.example::One or more environment variables defined in validateEnv.js or frontend/lib/env.js are missing from .env.example. Add the missing variables and push again."

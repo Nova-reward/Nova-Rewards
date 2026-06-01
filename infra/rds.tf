@@ -77,6 +77,5 @@ resource "aws_db_instance" "nova" {
     Environment = var.environment
     Project     = "nova-rewards"
   }
-
-  depends_on = [aws_secretsmanager_secret_version.rds_master]
 }
+
