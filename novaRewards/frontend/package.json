@@ -46,7 +46,7 @@
     "@storybook/addon-a11y": "^10.4.1",
     "@storybook/addon-essentials": "^8.1.0",
     "@storybook/addon-interactions": "^8.1.0",
-    "@storybook/nextjs": "^8.1.0",
+    "@storybook/nextjs": "^10.4.1",
     "@storybook/react": "^8.1.0",
     "@storybook/test": "^8.1.0",
     "@swc/jest": "^0.2.39",
