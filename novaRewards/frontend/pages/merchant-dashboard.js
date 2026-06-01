@@ -13,6 +13,7 @@ import {
   pauseCampaign,
   resumeCampaign,
 } from '../lib/merchantDashboardApi';
+import { SkeletonChartCard } from '../components/Skeleton';
 
 // Recharts uses browser APIs — skip SSR
 const RewardsLineChart = dynamic(
@@ -125,7 +126,7 @@ function MerchantDashboardContent() {
       <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
         <h2 className="text-base font-semibold dark:text-white mb-4">🎁 Daily Reward Issuance</h2>
         {loading ? (
-          <div className="h-60 rounded-lg bg-slate-100 dark:bg-brand-border animate-pulse" />
+          <SkeletonChartCard height="15rem" />
         ) : (
           <RewardsLineChart data={issuance} />
         )}
