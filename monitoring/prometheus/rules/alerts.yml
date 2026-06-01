@@ -138,7 +138,7 @@ groups:
       # SSL Certificate Expiry
       - alert: SSLCertificateExpiringSoon
         expr: |
-          probe_ssl_earliest_cert_expiry - time() < 86400 * 7
+          probe_ssl_earliest_cert_expiry - time() < 86400 * 14
         for: 1h
         labels:
           severity: warning
