@@ -3,6 +3,19 @@ import { vi, expect } from 'vitest';
 // Expose shared backend test utilities globally
 global.testUtils = require('./tests/utils');
 
+// Expose jest as global for backwards compatibility with existing tests
+// jest.fn() returns a mock function that needs to have all mock methods
+global.jest = {
+  fn: (...args) => {
+    const mock = vi.fn(...args);
+    return mock;
+  },
+  mock: vi.mock,
+  clearAllMocks: vi.clearAllMocks,
+  resetAllMocks: vi.resetAllMocks,
+  restoreAllMocks: vi.restoreAllMocks,
+};
+
 // Suppress console.error during tests to reduce noise from expected validation errors
 vi.spyOn(console, 'error').mockImplementation(() => {});
 

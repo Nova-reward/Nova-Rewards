@@ -35,5 +35,3 @@ export function createResponse() {
   return res;
 }
 
-// CommonJS interop for tests that still use require()
-module.exports = { createMockFunction, createMockModule, createRequest, createResponse };
