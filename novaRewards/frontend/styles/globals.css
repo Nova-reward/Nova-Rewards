@@ -1468,3 +1468,7 @@ td {
     max-width: calc(100vw - 2rem);
   }
 }
+
+@keyframes shimmer {
+  100% { transform: translateX(200%); }
+}
