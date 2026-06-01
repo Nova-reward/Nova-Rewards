@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/router';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ThemeProvider } from 'next-themes';
 import { WalletProvider } from '../context/WalletContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
@@ -38,7 +40,17 @@ function OnboardingTrigger() {
   return null;
 }
 
+const pageVariants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit:    { opacity: 0 },
+};
+
+const pageTransition = { duration: 0.15, ease: 'easeOut' };
+
 export default function App({ Component, pageProps }) {
+  const router = useRouter();
+
   useEffect(() => {
     registerServiceWorker();
   }, []);
@@ -53,7 +65,19 @@ export default function App({ Component, pageProps }) {
                 <TourProvider>
                   <ModalProvider>
                     <OnboardingTrigger />
-                    <Component {...pageProps} />
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.div
+                        key={router.asPath}
+                        variants={pageVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        transition={pageTransition}
+                        style={{ isolation: 'isolate' }}
+                      >
+                        <Component {...pageProps} />
+                      </motion.div>
+                    </AnimatePresence>
                     <Footer />
                     <OnboardingModal />
                     <OnboardingTour />

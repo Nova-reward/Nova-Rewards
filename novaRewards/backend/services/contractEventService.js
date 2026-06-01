@@ -160,17 +160,89 @@ async function handleRawEvent(contractId, raw) {
 
 /**
  * Dispatches a parsed event to the appropriate handler.
+ * Supports both legacy plain types and new namespaced types (e.g. "nova_rwd:staked").
  */
 async function dispatchEvent(contractId, eventType, raw, eventId) {
   switch (eventType) {
+    // ── Legacy plain types (backward compat) ──────────────────────────────
     case 'mint':
+    case 'nova_tok:mint':
       return handleMintEvent(contractId, raw, eventId);
     case 'claim':
       return handleClaimEvent(contractId, raw, eventId);
     case 'stake':
+    case 'nova_rwd:staked':
       return handleStakeEvent(contractId, raw, eventId);
     case 'unstake':
+    case 'nova_rwd:unstaked':
       return handleUnstakeEvent(contractId, raw, eventId);
+    // ── Token events ──────────────────────────────────────────────────────
+    case 'nova_tok:burn':
+    case 'nova_tok:transfer':
+    case 'nova_tok:transfer_from':
+    case 'nova_tok:approve':
+    case 'nova_tok:inc_allow':
+    case 'nova_tok:dec_allow':
+      return handleTokenEvent(contractId, eventType, raw, eventId);
+    // ── Nova Rewards core events ──────────────────────────────────────────
+    case 'nova_rwd:init':
+    case 'nova_rwd:bal_set':
+    case 'nova_rwd:rate_set':
+    case 'nova_rwd:swap':
+    case 'nova_rwd:paused':
+    case 'nova_rwd:resumed':
+    case 'nova_rwd:emrg_paus':
+    case 'nova_rwd:rec_op':
+    case 'nova_rwd:snap':
+    case 'nova_rwd:restore':
+    case 'nova_rwd:rec_tx':
+    case 'nova_rwd:rec_funds':
+    case 'nova_rwd:upgraded':
+      return handleNovaRewardsEvent(contractId, eventType, raw, eventId);
+    // ── Campaign events ───────────────────────────────────────────────────
+    case 'camp:created':
+    case 'camp:activated':
+    case 'camp:deactivated':
+    case 'camp:joined':
+    case 'camp:rwd_issued':
+    case 'camp:paused':
+    case 'camp:unpaused':
+    case 'camp:upgraded':
+      return handleCampaignEvent(contractId, eventType, raw, eventId);
+    // ── Escrow events ─────────────────────────────────────────────────────
+    case 'escrow:created':
+    case 'escrow:funded':
+    case 'escrow:released':
+    case 'escrow:refunded':
+    case 'escrow:upgraded':
+      return handleEscrowEvent(contractId, eventType, raw, eventId);
+    // ── Distribution events ───────────────────────────────────────────────
+    case 'dist:distributed':
+    case 'dist:batch_dist':
+    case 'dist:clawback':
+    case 'dist:upgraded':
+      return handleDistributionEvent(contractId, eventType, raw, eventId);
+    // ── Governance events ─────────────────────────────────────────────────
+    case 'gov:proposed':
+    case 'gov:voted':
+    case 'gov:finalised':
+    case 'gov:executed':
+    case 'gov:upgraded':
+      return handleGovernanceEvent(contractId, eventType, raw, eventId);
+    // ── Admin roles events ────────────────────────────────────────────────
+    case 'adm_roles:adm_prop':
+    case 'adm_roles:adm_xfer':
+    case 'adm_roles:role_chg':
+    case 'adm_roles:upgraded':
+      return handleAdminRolesEvent(contractId, eventType, raw, eventId);
+    // ── ContractState events ──────────────────────────────────────────────
+    case 'state:set':
+    case 'state:delete':
+    case 'state:snapshot':
+    case 'state:migrate':
+    case 'state:recover':
+    case 'state:upgraded':
+      return handleStateEvent(contractId, eventType, raw, eventId);
     default:
       console.log(`[horizon-stream] No handler for event type: ${eventType}`);
   }
@@ -179,29 +251,43 @@ async function dispatchEvent(contractId, eventType, raw, eventId) {
 /**
  * Extracts the event type from a Horizon record.
  * Soroban contract events carry their topic in the `topic` array as XDR symbols.
+ * Returns a namespaced key like "nova_rwd:staked" for structured events,
+ * or a plain type string for legacy events.
  */
 function extractEventType(record) {
-  const valid = ['mint', 'claim', 'stake', 'unstake'];
+  // Structured Soroban events: topics[0] = contract tag, topics[1] = event name
+  if (Array.isArray(record.topic) && record.topic.length >= 2) {
+    let tag = null;
+    let eventName = null;
 
-  // Soroban events: topics[0] is typically the event name as an XDR ScSymbol
-  if (Array.isArray(record.topic)) {
-    for (const topic of record.topic) {
+    for (let i = 0; i < Math.min(record.topic.length, 2); i++) {
+      const topic = record.topic[i];
+      let decoded = null;
+
       try {
-        const decoded = StellarSdk.xdr.ScVal.fromXDR(topic, 'base64');
-        if (decoded.switch().name === 'scvSymbol') {
-          const name = decoded.sym().toString().toLowerCase();
-          if (valid.includes(name)) return name;
+        const xdrVal = StellarSdk.xdr.ScVal.fromXDR(topic, 'base64');
+        if (xdrVal.switch().name === 'scvSymbol') {
+          decoded = xdrVal.sym().toString().toLowerCase();
         }
       } catch {
-        // not XDR — try plain string
-        if (valid.includes(String(topic).toLowerCase())) return String(topic).toLowerCase();
+        // Not XDR — use plain string value
+        decoded = (typeof topic === 'object' && topic.value)
+          ? String(topic.value).toLowerCase()
+          : String(topic).toLowerCase();
       }
+
+      if (i === 0) tag = decoded;
+      else eventName = decoded;
+    }
+
+    if (tag && eventName) {
+      return `${tag}:${eventName}`;
     }
   }
 
-  // Fallback: plain type field
+  // Legacy fallback: plain type field
   const plain = (record.type || record.event_type || '').toLowerCase();
-  return valid.includes(plain) ? plain : null;
+  return plain || null;
 }
 
 async function handleMintEvent(contractId, event, eventId) {
@@ -218,6 +304,38 @@ async function handleStakeEvent(contractId, event, eventId) {
 
 async function handleUnstakeEvent(contractId, event, eventId) {
   console.log(`[horizon-stream] unstake event — contract=${contractId} id=${eventId}`);
+}
+
+async function handleTokenEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] token event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleNovaRewardsEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] nova-rewards event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleCampaignEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] campaign event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleEscrowEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] escrow event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleDistributionEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] distribution event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleGovernanceEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] governance event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleAdminRolesEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] admin-roles event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleStateEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] contract-state event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 /**
@@ -256,4 +374,29 @@ function stopEventListener() {
   activeStreams.clear();
 }
 
-module.exports = { startEventListener, stopEventListener };
+/**
+ * Parses the structured data payload from a Soroban event value array.
+ * Returns { schemaVersion, fields } for v1 events, or { fields } for legacy events.
+ *
+ * @param {Array} value - The decoded event value array
+ * @returns {{ schemaVersion: number|null, fields: Array }}
+ */
+function parseEventData(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return { schemaVersion: null, fields: [] };
+  }
+  const first = value[0];
+  if (typeof first === 'number' && first >= 1) {
+    return { schemaVersion: first, fields: value.slice(1) };
+  }
+  return { schemaVersion: null, fields: value };
+}
+
+/**
+ * Process a single raw event — exposed for testing.
+ */
+async function processEvent(contractId, raw) {
+  return handleRawEvent(contractId, raw);
+}
+
+module.exports = { startEventListener, stopEventListener, extractEventType, parseEventData, processEvent };
