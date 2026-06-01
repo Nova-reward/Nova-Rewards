@@ -50,6 +50,7 @@ const {
   getUserReferralPoints,
 } = require('../db/pointTransactionRepository');
 const { processReferralBonus } = require('../services/referralService');
+const { UserFactory, STELLAR_ADDRESSES } = require('./fixtures');
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -58,26 +59,26 @@ beforeEach(() => jest.clearAllMocks());
 // ---------------------------------------------------------------------------
 describe('POST /api/users', () => {
   test('201 - creates user without referral', async () => {
-    const mockUser = { id: 1, wallet_address: 'GABC123', referred_by: null };
+    const mockUser = UserFactory.build({ referred_by: null });
     getUserByWallet.mockResolvedValue(null);
     createUser.mockResolvedValue(mockUser);
 
     const res = await request(app)
       .post('/api/users')
-      .send({ walletAddress: 'GABC123' });
+      .send({ walletAddress: mockUser.wallet_address });
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.wallet_address).toBe('GABC123');
+    expect(res.body.data.wallet_address).toBe(mockUser.wallet_address);
     expect(createUser).toHaveBeenCalledWith({
-      walletAddress: 'GABC123',
+      walletAddress: mockUser.wallet_address,
       referredBy: null,
     });
   });
 
   test('201 - creates user with referral', async () => {
-    const mockReferrer = { id: 2, wallet_address: 'GREFERRER' };
-    const mockUser = { id: 1, wallet_address: 'GABC123', referred_by: 2 };
+    const mockReferrer = UserFactory.build();
+    const mockUser = UserFactory.build({ referred_by: mockReferrer.id });
 
     getUserByWallet.mockResolvedValueOnce(null); // Check if user exists
     getUserByWallet.mockResolvedValueOnce(mockReferrer); // Find referrer
@@ -85,14 +86,14 @@ describe('POST /api/users', () => {
 
     const res = await request(app)
       .post('/api/users')
-      .send({ walletAddress: 'GABC123', referralCode: 'GREFERRER' });
+      .send({ walletAddress: mockUser.wallet_address, referralCode: mockReferrer.wallet_address });
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.referred_by).toBe(2);
+    expect(res.body.data.referred_by).toBe(mockReferrer.id);
     expect(createUser).toHaveBeenCalledWith({
-      walletAddress: 'GABC123',
-      referredBy: 2,
+      walletAddress: mockUser.wallet_address,
+      referredBy: mockReferrer.id,
     });
   });
 
@@ -108,12 +109,12 @@ describe('POST /api/users', () => {
   });
 
   test('409 - rejects when user already exists', async () => {
-    const mockUser = { id: 1, wallet_address: 'GABC123' };
+    const mockUser = UserFactory.build();
     getUserByWallet.mockResolvedValue(mockUser);
 
     const res = await request(app)
       .post('/api/users')
-      .send({ walletAddress: 'GABC123' });
+      .send({ walletAddress: mockUser.wallet_address });
 
     expect(res.status).toBe(409);
     expect(res.body.success).toBe(false);
@@ -126,11 +127,8 @@ describe('POST /api/users', () => {
 // ---------------------------------------------------------------------------
 describe('GET /api/users/:id/referrals', () => {
   test('200 - returns referral statistics', async () => {
-    const mockUser = { id: 1, wallet_address: 'GABC123' };
-    const mockReferredUsers = [
-      { id: 2, wallet_address: 'GUSER2', referred_at: '2026-03-27T10:00:00Z' },
-      { id: 3, wallet_address: 'GUSER3', referred_at: '2026-03-26T10:00:00Z' },
-    ];
+    const mockUser = UserFactory.build({ id: 1 });
+    const mockReferredUsers = UserFactory.buildList(2, { referred_by: mockUser.id });
 
     getUserById.mockResolvedValue(mockUser);
     getReferredUsers.mockResolvedValue(mockReferredUsers);
@@ -188,9 +186,9 @@ describe('Referral bonus processing', () => {
   });
 
   test('processes valid referral bonus', async () => {
-    const mockReferrer = { id: 1, wallet_address: 'GREFERRER' };
-    const mockReferredUser = { id: 2, wallet_address: 'GUSER2', referred_by: 1 };
-    const mockBonus = { id: 1, user_id: 1, type: 'referral', amount: '100' };
+    const mockReferrer = UserFactory.build({ id: 1 });
+    const mockReferredUser = UserFactory.build({ id: 2, referred_by: mockReferrer.id });
+    const mockBonus = { id: 1, user_id: mockReferrer.id, type: 'referral', amount: '100' };
 
     hasReferralBonusBeenClaimed.mockResolvedValue(false);
     getUserById.mockResolvedValueOnce(mockReferrer);
@@ -198,22 +196,22 @@ describe('Referral bonus processing', () => {
     recordPointTransaction.mockResolvedValue(mockBonus);
     markReferralBonusClaimed.mockResolvedValue({});
 
-    const result = await processReferralBonus(1, 2);
+    const result = await processReferralBonus(mockReferrer.id, mockReferredUser.id);
 
     expect(result.success).toBe(true);
     expect(result.bonus).toEqual(mockBonus);
     expect(recordPointTransaction).toHaveBeenCalledWith({
-      userId: 1,
+      userId: mockReferrer.id,
       type: 'referral',
       amount: 100,
       description: expect.any(String),
-      referredUserId: 2,
+      referredUserId: mockReferredUser.id,
     });
   });
 
   test('rejects invalid referral relationship', async () => {
-    const mockReferrer = { id: 1, wallet_address: 'GREFERRER' };
-    const mockReferredUser = { id: 2, wallet_address: 'GUSER2', referred_by: 3 };
+    const mockReferrer = UserFactory.build({ id: 1 });
+    const mockReferredUser = UserFactory.build({ id: 2, referred_by: 3 }); // referred by someone else
 
     hasReferralBonusBeenClaimed.mockResolvedValue(false);
     getUserById.mockResolvedValueOnce(mockReferrer);

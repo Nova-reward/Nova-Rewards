@@ -2,131 +2,88 @@
  * Skeleton primitives with shimmer animation.
  *
  * Exports:
- *   SkeletonBlock  — generic shimmer block (any size)
- *   SkeletonCard   — card with image + text lines (rewards / campaigns)
- *   SkeletonRow    — single table/list row (transactions)
- *   SkeletonNotification — notification list item
- *   SkeletonDashboard    — two-column dashboard layout (replaces LoadingSkeleton)
+ *   SkeletonBlock            — generic shimmer block (any size)
+ *   SkeletonCard             — reward/campaign card
+ *   SkeletonRow              — transaction list row
+ *   SkeletonNotification     — notification list item
+ *   SkeletonDashboard        — dashboard summary grid
+ *   SkeletonGrid             — grid of SkeletonCards (rewards page)
+ *   SkeletonLeaderboard      — leaderboard table rows
+ *   SkeletonAnalytics        — analytics summary + chart placeholders
+ *   SkeletonProfile          — profile page layout
+ *   SkeletonTransactionHistory — transaction history table
+ *   SkeletonMerchantDashboard  — merchant KPI cards + chart + campaign list
  *
- * All components are aria-hidden and use CSS vars from globals.css.
+ * Accessibility: containers use role="status" + aria-label; inner blocks are
+ * aria-hidden so screen readers announce only the live region label.
  */
 
-const shimmerStyle = {
-  background: 'linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%)',
-  backgroundSize: '200% 100%',
-  animation: `nova-shimmer var(--animation-loading-skeleton-duration, 1.5s) var(--animation-loading-skeleton-timing-function, linear) infinite`,
-  borderRadius: '6px',
-};
-
-/** Inject the keyframe once into the document head. */
-if (typeof document !== 'undefined' && !document.getElementById('nova-shimmer-kf')) {
-  const style = document.createElement('style');
-  style.id = 'nova-shimmer-kf';
-  style.textContent = `
-    @keyframes nova-shimmer {
-      0%   { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-/** Generic shimmer block. */
-export function SkeletonBlock({ width = '100%', height = '1rem', style = {} }) {
+/** Base shimmer block — all sizes, fully composable. */
+export function SkeletonBlock({ className = '', style = {} }) {
   return (
     <div
       aria-hidden="true"
-      style={{ width, height, ...shimmerStyle, ...style }}
+      className={`animate-pulse rounded bg-neutral-200 dark:bg-neutral-700 ${className}`}
+      style={style}
     />
   );
 }
 
-/**
- * Card skeleton — matches reward/campaign card layout:
- * image placeholder → title line → description lines → button.
- */
+/** Card skeleton — reward / campaign card layout. */
 export function SkeletonCard({ showImage = true }) {
   return (
     <div
       aria-hidden="true"
-      style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: '12px',
-        padding: '1.25rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.75rem',
-      }}
+      className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-5 flex flex-col gap-3"
     >
-      {showImage && <SkeletonBlock height="160px" style={{ borderRadius: '8px' }} />}
-      <SkeletonBlock width="65%" height="1.1rem" />
-      <SkeletonBlock height="0.85rem" />
-      <SkeletonBlock width="80%" height="0.85rem" />
-      <SkeletonBlock height="2.25rem" style={{ marginTop: '0.25rem', borderRadius: '8px' }} />
+      {showImage && <SkeletonBlock className="h-40 w-full rounded-lg" />}
+      <SkeletonBlock className="h-4 w-2/3" />
+      <SkeletonBlock className="h-3 w-full" />
+      <SkeletonBlock className="h-3 w-4/5" />
+      <SkeletonBlock className="h-9 w-full rounded-lg mt-1" />
     </div>
   );
 }
 
-/**
- * Row skeleton — matches transaction/history list row layout:
- * icon · title + subtitle · amount · date.
- */
+/** Row skeleton — transaction / history list row. */
 export function SkeletonRow() {
   return (
     <div
       aria-hidden="true"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-        padding: '0.75rem 0',
-        borderBottom: '1px solid var(--border)',
-      }}
+      className="flex items-center gap-3 py-3 border-b border-slate-100 dark:border-brand-border"
     >
-      <SkeletonBlock width="2rem" height="2rem" style={{ borderRadius: '50%', flexShrink: 0 }} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-        <SkeletonBlock width="45%" height="0.875rem" />
-        <SkeletonBlock width="30%" height="0.75rem" />
+      <SkeletonBlock className="h-8 w-8 rounded-full shrink-0" />
+      <div className="flex-1 flex flex-col gap-1.5">
+        <SkeletonBlock className="h-3.5 w-2/5" />
+        <SkeletonBlock className="h-3 w-1/4" />
       </div>
-      <SkeletonBlock width="4rem" height="0.875rem" style={{ flexShrink: 0 }} />
-      <SkeletonBlock width="3.5rem" height="0.75rem" style={{ flexShrink: 0 }} />
+      <SkeletonBlock className="h-3.5 w-14 shrink-0" />
+      <SkeletonBlock className="h-3 w-12 shrink-0" />
     </div>
   );
 }
 
-/**
- * Notification skeleton — matches notification list item layout.
- */
+/** Notification list item skeleton. */
 export function SkeletonNotification() {
   return (
     <div
       aria-hidden="true"
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: '0.75rem',
-        padding: '0.75rem 1rem',
-        borderBottom: '1px solid var(--border)',
-      }}
+      className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 dark:border-brand-border"
     >
-      <SkeletonBlock width="1.5rem" height="1.5rem" style={{ borderRadius: '50%', flexShrink: 0 }} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-        <SkeletonBlock height="0.875rem" />
-        <SkeletonBlock width="40%" height="0.75rem" />
+      <SkeletonBlock className="h-6 w-6 rounded-full shrink-0" />
+      <div className="flex-1 flex flex-col gap-1.5">
+        <SkeletonBlock className="h-3.5 w-full" />
+        <SkeletonBlock className="h-3 w-2/5" />
       </div>
     </div>
   );
 }
 
-/**
- * Dashboard skeleton — 3-column grid matching the dashboard summary grid
- * (1 col mobile → 2 col md → 3 col lg).
- */
+/** Dashboard skeleton — balance cards + recent transactions. */
 export function SkeletonDashboard() {
   return (
     <div
-      aria-busy="true"
+      role="status"
       aria-label="Loading dashboard"
       style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1rem' }}
       className="grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
@@ -153,6 +110,30 @@ export function SkeletonDashboard() {
       {/* Recent transactions card */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
         <SkeletonBlock width="55%" height="0.875rem" style={{ marginBottom: '0.75rem' }} />
+      className="space-y-4"
+    >
+      {/* Summary grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => (
+          <div
+            key={i}
+            aria-hidden="true"
+            className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 flex flex-col items-center gap-3"
+          >
+            <SkeletonBlock className="h-3 w-1/2" />
+            <SkeletonBlock className="h-10 w-3/4 rounded-lg" />
+            <SkeletonBlock className="h-2.5 w-1/3" />
+            <SkeletonBlock className="h-2 w-full rounded-full" />
+          </div>
+        ))}
+      </div>
+
+      {/* Recent transactions card */}
+      <div
+        aria-hidden="true"
+        className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4"
+      >
+        <SkeletonBlock className="h-4 w-2/5 mb-4" />
         {[...Array(4)].map((_, i) => <SkeletonRow key={i} />)}
       </div>
     </div>
@@ -197,16 +178,13 @@ export function SkeletonChartCard({ height = '15rem' }) {
 /**
  * Grid of SkeletonCards — used on rewards and campaigns pages.
  */
+/** Grid of SkeletonCards — rewards / campaigns page. */
 export function SkeletonGrid({ count = 6, showImage = true }) {
   return (
     <div
-      aria-busy="true"
+      role="status"
       aria-label="Loading items"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-        gap: '1.25rem',
-      }}
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
     >
       {[...Array(count)].map((_, i) => (
         <SkeletonCard key={i} showImage={showImage} />
@@ -214,3 +192,214 @@ export function SkeletonGrid({ count = 6, showImage = true }) {
     </div>
   );
 }
+
+/** Leaderboard skeleton — rank rows. */
+export function SkeletonLeaderboard({ rows = 10 }) {
+  return (
+    <div
+      role="status"
+      aria-label="Loading leaderboard"
+      className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card overflow-hidden"
+    >
+      {/* Header */}
+      <div
+        aria-hidden="true"
+        className="flex items-center gap-4 px-4 py-3 border-b border-slate-100 dark:border-brand-border"
+      >
+        <SkeletonBlock className="h-4 w-8" />
+        <SkeletonBlock className="h-4 flex-1" />
+        <SkeletonBlock className="h-4 w-20" />
+      </div>
+      {[...Array(rows)].map((_, i) => (
+        <div
+          key={i}
+          aria-hidden="true"
+          className="flex items-center gap-4 px-4 py-3 border-b border-slate-100 dark:border-brand-border last:border-0"
+        >
+          <SkeletonBlock className="h-4 w-6 shrink-0" />
+          <SkeletonBlock className="h-8 w-8 rounded-full shrink-0" />
+          <SkeletonBlock className="h-3.5 flex-1" />
+          <SkeletonBlock className="h-3.5 w-16 shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Analytics skeleton — 4 stat cards + 4 chart placeholders. */
+export function SkeletonAnalytics() {
+  return (
+    <div role="status" aria-label="Loading analytics" className="space-y-6">
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div
+            key={i}
+            aria-hidden="true"
+            className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 flex flex-col gap-2"
+          >
+            <SkeletonBlock className="h-3 w-3/5" />
+            <SkeletonBlock className="h-8 w-4/5" />
+            <SkeletonBlock className="h-2.5 w-2/5" />
+          </div>
+        ))}
+      </div>
+
+      {/* Wide chart */}
+      <div
+        aria-hidden="true"
+        className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4"
+      >
+        <SkeletonBlock className="h-4 w-1/3 mb-4" />
+        <SkeletonBlock className="h-56 w-full rounded-lg" />
+      </div>
+
+      {/* 3-column charts */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => (
+          <div
+            key={i}
+            aria-hidden="true"
+            className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4"
+          >
+            <SkeletonBlock className="h-4 w-2/3 mb-4" />
+            <SkeletonBlock className="h-44 w-full rounded-lg" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Profile skeleton — avatar, name, stats, notification toggles. */
+export function SkeletonProfile() {
+  return (
+    <div role="status" aria-label="Loading profile" className="space-y-6">
+      {/* Avatar + name */}
+      <div
+        aria-hidden="true"
+        className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-6 flex items-center gap-4"
+      >
+        <SkeletonBlock className="h-16 w-16 rounded-full shrink-0" />
+        <div className="flex-1 flex flex-col gap-2">
+          <SkeletonBlock className="h-5 w-1/3" />
+          <SkeletonBlock className="h-3.5 w-1/2" />
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div
+        aria-hidden="true"
+        className="grid grid-cols-3 gap-4"
+      >
+        {[...Array(3)].map((_, i) => (
+          <div
+            key={i}
+            className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 flex flex-col items-center gap-2"
+          >
+            <SkeletonBlock className="h-6 w-1/2" />
+            <SkeletonBlock className="h-3 w-3/4" />
+          </div>
+        ))}
+      </div>
+
+      {/* Settings rows */}
+      <div
+        aria-hidden="true"
+        className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 flex flex-col gap-4"
+      >
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="flex items-center justify-between">
+            <SkeletonBlock className="h-4 w-2/5" />
+            <SkeletonBlock className="h-6 w-10 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Transaction history skeleton — filter bar + table rows. */
+export function SkeletonTransactionHistory({ rows = 8 }) {
+  return (
+    <div role="status" aria-label="Loading transaction history" className="space-y-4">
+      {/* Filter bar */}
+      <div
+        aria-hidden="true"
+        className="flex flex-wrap gap-3"
+      >
+        {[...Array(4)].map((_, i) => (
+          <SkeletonBlock key={i} className="h-9 w-28 rounded-lg" />
+        ))}
+        <SkeletonBlock className="h-9 w-24 rounded-lg ml-auto" />
+      </div>
+
+      {/* Table */}
+      <div
+        aria-hidden="true"
+        className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card overflow-hidden"
+      >
+        {/* Table header */}
+        <div className="flex gap-4 px-4 py-3 border-b border-slate-100 dark:border-brand-border">
+          {[40, 80, 60, 80, 60, 48].map((w, i) => (
+            <SkeletonBlock key={i} className="h-3.5" style={{ width: w }} />
+          ))}
+        </div>
+        {[...Array(rows)].map((_, i) => <SkeletonRow key={i} />)}
+      </div>
+
+      {/* Pagination */}
+      <div aria-hidden="true" className="flex items-center justify-between">
+        <SkeletonBlock className="h-4 w-20" />
+        <div className="flex gap-2">
+          <SkeletonBlock className="h-8 w-16 rounded-lg" />
+          <SkeletonBlock className="h-8 w-16 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Merchant dashboard skeleton — KPI cards + chart + campaign list. */
+export function SkeletonMerchantDashboard() {
+  return (
+    <div role="status" aria-label="Loading merchant dashboard" className="space-y-6">
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div
+            key={i}
+            aria-hidden="true"
+            className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 flex flex-col items-center gap-2"
+          >
+            <SkeletonBlock className="h-8 w-8 rounded-full" />
+            <SkeletonBlock className="h-3 w-3/4" />
+            <SkeletonBlock className="h-7 w-1/2" />
+          </div>
+        ))}
+      </div>
+
+      {/* Issuance chart */}
+      <div
+        aria-hidden="true"
+        className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6"
+      >
+        <SkeletonBlock className="h-4 w-1/3 mb-4" />
+        <SkeletonBlock className="h-60 w-full rounded-lg" />
+      </div>
+
+      {/* Campaign list */}
+      <div
+        aria-hidden="true"
+        className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6"
+      >
+        <SkeletonBlock className="h-4 w-1/4 mb-4" />
+        {[...Array(3)].map((_, i) => (
+          <SkeletonBlock key={i} className="h-10 w-full rounded-lg mb-2" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default SkeletonDashboard;
