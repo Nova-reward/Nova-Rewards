@@ -61,7 +61,6 @@ impl NovaToken {
         }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
-        Ok(())
     }
 
     // ========================================
@@ -466,20 +465,16 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "insufficient allowance")]
     fn test_transfer_from_insufficient_allowance() {
         let (env, _admin, client) = setup();
         let owner = Address::generate(&env);
         let spender = Address::generate(&env);
         let recipient = Address::generate(&env);
-        
+
         client.mint(&owner, &500);
         client.approve(&owner, &spender, &100);
-        
-        // This should panic - trying to transfer more than allowed
-        let result = std::panic::catch_unwind(|| {
-            client.transfer_from(&spender, &owner, &recipient, &150);
-        });
-        assert!(result.is_err());
+        client.transfer_from(&spender, &owner, &recipient, &150);
     }
 
     #[test]
@@ -516,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "AlreadyInitialized")]
+    #[should_panic(expected = "already initialized")]
     fn test_reinitialize_is_blocked() {
         let (env, admin, client) = setup();
         // second call must revert with AlreadyInitialized
