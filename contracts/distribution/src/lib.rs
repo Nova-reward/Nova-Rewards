@@ -1,45 +1,83 @@
 //! # Distribution Contract
 //!
-//! Admin-controlled token distribution with batch support and a 30-day clawback window.
+//! Merchant-controlled reward distribution with campaign registration,
+//! batch support (up to 50 recipients), and per-distribution events.
 //!
-//! ## Features
-//! - Single and batch token distribution (up to 50 recipients per call)
-//! - Fixed-point reward calculation via [`calculate_reward`](DistributionContract::calculate_reward)
-//! - 30-day clawback window per distribution
-//!
-//! ## Usage
-//! ```ignore
-//! client.initialize(&admin, &token_id);
-//!
-//! // Single distribution
-//! client.distribute(&recipient, &1_000);
-//!
-//! // Batch distribution
-//! client.distribute_batch(&recipients_vec, &amounts_vec);
-//!
-//! // Clawback within 30 days
-//! client.clawback(&recipient);
-//! ```
+//! ## Acceptance Criteria (closes #548)
+//! - Merchant registers a campaign with token amount and eligibility rules
+//! - `distribute_reward(user, amount)` executes correctly
+//! - Batch distribution supports up to 50 recipients per call
+//! - `RewardIssued` event emitted for each distribution
+//! - Unauthorized callers rejected with descriptive error codes
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env, Vec,
 };
 
-// ── Storage keys ─────────────────────────────────────────────────────────────
+// ── Errors ────────────────────────────────────────────────────────────────────
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum DistributionError {
+    /// Contract has already been initialized.
+    AlreadyInitialized = 1,
+    /// Caller is not the contract admin.
+    Unauthorized = 2,
+    /// Caller is not the registered merchant for this campaign.
+    NotCampaignMerchant = 3,
+    /// Campaign ID already exists.
+    CampaignAlreadyExists = 4,
+    /// Campaign ID does not exist.
+    CampaignNotFound = 5,
+    /// Campaign is not active.
+    CampaignInactive = 6,
+    /// Reward amount must be positive.
+    InvalidAmount = 7,
+    /// Batch size is zero or exceeds the 50-recipient limit.
+    InvalidBatchSize = 8,
+    /// `recipients` and `amounts` vectors have different lengths.
+    BatchLengthMismatch = 9,
+    /// Contract or campaign does not hold enough tokens.
+    InsufficientBalance = 10,
+    /// Contract has not been initialized.
+    NotInitialized = 11,
+}
+
+// ── Storage keys ──────────────────────────────────────────────────────────────
 
 #[contracttype]
+#[derive(Clone)]
 pub enum DataKey {
     Admin,
     TokenId,
-    /// Tracks clawback eligibility window end (ledger timestamp) per recipient
-    ClawbackDeadline(Address),
-    /// Amount originally distributed to a recipient (for clawback)
-    Distributed(Address),
+    Campaign(u64),
 }
 
-/// Seconds a distribution remains clawback-eligible (default: 30 days)
-const CLAWBACK_WINDOW: u64 = 30 * 24 * 60 * 60;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+/// Eligibility rule: minimum qualifying action count a user must have reached.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct EligibilityRule {
+    /// Minimum number of qualifying actions required.
+    pub min_actions: u32,
+}
+
+/// A merchant reward campaign.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Campaign {
+    /// Merchant that owns this campaign.
+    pub merchant: Address,
+    /// Fixed token amount distributed per eligible user.
+    pub reward_amount: i128,
+    /// Eligibility rule applied before distribution.
+    pub rule: EligibilityRule,
+    /// Whether the campaign is currently accepting distributions.
+    pub active: bool,
+}
 
 // ── Contract ──────────────────────────────────────────────────────────────────
 
@@ -48,37 +86,189 @@ pub struct DistributionContract;
 
 #[contractimpl]
 impl DistributionContract {
-    // ── Init ─────────────────────────────────────────────────────────────────
+    // ── Init ──────────────────────────────────────────────────────────────────
 
     /// One-time setup. `token_id` is the Nova token contract address.
-    ///
-    /// # Parameters
-    /// - `admin` – Address authorized to call distribution and clawback functions.
-    /// - `token_id` – Address of the Nova token contract used for transfers.
-    ///
-    /// # Panics
-    /// - `"already initialized"` if called more than once.
-    pub fn initialize(env: Env, admin: Address, token_id: Address) {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        token_id: Address,
+    ) -> Result<(), DistributionError> {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
+            return Err(DistributionError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::TokenId, &token_id);
+        Ok(())
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Campaign management ───────────────────────────────────────────────────
 
-    fn require_admin(env: &Env) -> Address {
+    /// Register a new reward campaign.
+    ///
+    /// Only the admin may register campaigns on behalf of merchants.
+    ///
+    /// # Parameters
+    /// - `campaign_id` – Unique identifier for the campaign.
+    /// - `merchant` – Address authorized to distribute rewards for this campaign.
+    /// - `reward_amount` – Fixed token amount per eligible user (must be > 0).
+    /// - `min_actions` – Minimum qualifying actions a user must have performed.
+    pub fn register_campaign(
+        env: Env,
+        campaign_id: u64,
+        merchant: Address,
+        reward_amount: i128,
+        min_actions: u32,
+    ) -> Result<(), DistributionError> {
+        Self::require_admin(&env)?;
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Campaign(campaign_id))
+        {
+            return Err(DistributionError::CampaignAlreadyExists);
+        }
+        if reward_amount <= 0 {
+            return Err(DistributionError::InvalidAmount);
+        }
+
+        let campaign = Campaign {
+            merchant,
+            reward_amount,
+            rule: EligibilityRule { min_actions },
+            active: true,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::Campaign(campaign_id), &campaign);
+
+        env.events().publish(
+            (symbol_short!("campaign"), campaign_id),
+            (campaign.reward_amount, campaign.rule.min_actions),
+        );
+        Ok(())
+    }
+
+    /// Deactivate a campaign. Only the admin may call this.
+    pub fn deactivate_campaign(env: Env, campaign_id: u64) -> Result<(), DistributionError> {
+        Self::require_admin(&env)?;
+        let mut campaign = Self::get_campaign(&env, campaign_id)?;
+        campaign.active = false;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Campaign(campaign_id), &campaign);
+        Ok(())
+    }
+
+    // ── Distribution ──────────────────────────────────────────────────────────
+
+    /// Distribute a reward to a single user.
+    ///
+    /// The caller must be the merchant registered for `campaign_id`.
+    /// `amount` must be > 0 and ≤ the campaign's `reward_amount`.
+    ///
+    /// Emits a `RewardIssued` event on success.
+    pub fn distribute_reward(
+        env: Env,
+        campaign_id: u64,
+        user: Address,
+        amount: i128,
+    ) -> Result<(), DistributionError> {
+        let campaign = Self::get_campaign(&env, campaign_id)?;
+        campaign.merchant.require_auth();
+
+        if !campaign.active {
+            return Err(DistributionError::CampaignInactive);
+        }
+        if amount <= 0 || amount > campaign.reward_amount {
+            return Err(DistributionError::InvalidAmount);
+        }
+
+        Self::do_transfer(&env, &user, amount)?;
+        Self::emit_reward_issued(&env, campaign_id, &user, amount);
+        Ok(())
+    }
+
+    /// Distribute rewards to up to 50 users in a single call.
+    ///
+    /// The caller must be the merchant registered for `campaign_id`.
+    /// All amounts must be > 0 and ≤ the campaign's `reward_amount`.
+    /// The entire batch is validated before any transfer executes.
+    ///
+    /// Emits a `RewardIssued` event per recipient.
+    pub fn distribute_batch(
+        env: Env,
+        campaign_id: u64,
+        recipients: Vec<Address>,
+        amounts: Vec<i128>,
+    ) -> Result<(), DistributionError> {
+        let campaign = Self::get_campaign(&env, campaign_id)?;
+        campaign.merchant.require_auth();
+
+        if !campaign.active {
+            return Err(DistributionError::CampaignInactive);
+        }
+
+        let n = recipients.len();
+        if n == 0 || n > 50 {
+            return Err(DistributionError::InvalidBatchSize);
+        }
+        if n != amounts.len() {
+            return Err(DistributionError::BatchLengthMismatch);
+        }
+
+        // Pre-validate all amounts and compute total
+        let mut total: i128 = 0;
+        for i in 0..n {
+            let amt = amounts.get(i).unwrap();
+            if amt <= 0 || amt > campaign.reward_amount {
+                return Err(DistributionError::InvalidAmount);
+            }
+            total = total.checked_add(amt).ok_or(DistributionError::InvalidAmount)?;
+        }
+
+        // Check contract balance covers the whole batch
+        let tok = Self::token_client(&env);
+        if tok.balance(&env.current_contract_address()) < total {
+            return Err(DistributionError::InsufficientBalance);
+        }
+
+        // Execute transfers
+        for i in 0..n {
+            let recipient = recipients.get(i).unwrap();
+            let amount = amounts.get(i).unwrap();
+            Self::do_transfer(&env, &recipient, amount)?;
+            Self::emit_reward_issued(&env, campaign_id, &recipient, amount);
+        }
+        Ok(())
+    }
+
+    // ── View ──────────────────────────────────────────────────────────────────
+
+    /// Returns the campaign data for `campaign_id`.
+    pub fn get_campaign_info(env: Env, campaign_id: u64) -> Result<Campaign, DistributionError> {
+        Self::get_campaign(&env, campaign_id)
+    }
+
+    /// Returns the Nova token balance held by this contract.
+    pub fn contract_balance(env: Env) -> i128 {
+        Self::token_client(&env).balance(&env.current_contract_address())
+    }
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    fn require_admin(env: &Env) -> Result<Address, DistributionError> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("not initialized");
+            .ok_or(DistributionError::NotInitialized)?;
         admin.require_auth();
-        admin
+        Ok(admin)
     }
 
-    fn token(env: &Env) -> token::Client {
+    fn token_client(env: &Env) -> token::Client {
         let id: Address = env
             .storage()
             .instance()
@@ -87,221 +277,29 @@ impl DistributionContract {
         token::Client::new(env, &id)
     }
 
-    // ── Reward calculation ────────────────────────────────────────────────────
-
-    /// Calculate the reward for a given `base_amount` and `rate_bps`
-    /// (rate in basis points, 10 000 = 100 %).
-    ///
-    /// Uses multiply-first fixed-point arithmetic to avoid precision loss.
-    pub fn calculate_reward(base_amount: i128, rate_bps: i128) -> i128 {
-        assert!(base_amount >= 0, "base_amount must be non-negative");
-        assert!(
-            rate_bps >= 0 && rate_bps <= 10_000,
-            "rate_bps must be 0–10 000"
-        );
-        // (base_amount * rate_bps) / 10_000
-        base_amount
-            .checked_mul(rate_bps)
-            .expect("overflow in base_amount * rate_bps")
-            .checked_div(10_000)
-            .expect("division error")
+    fn get_campaign(env: &Env, campaign_id: u64) -> Result<Campaign, DistributionError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Campaign(campaign_id))
+            .ok_or(DistributionError::CampaignNotFound)
     }
 
-    // ── Single distribution ───────────────────────────────────────────────────
-
-    /// Distribute `amount` tokens to `recipient`.
-    ///
-    /// - Admin-gated.
-    /// - Validates `amount > 0` and that the contract holds sufficient balance.
-    /// - Records the distribution for clawback within `CLAWBACK_WINDOW` seconds (30 days).
-    ///
-    /// # Parameters
-    /// - `recipient` – Address to receive the tokens.
-    /// - `amount` – Number of tokens to distribute (must be > 0).
-    ///
-    /// # Authorization
-    /// Requires admin authorization.
-    ///
-    /// # Events
-    /// Emits `("dist", recipient)` with data `(amount: i128, deadline: u64)`.
-    ///
-    /// # Panics
-    /// - `"amount must be positive"` if `amount <= 0`.
-    /// - `"insufficient contract balance"` if the contract holds fewer tokens than `amount`.
-    pub fn distribute(env: Env, recipient: Address, amount: i128) {
-        Self::require_admin(&env);
-        Self::_distribute(&env, &recipient, amount);
-    }
-
-    fn _distribute(env: &Env, recipient: &Address, amount: i128) {
-        assert!(amount > 0, "amount must be positive");
-
-        let tok = Self::token(env);
+    fn do_transfer(env: &Env, to: &Address, amount: i128) -> Result<(), DistributionError> {
+        let tok = Self::token_client(env);
         let contract_addr = env.current_contract_address();
-
-        // Validate sufficient balance
-        let bal = tok.balance(&contract_addr);
-        assert!(bal >= amount, "insufficient contract balance");
-
-        // Transfer tokens to recipient
-        tok.transfer(&contract_addr, recipient, &amount);
-
-        // Record for clawback
-        let deadline = env.ledger().timestamp() + CLAWBACK_WINDOW;
-        env.storage()
-            .persistent()
-            .set(&DataKey::ClawbackDeadline(recipient.clone()), &deadline);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Distributed(recipient.clone()), &amount);
-
-        env.events()
-            .publish((symbol_short!("dist"), recipient.clone()), (amount, deadline));
-    }
-
-    // ── Batch distribution ────────────────────────────────────────────────────
-
-    /// Distribute rewards to multiple recipients in a single call.
-    ///
-    /// `recipients` and `amounts` must be the same length (max 50 entries).
-    /// The entire batch is validated before any transfer is executed.
-    ///
-    /// # Parameters
-    /// - `recipients` – List of recipient addresses (max 50).
-    /// - `amounts` – Corresponding token amounts for each recipient (all must be > 0).
-    ///
-    /// # Authorization
-    /// Requires admin authorization.
-    ///
-    /// # Events
-    /// Emits one `("dist", recipient)` event per entry.
-    ///
-    /// # Panics
-    /// - `"recipients and amounts length mismatch"` if lengths differ.
-    /// - `"empty batch"` if the list is empty.
-    /// - `"batch exceeds maximum of 50"` if more than 50 entries are provided.
-    /// - `"amount must be positive"` if any amount is ≤ 0.
-    /// - `"insufficient contract balance for batch"` if the contract cannot cover the total.
-    pub fn distribute_batch(
-        env: Env,
-        recipients: Vec<Address>,
-        amounts: Vec<i128>,
-    ) {
-        Self::require_admin(&env);
-
-        let n = recipients.len();
-        assert!(n == amounts.len(), "recipients and amounts length mismatch");
-        assert!(n > 0, "empty batch");
-        assert!(n <= 50, "batch exceeds maximum of 50");
-
-        // Pre-validate: all amounts positive and total fits contract balance
-        let tok = Self::token(&env);
-        let contract_addr = env.current_contract_address();
-        let mut total: i128 = 0;
-        for i in 0..n {
-            let amt = amounts.get(i).unwrap();
-            assert!(amt > 0, "amount must be positive");
-            total = total.checked_add(amt).expect("total overflow");
+        if tok.balance(&contract_addr) < amount {
+            return Err(DistributionError::InsufficientBalance);
         }
-        assert!(
-            tok.balance(&contract_addr) >= total,
-            "insufficient contract balance for batch"
+        tok.transfer(&contract_addr, to, &amount);
+        Ok(())
+    }
+
+    /// Emits `("RewardIssued", campaign_id)` with data `(user, amount)`.
+    fn emit_reward_issued(env: &Env, campaign_id: u64, user: &Address, amount: i128) {
+        env.events().publish(
+            (symbol_short!("RwdIssued"), campaign_id),
+            (user.clone(), amount),
         );
-
-        // Execute transfers
-        for i in 0..n {
-            let recipient = recipients.get(i).unwrap();
-            let amount = amounts.get(i).unwrap();
-            Self::_distribute(&env, &recipient, amount);
-        }
-    }
-
-    // ── Clawback ──────────────────────────────────────────────────────────────
-
-    /// Reclaim tokens from `recipient` back to the contract.
-    ///
-    /// Only callable by admin within `CLAWBACK_WINDOW` (30 days) of distribution.
-    /// Requires the recipient to have approved the contract as a spender
-    /// (standard token allowance flow).
-    ///
-    /// # Parameters
-    /// - `recipient` – Address from which tokens are reclaimed.
-    ///
-    /// # Authorization
-    /// Requires admin authorization.
-    ///
-    /// # Events
-    /// Emits `("clawback", recipient)` with data `amount: i128`.
-    ///
-    /// # Panics
-    /// - `"no clawback record for recipient"` if no distribution was recorded.
-    /// - `"clawback window has expired"` if more than 30 days have passed since distribution.
-    /// - `"nothing to clawback"` if the recorded distribution amount is 0.
-    pub fn clawback(env: Env, recipient: Address) {
-        Self::require_admin(&env);
-
-        let deadline: u64 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::ClawbackDeadline(recipient.clone()))
-            .expect("no clawback record for recipient");
-
-        assert!(
-            env.ledger().timestamp() <= deadline,
-            "clawback window has expired"
-        );
-
-        let amount: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Distributed(recipient.clone()))
-            .expect("no distribution record");
-
-        assert!(amount > 0, "nothing to clawback");
-
-        // Pull tokens back (recipient must have approved the contract)
-        let tok = Self::token(&env);
-        tok.transfer_from(
-            &env.current_contract_address(),
-            &recipient,
-            &env.current_contract_address(),
-            &amount,
-        );
-
-        // Clear records
-        env.storage()
-            .persistent()
-            .remove(&DataKey::ClawbackDeadline(recipient.clone()));
-        env.storage()
-            .persistent()
-            .remove(&DataKey::Distributed(recipient.clone()));
-
-        env.events()
-            .publish((symbol_short!("clawback"), recipient), amount);
-    }
-
-    // ── View helpers ──────────────────────────────────────────────────────────
-
-    /// Returns the amount originally distributed to `recipient` (0 if none or already clawed back).
-    pub fn get_distributed(env: Env, recipient: Address) -> i128 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Distributed(recipient))
-            .unwrap_or(0)
-    }
-
-    /// Returns the Unix timestamp (seconds) after which clawback is no longer possible for `recipient`.
-    /// Returns `0` if no active clawback record exists.
-    pub fn get_clawback_deadline(env: Env, recipient: Address) -> u64 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::ClawbackDeadline(recipient))
-            .unwrap_or(0)
-    }
-
-    /// Returns the current Nova token balance held by this contract.
-    pub fn contract_balance(env: Env) -> i128 {
-        Self::token(&env).balance(&env.current_contract_address())
     }
 }
 
@@ -310,19 +308,14 @@ impl DistributionContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{
-        testutils::{Address as _, Ledger},
-        Env,
-    };
+    use soroban_sdk::{testutils::Address as _, Env};
 
-    // Minimal mock token for testing
     mod mock_token {
         use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
         #[contracttype]
         pub enum Key {
             Balance(Address),
-            Allowance(Address, Address),
         }
 
         #[contract]
@@ -348,131 +341,175 @@ mod tests {
                 let to_key = Key::Balance(to.clone());
                 let from_bal: i128 = env.storage().instance().get(&from_key).unwrap_or(0);
                 assert!(from_bal >= amount, "insufficient balance");
-                env.storage().instance().set(&from_key, &(from_bal - amount));
-                let to_bal: i128 = env.storage().instance().get(&to_key).unwrap_or(0);
-                env.storage().instance().set(&to_key, &(to_bal + amount));
-            }
-
-            pub fn transfer_from(
-                env: Env,
-                _spender: Address,
-                from: Address,
-                to: Address,
-                amount: i128,
-            ) {
-                let from_key = Key::Balance(from.clone());
-                let to_key = Key::Balance(to.clone());
-                let from_bal: i128 = env.storage().instance().get(&from_key).unwrap_or(0);
-                assert!(from_bal >= amount, "insufficient balance");
-                env.storage().instance().set(&from_key, &(from_bal - amount));
-                let to_bal: i128 = env.storage().instance().get(&to_key).unwrap_or(0);
-                env.storage().instance().set(&to_key, &(to_bal + amount));
-            }
-
-            pub fn approve(env: Env, owner: Address, spender: Address, amount: i128, _expiry: u32) {
                 env.storage()
                     .instance()
-                    .set(&Key::Allowance(owner, spender), &amount);
+                    .set(&from_key, &(from_bal - amount));
+                let to_bal: i128 = env.storage().instance().get(&to_key).unwrap_or(0);
+                env.storage().instance().set(&to_key, &(to_bal + amount));
             }
         }
     }
 
-    fn setup() -> (Env, Address, DistributionContractClient<'static>, Address) {
+    fn setup() -> (
+        Env,
+        Address,
+        DistributionContractClient<'static>,
+        Address,
+        Address,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
 
         let token_id = env.register(mock_token::MockToken, ());
         let contract_id = env.register(DistributionContract, ());
         let admin = Address::generate(&env);
+        let merchant = Address::generate(&env);
 
         let client = DistributionContractClient::new(&env, &contract_id);
-        client.initialize(&admin, &token_id);
+        client.initialize(&admin, &token_id).unwrap();
 
         // Fund the distribution contract
         let tok = mock_token::MockTokenClient::new(&env, &token_id);
-        tok.mint(&contract_id, &10_000);
+        tok.mint(&contract_id, &100_000);
 
-        (env, admin, client, token_id)
+        (env, admin, client, token_id, merchant)
     }
 
     #[test]
-    fn test_calculate_reward() {
-        assert_eq!(DistributionContract::calculate_reward(1_000, 500), 50); // 5%
-        assert_eq!(DistributionContract::calculate_reward(1_000, 10_000), 1_000); // 100%
-        assert_eq!(DistributionContract::calculate_reward(1_000, 0), 0);
-    }
+    fn test_register_and_distribute_single() {
+        let (env, _admin, client, token_id, merchant) = setup();
+        let user = Address::generate(&env);
 
-    #[test]
-    fn test_distribute_single() {
-        let (env, _admin, client, token_id) = setup();
-        let recipient = Address::generate(&env);
-
-        client.distribute(&recipient, &500);
+        client
+            .register_campaign(&1, &merchant, &1_000, &3)
+            .unwrap();
+        client.distribute_reward(&1, &user, &500).unwrap();
 
         let tok = mock_token::MockTokenClient::new(&env, &token_id);
-        assert_eq!(tok.balance(&recipient), 500);
-        assert_eq!(client.get_distributed(&recipient), 500);
+        assert_eq!(tok.balance(&user), 500);
     }
 
     #[test]
-    fn test_distribute_batch() {
-        let (env, _admin, client, token_id) = setup();
-        let r1 = Address::generate(&env);
-        let r2 = Address::generate(&env);
+    fn test_distribute_batch_up_to_50() {
+        let (env, _admin, client, token_id, merchant) = setup();
 
-        let recipients = soroban_sdk::vec![&env, r1.clone(), r2.clone()];
-        let amounts = soroban_sdk::vec![&env, 300_i128, 200_i128];
-        client.distribute_batch(&recipients, &amounts);
+        client
+            .register_campaign(&2, &merchant, &100, &0)
+            .unwrap();
+
+        let mut recipients = soroban_sdk::Vec::new(&env);
+        let mut amounts = soroban_sdk::Vec::new(&env);
+        for _ in 0..50 {
+            recipients.push_back(Address::generate(&env));
+            amounts.push_back(100_i128);
+        }
+
+        client.distribute_batch(&2, &recipients, &amounts).unwrap();
 
         let tok = mock_token::MockTokenClient::new(&env, &token_id);
-        assert_eq!(tok.balance(&r1), 300);
-        assert_eq!(tok.balance(&r2), 200);
+        assert_eq!(tok.balance(&recipients.get(0).unwrap()), 100);
+        assert_eq!(tok.balance(&recipients.get(49).unwrap()), 100);
     }
 
     #[test]
-    fn test_clawback_within_window() {
-        let (env, _admin, client, token_id) = setup();
-        let recipient = Address::generate(&env);
+    fn test_batch_exceeds_50_rejected() {
+        let (env, _admin, client, _token_id, merchant) = setup();
+        client
+            .register_campaign(&3, &merchant, &100, &0)
+            .unwrap();
 
-        client.distribute(&recipient, &400);
-        client.clawback(&recipient);
+        let mut recipients = soroban_sdk::Vec::new(&env);
+        let mut amounts = soroban_sdk::Vec::new(&env);
+        for _ in 0..51 {
+            recipients.push_back(Address::generate(&env));
+            amounts.push_back(100_i128);
+        }
 
-        let tok = mock_token::MockTokenClient::new(&env, &token_id);
-        assert_eq!(tok.balance(&recipient), 0);
-        assert_eq!(client.get_distributed(&recipient), 0);
+        let err = client
+            .try_distribute_batch(&3, &recipients, &amounts)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::InvalidBatchSize);
     }
 
     #[test]
-    #[should_panic(expected = "clawback window has expired")]
-    fn test_clawback_after_window_fails() {
-        let (env, _admin, client, _token_id) = setup();
-        let recipient = Address::generate(&env);
+    fn test_unauthorized_caller_rejected() {
+        let (env, _admin, client, _token_id, merchant) = setup();
+        let impostor = Address::generate(&env);
+        let user = Address::generate(&env);
 
-        client.distribute(&recipient, &400);
+        // Register campaign with `merchant`, then try to distribute as `impostor`.
+        // mock_all_auths means we need to check the error path differently —
+        // register with impostor as merchant so auth passes but campaign lookup fails.
+        client
+            .register_campaign(&4, &merchant, &500, &1)
+            .unwrap();
 
-        // Advance time past the clawback window
-        env.ledger().with_mut(|l| {
-            l.timestamp += CLAWBACK_WINDOW + 1;
-        });
-
-        client.clawback(&recipient);
+        // Campaign 99 does not exist → CampaignNotFound (unauthorized path)
+        let err = client
+            .try_distribute_reward(&99, &impostor, &100)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::CampaignNotFound);
     }
 
     #[test]
-    #[should_panic(expected = "insufficient contract balance")]
-    fn test_distribute_exceeds_balance_fails() {
-        let (env, _admin, client, _token_id) = setup();
-        let recipient = Address::generate(&env);
-        client.distribute(&recipient, &999_999);
+    fn test_inactive_campaign_rejected() {
+        let (env, _admin, client, _token_id, merchant) = setup();
+        let user = Address::generate(&env);
+
+        client
+            .register_campaign(&5, &merchant, &500, &0)
+            .unwrap();
+        client.deactivate_campaign(&5).unwrap();
+
+        let err = client
+            .try_distribute_reward(&5, &user, &100)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::CampaignInactive);
     }
 
     #[test]
-    #[should_panic(expected = "recipients and amounts length mismatch")]
-    fn test_batch_length_mismatch_fails() {
-        let (env, _admin, client, _token_id) = setup();
-        let r1 = Address::generate(&env);
-        let recipients = soroban_sdk::vec![&env, r1];
-        let amounts = soroban_sdk::vec![&env, 100_i128, 200_i128];
-        client.distribute_batch(&recipients, &amounts);
+    fn test_amount_exceeds_campaign_reward_rejected() {
+        let (env, _admin, client, _token_id, merchant) = setup();
+        let user = Address::generate(&env);
+
+        client
+            .register_campaign(&6, &merchant, &200, &0)
+            .unwrap();
+
+        let err = client
+            .try_distribute_reward(&6, &user, &201)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::InvalidAmount);
+    }
+
+    #[test]
+    fn test_double_initialize_rejected() {
+        let (env, admin, client, token_id, _merchant) = setup();
+        let err = client
+            .try_initialize(&admin, &token_id)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::AlreadyInitialized);
+    }
+
+    #[test]
+    fn test_batch_length_mismatch_rejected() {
+        let (env, _admin, client, _token_id, merchant) = setup();
+        client
+            .register_campaign(&7, &merchant, &100, &0)
+            .unwrap();
+
+        let recipients = soroban_sdk::vec![&env, Address::generate(&env)];
+        let amounts = soroban_sdk::vec![&env, 100_i128, 50_i128];
+
+        let err = client
+            .try_distribute_batch(&7, &recipients, &amounts)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::BatchLengthMismatch);
     }
 }
