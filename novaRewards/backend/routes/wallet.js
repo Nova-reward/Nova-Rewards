@@ -66,6 +66,48 @@ router.post("/verify", async (req, res) => {
 });
 
 /**
+ * GET /api/wallet/balance
+ * Retrieves the authenticated user's live NOVA token balance from Stellar network
+ * Requirements: Header balance display, live on-chain data
+ */
+router.get("/balance", authenticateUser, async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!user.stellar_public_key) {
+      return res.status(400).json({
+        success: false,
+        error: "no_wallet_linked",
+        message: "User has no linked Stellar wallet",
+      });
+    }
+
+    const result = await walletService.getBalances(user.stellar_public_key);
+
+    if (result.success) {
+      // Extract NOVA balance and format to 7 decimal places
+      const novaBalance = result.balances?.tokens?.NOVA?.balance || "0";
+      const formattedBalance = parseFloat(novaBalance).toFixed(7);
+
+      res.json({
+        success: true,
+        balance: formattedBalance,
+        raw: novaBalance,
+        stellarPublicKey: user.stellar_public_key,
+      });
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: "server_error",
+      message: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/wallet/balances/:publicKey
  * Retrieves balance information for a wallet
  * Requirements: 8.3

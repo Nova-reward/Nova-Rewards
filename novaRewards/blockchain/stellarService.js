@@ -6,6 +6,21 @@ const server = new Horizon.Server(
   process.env.HORIZON_URL || "https://horizon-testnet.stellar.org",
 );
 
+/**
+ * Returns a Stellar Asset object.
+ * Returns Asset.native() if code is 'XLM', otherwise returns a non-native Asset.
+ *
+ * @param {string} code - Asset code (e.g. 'NOVA', 'XLM')
+ * @param {string} [issuer] - Asset issuer public key (optional for XLM)
+ * @returns {Asset}
+ */
+function getAsset(code, issuer) {
+  if (code === "XLM" || code === "native") {
+    return Asset.native();
+  }
+  const asset = new Asset(code, issuer);
+  return asset;
+}
 // NOVA asset definition — issued by the Issuer Account
 const NOVA = getAsset("NOVA", process.env.ISSUER_PUBLIC);
 
@@ -24,21 +39,6 @@ function isValidStellarAddress(address) {
   } catch {
     return false;
   }
-}
-
-/**
- * Returns a Stellar Asset object.
- * Returns Asset.native() if code is 'XLM', otherwise returns a non-native Asset.
- *
- * @param {string} code - Asset code (e.g. 'NOVA', 'XLM')
- * @param {string} [issuer] - Asset issuer public key (optional for XLM)
- * @returns {Asset}
- */
-function getAsset(code, issuer) {
-  if (code === "XLM" || code === "native") {
-    return Asset.native();
-  }
-  return new Asset(code, issuer);
 }
 
 /**

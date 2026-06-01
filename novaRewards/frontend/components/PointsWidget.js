@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Lottie from 'lottie-react';
 import api from '../lib/api';
 import { useWallet } from '../context/WalletContext';
+import AnimatedCounter from './ui/AnimatedCounter';
 import counterAnimationData from '../public/points-counter-increment.json';
 import styles from '../styles/PointsWidget.module.css';
 
@@ -81,7 +82,7 @@ export default function PointsWidget() {
       <div className={styles.label}>Nova Points</div>
       <div className={styles.balanceWrapper}>
         <div className={styles.balanceWithAnimation}>
-          <AnimatedCounter value={balance} />
+        <AnimatedCounter value={balance} className={styles.balance} />
           {showCounterAnimation && (
             <div className={styles.lottieOverlay}>
               <Lottie animationData={counterAnimationData} loop={false} />
@@ -98,35 +99,3 @@ export default function PointsWidget() {
   );
 }
 
-function AnimatedCounter({ value }) {
-  const [displayValue, setDisplayValue] = useState(value);
-  const requestRef = useRef();
-  const startTimeRef = useRef();
-  const duration = 1000;
-
-  useEffect(() => {
-    const startValue = displayValue;
-    const endValue = value;
-    
-    if (startValue === endValue) return;
-
-    const animate = (time) => {
-      if (!startTimeRef.current) startTimeRef.current = time;
-      const progress = Math.min((time - startTimeRef.current) / duration, 1);
-      
-      const current = Math.floor(startValue + (endValue - startValue) * progress);
-      setDisplayValue(current);
-
-      if (progress < 1) {
-        requestRef.current = requestAnimationFrame(animate);
-      } else {
-        startTimeRef.current = null;
-      }
-    };
-
-    requestRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(requestRef.current);
-  }, [value]);
-
-  return <span className={styles.balance}>{displayValue}</span>;
-}
