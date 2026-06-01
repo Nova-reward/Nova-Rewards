@@ -24,7 +24,7 @@ fn initialize_sets_admin() {
 }
 
 #[test]
-#[should_panic(expected = "already initialised")]
+#[should_panic(expected = "already initialized")]
 fn initialize_twice_panics() {
     let (env, admin, client) = setup();
     client.initialize(&admin); // second call must panic
@@ -203,7 +203,18 @@ fn approve_zero_clears_allowance() {
     assert_eq!(client.allowance(&owner, &spender), 0);
 }
 
-// ── boundary: large values ────────────────────────────────────────────────────
+#[test]
+#[should_panic(expected = "insufficient allowance")]
+fn transfer_from_insufficient_allowance_panics() {
+    let (env, _admin, client) = setup();
+    let owner = Address::generate(&env);
+    let spender = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    client.mint(&owner, &500);
+    client.approve(&owner, &spender, &100);
+    client.transfer_from(&spender, &owner, &recipient, &150);
+}
 
 #[test]
 fn mint_and_burn_large_amount() {

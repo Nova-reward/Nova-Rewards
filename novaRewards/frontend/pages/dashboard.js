@@ -8,7 +8,7 @@ import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
 import ReferralLink from "../components/ReferralLink";
-import { SkeletonDashboard } from "../components/Skeleton";
+import { SkeletonDashboard, SkeletonRow } from "../components/Skeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 import WalletGuard from "../components/WalletGuard";
 import WalletConnect from "../components/WalletConnect";
@@ -154,7 +154,9 @@ function DashboardContent() {
               <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 shadow-sm">
                 <h2 className="font-bold text-base dark:text-white mb-3">Recent Transactions</h2>
                 {txLoading ? (
-                  <p className="text-sm text-slate-400">Loading…</p>
+                  <div aria-busy="true" aria-label="Loading transactions">
+                    {[...Array(4)].map((_, i) => <SkeletonRow key={i} />)}
+                  </div>
                 ) : recentTransactions && recentTransactions.length > 0 ? (
                   <ul className="divide-y divide-slate-100 dark:divide-brand-border">
                     {recentTransactions.map((tx, i) => (

@@ -82,8 +82,8 @@ input[type="radio"] {
   padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 1rem);
 }
 
-/* Hide bottom nav on desktop */
-@media (min-width: 1025px) {
+/* Hide bottom nav on tablet+ (768px) — sidebar is visible from md breakpoint */
+@media (min-width: 768px) {
   .bottom-nav {
     display: none;
   }
@@ -108,7 +108,7 @@ input[type="radio"] {
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1024px) {
   .reward-grid {
     grid-template-columns: repeat(3, 1fr);
   }

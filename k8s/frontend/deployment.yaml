@@ -31,6 +31,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: nova-rewards-config
+            - secretRef:
+                name: nova-rewards-secrets
           startupProbe:
             httpGet:
               path: /api/health

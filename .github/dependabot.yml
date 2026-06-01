@@ -8,6 +8,7 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    assignees: [milah-247]
     labels: [dependencies, backend]
     groups:
       backend-minor-patch:
@@ -20,6 +21,7 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    assignees: [milah-247]
     labels: [dependencies, frontend]
     groups:
       frontend-minor-patch:
@@ -32,6 +34,7 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    assignees: [milah-247]
     labels: [dependencies]
 
   # Rust / Cargo
@@ -41,6 +44,7 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    assignees: [milah-247]
     labels: [dependencies, contracts]
     groups:
       contracts-minor-patch:
@@ -53,4 +57,5 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    assignees: [milah-247]
     labels: [dependencies, ci]
