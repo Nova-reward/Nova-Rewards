@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { SkeletonRow } from '../Skeleton';
 
 const STATUS_BADGE = {
   active:   { cls: 'badge badge-green', label: '● Active' },
@@ -15,10 +16,8 @@ const STATUS_BADGE = {
 export default function CampaignList({ campaigns, loading, onPause, onResume }) {
   if (loading) {
     return (
-      <div>
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="skeleton-block" style={{ height: '2.5rem', marginBottom: '0.5rem', borderRadius: 8 }} />
-        ))}
+      <div aria-busy="true" aria-label="Loading campaigns">
+        {[...Array(3)].map((_, i) => <SkeletonRow key={i} />)}
       </div>
     );
   }
