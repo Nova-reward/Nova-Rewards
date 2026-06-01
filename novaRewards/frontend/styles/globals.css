@@ -25,9 +25,17 @@
   --animation-button-press-duration: 80ms;
   --animation-button-press-timing-function: ease-out;
   --animation-button-hover-duration: 150ms;
-  --animation-button-hover-timing-function: ease;
-  --animation-button-focus-duration: 100ms;
+  --animation-button-hover-timing-function: ease-out;
+  --animation-button-focus-duration: 150ms;
   --animation-button-focus-timing-function: ease-out;
+
+  /* Page / list transition tokens */
+  --animation-page-fade-duration: 150ms;
+  --animation-page-fade-timing-function: ease-out;
+  --animation-list-item-duration: 150ms;
+  --animation-list-item-stagger: 50ms;
+  --animation-drawer-duration: 200ms;
+  --animation-drawer-timing-function: ease-out;
 
   --animation-loading-skeleton-duration: 1.5s;
   --animation-loading-skeleton-timing-function: linear;
@@ -93,6 +101,45 @@ a:hover {
   margin-bottom: 1.5rem;
 }
 
+/* ── Page & list entry animations ────────────────────────────────────────── */
+@keyframes nova-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes nova-slide-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Apply to <ul> or <ol> to stagger children 50 ms apart */
+.nova-list-stagger > * {
+  animation: nova-slide-up var(--animation-list-item-duration) var(--animation-page-fade-timing-function) both;
+}
+.nova-list-stagger > *:nth-child(1)  { animation-delay:   0ms; }
+.nova-list-stagger > *:nth-child(2)  { animation-delay:  50ms; }
+.nova-list-stagger > *:nth-child(3)  { animation-delay: 100ms; }
+.nova-list-stagger > *:nth-child(4)  { animation-delay: 150ms; }
+.nova-list-stagger > *:nth-child(5)  { animation-delay: 200ms; }
+.nova-list-stagger > *:nth-child(6)  { animation-delay: 250ms; }
+.nova-list-stagger > *:nth-child(7)  { animation-delay: 300ms; }
+.nova-list-stagger > *:nth-child(8)  { animation-delay: 350ms; }
+.nova-list-stagger > *:nth-child(9)  { animation-delay: 400ms; }
+.nova-list-stagger > *:nth-child(10) { animation-delay: 450ms; }
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
   display: inline-block;
   padding: 0.6rem 1.4rem;
@@ -105,7 +152,7 @@ a:hover {
     transform var(--animation-button-press-duration) var(--animation-button-press-timing-function),
     background-color var(--animation-button-hover-duration) var(--animation-button-hover-timing-function),
     box-shadow var(--animation-button-focus-duration) var(--animation-button-focus-timing-function),
-    opacity 0.2s ease;
+    opacity 150ms ease-out;
 }
 .btn:hover:not(:disabled) {
   /* optional hover color can be customized through a var */
@@ -539,7 +586,7 @@ td {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
+  transition: width 0.3s ease, transform var(--animation-drawer-duration) var(--animation-drawer-timing-function);
   z-index: 100;
 }
 
@@ -580,7 +627,7 @@ td {
   cursor: pointer;
   padding: 0.5rem;
   border-radius: 6px;
-  transition: background 0.2s;
+  transition: background 150ms ease-out;
 }
 
 .sidebar-toggle:hover {
@@ -602,7 +649,7 @@ td {
   color: var(--text);
   text-decoration: none;
   margin-bottom: 0.25rem;
-  transition: background 0.2s;
+  transition: background 150ms ease-out, color 150ms ease-out;
 }
 
 .nav-link:hover {
@@ -689,7 +736,7 @@ td {
   padding: 0.5rem;
   cursor: pointer;
   border-radius: 8px;
-  transition: background 0.2s;
+  transition: background 150ms ease-out;
 }
 
 .header-icon-btn:hover {
@@ -728,7 +775,7 @@ td {
   padding: 0.5rem;
   cursor: pointer;
   border-radius: 8px;
-  transition: background 0.2s;
+  transition: background 150ms ease-out;
 }
 
 .profile-btn:hover {
@@ -825,7 +872,7 @@ td {
   text-align: left;
   cursor: pointer;
   font-size: 0.9rem;
-  transition: background 0.2s;
+  transition: background 150ms ease-out, color 150ms ease-out;
 }
 
 .profile-dropdown-item:hover {
@@ -900,7 +947,7 @@ td {
   }
 }
 
-/* Mobile overlay */
+/* Mobile overlay — always rendered; visibility controlled via .mobile-overlay-visible */
 .mobile-overlay {
   display: none;
   position: fixed;
@@ -910,13 +957,12 @@ td {
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
   z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--animation-drawer-duration) var(--animation-drawer-timing-function);
 }
 
-.mobile-overlay.active {
-  display: block;
-}
-
-/* Mobile menu button */
+/* Mobile menu button (hamburger) */
 .mobile-menu-btn {
   display: none;
   background: none;
@@ -926,14 +972,15 @@ td {
   padding: 0.5rem;
   border-radius: 6px;
   color: var(--text);
+  transition: background 150ms ease-out;
 }
 
 .mobile-menu-btn:hover {
   background: var(--surface-2);
 }
 
-/* Responsive styles */
-@media (max-width: 1024px) {
+/* Responsive styles — sidebar hidden below 768px; hamburger shown */
+@media (max-width: 767px) {
   .sidebar {
     transform: translateX(-100%);
   }
@@ -950,6 +997,15 @@ td {
     margin-left: 0;
   }
 
+  .mobile-overlay {
+    display: block;
+  }
+
+  .mobile-overlay.mobile-overlay-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   .mobile-menu-btn {
     display: block;
   }
@@ -959,7 +1015,7 @@ td {
   }
 }
 
-@media (min-width: 1025px) {
+@media (min-width: 768px) {
   .mobile-only {
     display: none;
   }
@@ -1020,7 +1076,7 @@ td {
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
-  transition: background 0.15s;
+  transition: background 150ms ease-out;
 }
 
 .notification-item:last-child {
@@ -1415,4 +1471,8 @@ td {
     bottom: 1rem;
     max-width: calc(100vw - 2rem);
   }
+}
+
+@keyframes shimmer {
+  100% { transform: translateX(200%); }
 }

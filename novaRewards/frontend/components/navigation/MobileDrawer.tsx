@@ -42,7 +42,7 @@ export default function MobileDrawer({ isOpen, onClose, items }: MobileDrawerPro
         aria-hidden="true"
         onClick={onClose}
         className={[
-          'fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 md:hidden',
+          'fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-200 md:hidden',
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none',
         ].join(' ')}
       />
@@ -53,7 +53,7 @@ export default function MobileDrawer({ isOpen, onClose, items }: MobileDrawerPro
         aria-modal="true"
         aria-label="Navigation menu"
         className={[
-          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out dark:bg-brand-card md:hidden',
+          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-brand-card md:hidden',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         ].join(' ')}
       >

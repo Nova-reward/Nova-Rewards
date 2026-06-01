@@ -114,13 +114,22 @@ function RewardsEmptyState() {
  * RewardsHistory — paginated transaction history with filters and CSV export.
  * Uses the shared DataTable component for consistent sorting, pagination,
  * and URL query string sync.
+ *
+ * @param {{ userId: string, dateFrom?: string, dateTo?: string, onDateChange?: (from: string, to: string) => void }} props
  */
-export default function RewardsHistory({ userId }) {
+export default function RewardsHistory({ userId, dateFrom: externalDateFrom, dateTo: externalDateTo, onDateChange }) {
   const [page, setPage]               = useState(1);
   const [typeFilter, setTypeFilter]   = useState('all');
-  const [dateFrom, setDateFrom]       = useState('');
-  const [dateTo, setDateTo]           = useState('');
+  const [internalDateFrom, setInternalDateFrom] = useState('');
+  const [internalDateTo, setInternalDateTo]     = useState('');
   const [campaignFilter, setCampaignFilter] = useState('all');
+
+  // External props take precedence when provided
+  const dateFrom = externalDateFrom ?? internalDateFrom;
+  const dateTo   = externalDateTo   ?? internalDateTo;
+
+  const setDateFrom = (v) => { setInternalDateFrom(v); onDateChange?.(v, dateTo); };
+  const setDateTo   = (v) => { setInternalDateTo(v);   onDateChange?.(dateFrom, v); };
 
   const filters = {
     limit:  PAGE_SIZE,
