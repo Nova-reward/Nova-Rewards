@@ -2,94 +2,114 @@
 
 import Link from 'next/link';
 import EmptyState from '../EmptyState';
+import DataTable from '../DataTable';
 
 const STATUS_BADGE = {
-  active:   { cls: 'badge badge-green', label: '● Active' },
-  paused:   { cls: 'badge', style: { background: 'var(--badge-gray-bg)', color: '#f59e0b' }, label: '⏸ Paused' },
-  inactive: { cls: 'badge badge-gray',  label: 'Inactive' },
+  active:   { cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', label: '● Active' },
+  paused:   { cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', label: '⏸ Paused' },
+  inactive: { cls: 'bg-slate-100 text-slate-500 dark:bg-brand-border dark:text-slate-400', label: 'Inactive' },
 };
 
+function StatusBadge({ status }) {
+  const badge = STATUS_BADGE[status] ?? STATUS_BADGE.inactive;
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${badge.cls}`}>
+      {badge.label}
+    </span>
+  );
+}
+
+/** Custom empty state for the campaign list */
+function CampaignEmptyState() {
+  return (
+    <EmptyState
+      icon="campaigns"
+      title="No campaigns yet"
+      description="Create your first reward campaign to get started issuing tokens to your users."
+      actionLabel="Create Campaign"
+      onAction={() => { window.location.href = '/merchant'; }}
+      variant="primary"
+    />
+  );
+}
+
 /**
- * Campaign list with status badges and pause/resume quick-actions.
+ * CampaignList — displays merchant campaigns in a shared DataTable.
+ * Supports sortable columns, pagination, and URL query string sync.
+ *
  * @param {{ campaigns: object[], loading: boolean, onPause: (id:string)=>void, onResume: (id:string)=>void }} props
  */
 export default function CampaignList({ campaigns, loading, onPause, onResume }) {
-  if (loading) {
-    return (
-      <div>
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="skeleton-block" style={{ height: '2.5rem', marginBottom: '0.5rem', borderRadius: 8 }} />
-        ))}
-      </div>
-    );
-  }
-
-  if (!campaigns?.length) {
-    return (
-      <EmptyState
-        icon="campaigns"
-        title="No campaigns yet"
-        description="Create your first reward campaign to get started issuing tokens to your users."
-        actionLabel="Create Campaign"
-        onAction={() => window.location.href = '/merchant'}
-        variant="primary"
-      />
-    );
-  }
+  const columns = [
+    {
+      key: 'name',
+      label: 'Campaign',
+      render: (v) => <span className="font-semibold">{v ?? '—'}</span>,
+    },
+    {
+      key: 'rewardRate',
+      label: 'Rate',
+      render: (v) => (v != null ? `${v} NOVA/unit` : '—'),
+    },
+    {
+      key: 'endDate',
+      label: 'Ends',
+      render: (v) => (
+        <span className="text-slate-500 dark:text-slate-400 text-xs">
+          {v ?? '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (v) => <StatusBadge status={v} />,
+    },
+    {
+      key: 'id',
+      label: 'Actions',
+      sortable: false,
+      render: (id, row) => (
+        <div className="flex items-center gap-2 justify-end whitespace-nowrap">
+          {row.status === 'active' && (
+            <button
+              className="touch-target px-3 py-1 text-xs rounded-lg border border-yellow-300 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors"
+              onClick={() => onPause(id)}
+              aria-label={`Pause ${row.name}`}
+            >
+              Pause
+            </button>
+          )}
+          {row.status === 'paused' && (
+            <button
+              className="touch-target px-3 py-1 text-xs rounded-lg bg-brand-purple text-white hover:opacity-90 transition-opacity"
+              onClick={() => onResume(id)}
+              aria-label={`Resume ${row.name}`}
+            >
+              Resume
+            </button>
+          )}
+          <Link
+            href="/merchant"
+            className="text-xs text-brand-purple hover:underline"
+          >
+            Manage →
+          </Link>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Campaign</th>
-            <th>Rate</th>
-            <th>Ends</th>
-            <th>Status</th>
-            <th style={{ textAlign: 'right' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {campaigns.map((c) => {
-            const badge = STATUS_BADGE[c.status] ?? STATUS_BADGE.inactive;
-            return (
-              <tr key={c.id}>
-                <td style={{ fontWeight: 600 }}>{c.name}</td>
-                <td>{c.rewardRate} NOVA/unit</td>
-                <td style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{c.endDate}</td>
-                <td>
-                  <span className={badge.cls} style={badge.style}>{badge.label}</span>
-                </td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  {c.status === 'active' && (
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', marginRight: '0.5rem' }}
-                      onClick={() => onPause(c.id)}
-                      aria-label={`Pause ${c.name}`}
-                    >
-                      Pause
-                    </button>
-                  )}
-                  {c.status === 'paused' && (
-                    <button
-                      className="btn btn-primary"
-                      style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', marginRight: '0.5rem' }}
-                      onClick={() => onResume(c.id)}
-                      aria-label={`Resume ${c.name}`}
-                    >
-                      Resume
-                    </button>
-                  )}
-                  <Link href="/merchant" style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>
-                    Manage →
-                  </Link>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      data={campaigns ?? []}
+      defaultPageSize={10}
+      emptyState={<CampaignEmptyState />}
+      keyField="id"
+      urlSync={true}
+      queryPrefix="cl_"
+      loading={loading}
+    />
   );
 }

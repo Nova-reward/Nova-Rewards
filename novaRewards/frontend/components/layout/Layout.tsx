@@ -1,3 +1,4 @@
+'use client';
 import { ReactNode } from 'react';
 import Navbar, { NAV_ITEMS } from '../navigation/Navbar';
 import MobileDrawer from '../navigation/MobileDrawer';

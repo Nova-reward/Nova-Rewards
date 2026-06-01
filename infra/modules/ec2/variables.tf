@@ -10,6 +10,12 @@ variable "asg_desired" { type = number }
 variable "app_port" { type = number }
 variable "certificate_arn" { type = string }
 variable "instance_profile" { type = string }
-variable "rds_endpoint" { type = string, sensitive = true }
-variable "redis_endpoint" { type = string, sensitive = true }
+variable "rds_endpoint" {
+  type      = string
+  sensitive = true
+}
+variable "redis_endpoint" {
+  type      = string
+  sensitive = true
+}
 variable "app_secret_name" { type = string }

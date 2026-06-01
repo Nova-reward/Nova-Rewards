@@ -7,77 +7,55 @@ export default function Custom404() {
   const router = useRouter();
 
   useEffect(() => {
-    // Log 404 errors to Sentry for monitoring
     Sentry.captureMessage(`404 - Page not found: ${router.asPath}`, 'warning');
   }, [router.asPath]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 px-4">
-      <div className="max-w-lg w-full text-center">
-        <div className="mb-8">
-          <h1 className="text-9xl font-bold text-blue-600 dark:text-blue-400 mb-4">
-            404
-          </h1>
-          <div className="relative">
-            <svg 
-              className="mx-auto h-32 w-32 text-gray-400 dark:text-gray-600" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={1.5} 
-                d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-              />
-            </svg>
-          </div>
+    <main
+      className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900 px-4"
+      aria-labelledby="error-heading"
+    >
+      <div className="max-w-md w-full text-center">
+        {/* Illustration */}
+        <div className="mb-8 flex justify-center" aria-hidden="true">
+          <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="80" cy="80" r="72" fill="#ede9fe" />
+            <circle cx="80" cy="80" r="52" fill="#ddd6fe" />
+            <text x="80" y="96" textAnchor="middle" fontSize="48" fontWeight="700" fill="#7c3aed">404</text>
+            <circle cx="56" cy="68" r="5" fill="#7c3aed" />
+            <circle cx="104" cy="68" r="5" fill="#7c3aed" />
+            <path d="M62 96 Q80 88 98 96" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" fill="none" />
+          </svg>
         </div>
 
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-          Page Not Found
-        </h2>
-        
-        <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
-          The page you're looking for doesn't exist or has been moved.
+        <h1 id="error-heading" className="text-3xl font-bold text-neutral-900 dark:text-neutral-50 mb-3">
+          Page not found
+        </h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mb-8">
+          The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="flex flex-col sm:flex-row gap-3 justify-center mb-10">
           <Link
-            href="/"
-            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-lg hover:shadow-xl"
+            href="/dashboard"
+            className="px-6 py-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
           >
-            Go Home
+            Go to Dashboard
           </Link>
-          
           <button
             onClick={() => router.back()}
-            className="px-8 py-3 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-md border border-gray-200 dark:border-gray-700"
+            className="px-6 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 font-medium text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
           >
             Go Back
           </button>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
-            Looking for something specific?
-          </p>
-          <div className="flex flex-wrap gap-3 justify-center text-sm">
-            <Link href="/dashboard" className="text-blue-600 dark:text-blue-400 hover:underline">
-              Dashboard
-            </Link>
-            <span className="text-gray-300 dark:text-gray-700">•</span>
-            <Link href="/rewards" className="text-blue-600 dark:text-blue-400 hover:underline">
-              Rewards
-            </Link>
-            <span className="text-gray-300 dark:text-gray-700">•</span>
-            <Link href="/help" className="text-blue-600 dark:text-blue-400 hover:underline">
-              Help Center
-            </Link>
-          </div>
-        </div>
+        <nav aria-label="Helpful links" className="flex flex-wrap gap-x-4 gap-y-2 justify-center text-sm">
+          <Link href="/rewards" className="text-primary-600 dark:text-primary-400 hover:underline">Rewards</Link>
+          <Link href="/campaigns" className="text-primary-600 dark:text-primary-400 hover:underline">Campaigns</Link>
+          <Link href="/help" className="text-primary-600 dark:text-primary-400 hover:underline">Help Center</Link>
+        </nav>
       </div>
-    </div>
+    </main>
   );
 }
