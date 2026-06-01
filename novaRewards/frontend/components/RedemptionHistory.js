@@ -3,24 +3,88 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import DataTable from './DataTable';
 
 const STATUS_LABEL = {
-  pending:   { text: 'Pending',   cls: 'badge-yellow' },
-  completed: { text: 'Completed', cls: 'badge-green'  },
-  failed:    { text: 'Failed',    cls: 'badge-red'    },
-  cancelled: { text: 'Cancelled', cls: 'badge-gray'   },
+  pending:   { text: 'Pending',   cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  completed: { text: 'Completed', cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'   },
+  failed:    { text: 'Failed',    cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'           },
+  cancelled: { text: 'Cancelled', cls: 'bg-slate-100 text-slate-500 dark:bg-brand-border dark:text-slate-400'   },
 };
 
+function StatusBadge({ status }) {
+  const { text, cls } = STATUS_LABEL[status] ?? { text: status, cls: 'bg-slate-100 text-slate-500' };
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+      {text}
+    </span>
+  );
+}
+
+const COLUMNS = [
+  {
+    key: 'reward_name',
+    label: 'Reward',
+    render: (v, r) => v || r.rewardName || '—',
+  },
+  {
+    key: 'points_spent',
+    label: 'Points',
+    render: (v, r) => `−${v ?? r.pointsSpent ?? r.cost ?? '?'}`,
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    render: (v) => <StatusBadge status={v} />,
+  },
+  {
+    key: 'created_at',
+    label: 'Date',
+    render: (v) => (v ? new Date(v).toLocaleDateString() : '—'),
+  },
+  {
+    key: 'tx_hash',
+    label: 'Tx',
+    sortable: false,
+    render: (v) =>
+      v ? (
+        <a
+          href={`https://stellar.expert/explorer/testnet/tx/${v}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 font-medium hover:underline"
+          title={v}
+        >
+          {v.slice(0, 8)}…
+        </a>
+      ) : (
+        '—'
+      ),
+  },
+];
+
+/** Custom empty state for the redemption history table */
+function RedemptionEmptyState() {
+  return (
+    <div className="flex flex-col items-center gap-2 py-4">
+      <span className="text-3xl" aria-hidden="true">🎟️</span>
+      <p className="font-medium text-slate-700 dark:text-slate-300">No redemptions yet</p>
+      <p className="text-xs text-slate-400">
+        Your redemption history will appear here once you redeem rewards.
+      </p>
+    </div>
+  );
+}
+
 /**
- * Displays paginated redemption history for the authenticated user.
+ * RedemptionHistory — paginated redemption history for the authenticated user.
+ * Uses the shared DataTable for consistent sorting, pagination, and URL sync.
  */
 export default function RedemptionHistory() {
   const { user } = useAuth();
   const [redemptions, setRedemptions] = useState([]);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -30,11 +94,10 @@ export default function RedemptionHistory() {
       setLoading(true);
       setError(null);
       try {
-        const res = await api.get(`/redemptions?page=${page}&limit=10`);
+        // Fetch all redemptions — DataTable handles client-side pagination
+        const res = await api.get('/redemptions?limit=200');
         if (cancelled) return;
-        const { data, total, limit } = res.data;
-        setRedemptions(data || []);
-        setTotalPages(Math.max(1, Math.ceil((total || 0) / (limit || 10))));
+        setRedemptions(res.data?.data || []);
       } catch (err) {
         if (!cancelled) setError(err.response?.data?.message || 'Failed to load history');
       } finally {
@@ -44,93 +107,25 @@ export default function RedemptionHistory() {
 
     load();
     return () => { cancelled = true; };
-  }, [user?.id, page]);
-
-  if (loading) {
-    return (
-      <div className="card">
-        <h2 style={{ marginBottom: '1rem' }}>📜 Redemption History</h2>
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="card">
-        <h2 style={{ marginBottom: '1rem' }}>📜 Redemption History</h2>
-        <p className="error">{error}</p>
-      </div>
-    );
-  }
+  }, [user?.id]);
 
   return (
-    <div className="card">
-      <h2 style={{ marginBottom: '1rem' }}>📜 Redemption History</h2>
+    <div className="rounded-xl border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card p-4 md:p-6 shadow-sm">
+      <h2 className="text-base font-bold dark:text-white mb-4">📜 Redemption History</h2>
 
-      {redemptions.length === 0 ? (
-        <p style={{ color: 'var(--muted)' }}>No redemptions yet.</p>
+      {error ? (
+        <p className="text-sm text-red-500">{error}</p>
       ) : (
-        <>
-          <div className="redemption-history-table" role="table" aria-label="Redemption history">
-            <div className="rh-header" role="row">
-              <span role="columnheader">Reward</span>
-              <span role="columnheader">Points</span>
-              <span role="columnheader">Status</span>
-              <span role="columnheader">Date</span>
-              <span role="columnheader">Tx</span>
-            </div>
-
-            {redemptions.map((r) => {
-              const { text, cls } = STATUS_LABEL[r.status] || { text: r.status, cls: 'badge-gray' };
-              return (
-                <div key={r.id} className="rh-row" role="row">
-                  <span role="cell" className="rh-reward-name">{r.reward_name || r.rewardName || '—'}</span>
-                  <span role="cell" className="rh-points">−{r.points_spent ?? r.pointsSpent ?? r.cost ?? '?'}</span>
-                  <span role="cell">
-                    <span className={`badge ${cls}`}>{text}</span>
-                  </span>
-                  <span role="cell" className="rh-date">
-                    {r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}
-                  </span>
-                  <span role="cell">
-                    {r.tx_hash ? (
-                      <a
-                        href={`https://stellar.expert/explorer/testnet/tx/${r.tx_hash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="tx-hash-link"
-                        title={r.tx_hash}
-                      >
-                        {r.tx_hash.slice(0, 8)}…
-                      </a>
-                    ) : '—'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {totalPages > 1 && (
-            <div className="pagination">
-              <button
-                className="btn btn-secondary"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                ← Prev
-              </button>
-              <span className="pagination-info">Page {page} of {totalPages}</span>
-              <button
-                className="btn btn-secondary"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-              >
-                Next →
-              </button>
-            </div>
-          )}
-        </>
+        <DataTable
+          columns={COLUMNS}
+          data={redemptions}
+          defaultPageSize={10}
+          emptyState={<RedemptionEmptyState />}
+          keyField="id"
+          urlSync={true}
+          queryPrefix="rdh_"
+          loading={loading}
+        />
       )}
     </div>
   );

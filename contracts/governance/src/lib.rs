@@ -1,6 +1,30 @@
+//! # Governance Contract
+//!
+//! On-chain governance for Nova Rewards protocol parameter changes.
+//!
+//! ## Lifecycle
+//! 1. Any address calls [`create_proposal`](GovernanceContract::create_proposal) to open a vote.
+//! 2. Token holders call [`vote`](GovernanceContract::vote) during the voting period (~7 days).
+//! 3. After the period ends, anyone calls [`finalise`](GovernanceContract::finalise) to tally votes.
+//! 4. The admin calls [`execute`](GovernanceContract::execute) to mark a passed proposal as executed.
+//!
+//! ## Upgrade
+//! Admin signers call [`approve_upgrade`](GovernanceContract::approve_upgrade) with a new WASM hash.
+//! Requires M-of-N admin signatures. Emits `ContractUpgraded` event.
+//!
+//! ## Event Schema (v1)
+//! All events include `schema_version` as the first data element.
+//!
+//! | topics                      | data                                                    |
+//! |-----------------------------|---------------------------------------------------------|
+//! | `("gov", "proposed")`       | `(v, id, proposer, title)`                              |
+//! | `("gov", "voted")`          | `(v, proposal_id, voter, support)`                      |
+//! | `("gov", "finalised")`      | `(v, proposal_id, passed)`                              |
+//! | `("gov", "executed")`       | `(v, proposal_id, proposer)`                            |
+//! | `("gov", "upgraded")`       | `(v, new_wasm_hash)`                                    |
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, String,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String, Vec,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -9,6 +33,9 @@ use soroban_sdk::{
 const VOTING_PERIOD: u32 = 120_960;
 /// Minimum yes-votes required for a proposal to pass.
 const QUORUM: u32 = 1;
+
+/// Schema version for all events emitted by this contract.
+pub const EVENT_SCHEMA_VERSION: u32 = 1;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,6 +70,49 @@ pub enum DataKey {
     Proposal(u32),
     /// (proposal_id, voter) → bool
     HasVoted(u32, Address),
+    /// Multisig signers for upgrade authorization
+    Signers,
+    /// Minimum approvals required for upgrade
+    Threshold,
+    /// Pending upgrade approvals: wasm_hash -> Vec<Address>
+    UpgradeApprovals(BytesN<32>),
+}
+
+// ── Event helpers ─────────────────────────────────────────────────────────────
+
+fn emit_proposed(env: &Env, id: u32, proposer: &Address, title: &String) {
+    env.events().publish(
+        (symbol_short!("gov"), symbol_short!("proposed")),
+        (EVENT_SCHEMA_VERSION, id, proposer.clone(), title.clone()),
+    );
+}
+
+fn emit_voted(env: &Env, proposal_id: u32, voter: &Address, support: bool) {
+    env.events().publish(
+        (symbol_short!("gov"), symbol_short!("voted")),
+        (EVENT_SCHEMA_VERSION, proposal_id, voter.clone(), support),
+    );
+}
+
+fn emit_finalised(env: &Env, proposal_id: u32, passed: bool) {
+    env.events().publish(
+        (symbol_short!("gov"), symbol_short!("finalised")),
+        (EVENT_SCHEMA_VERSION, proposal_id, passed),
+    );
+}
+
+fn emit_executed(env: &Env, proposal_id: u32, proposer: &Address) {
+    env.events().publish(
+        (symbol_short!("gov"), symbol_short!("executed")),
+        (EVENT_SCHEMA_VERSION, proposal_id, proposer.clone()),
+    );
+}
+
+fn emit_contract_upgraded(env: &Env, new_wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("gov"), symbol_short!("upgraded")),
+        (EVENT_SCHEMA_VERSION, new_wasm_hash.clone()),
+    );
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -52,13 +122,28 @@ pub struct GovernanceContract;
 
 #[contractimpl]
 impl GovernanceContract {
-    /// Initialise with an admin address.
-    pub fn initialize(env: Env, admin: Address) {
+    /// Initialise with an admin address and upgrade multisig config.
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized to call [`execute`](GovernanceContract::execute).
+    /// - `signers` – Multisig signer set for upgrade authorization.
+    /// - `threshold` – Minimum approvals required to execute an upgrade.
+    ///
+    /// # Panics
+    /// - `"already initialised"` if called more than once.
+    pub fn initialize(env: Env, admin: Address, signers: Vec<Address>, threshold: u32) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
         }
+        assert!(threshold >= 1, "threshold must be at least 1");
+        assert!(
+            signers.len() >= threshold,
+            "signers count must be >= threshold"
+        );
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::ProposalCount, &0_u32);
+        env.storage().instance().set(&DataKey::Signers, &signers);
+        env.storage().instance().set(&DataKey::Threshold, &threshold);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -67,7 +152,7 @@ impl GovernanceContract {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
-    fn proposal_count(env: &Env) -> u32 {
+    fn proposal_count_val(env: &Env) -> u32 {
         env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0)
     }
 
@@ -90,7 +175,9 @@ impl GovernanceContract {
     // ── Proposal creation ─────────────────────────────────────────────────────
 
     /// Create a new governance proposal. Any address may propose.
-    /// Returns the new proposal id.
+    ///
+    /// # Events
+    /// Emits `("gov", "proposed")` with `(schema_version, id, proposer, title)`.
     pub fn create_proposal(
         env: Env,
         proposer: Address,
@@ -99,7 +186,7 @@ impl GovernanceContract {
     ) -> u32 {
         proposer.require_auth();
 
-        let id = Self::proposal_count(&env) + 1;
+        let id = Self::proposal_count_val(&env) + 1;
         let end_ledger = env.ledger().sequence() + VOTING_PERIOD;
 
         let proposal = Proposal {
@@ -116,11 +203,7 @@ impl GovernanceContract {
         Self::save_proposal(&env, &proposal);
         env.storage().instance().set(&DataKey::ProposalCount, &id);
 
-        // emit proposal_created event
-        env.events().publish(
-            (symbol_short!("gov"), symbol_short!("proposed")),
-            (id, proposer, title),
-        );
+        emit_proposed(&env, id, &proposer, &title);
 
         id
     }
@@ -128,12 +211,19 @@ impl GovernanceContract {
     // ── Voting ────────────────────────────────────────────────────────────────
 
     /// Cast a vote on an active proposal. Each address may vote once.
-    /// `support = true` → yes, `support = false` → no.
+    ///
+    /// # Events
+    /// Emits `("gov", "voted")` with `(schema_version, proposal_id, voter, support)`.
     pub fn vote(env: Env, voter: Address, proposal_id: u32, support: bool) {
         voter.require_auth();
 
         let voted_key = DataKey::HasVoted(proposal_id, voter.clone());
-        if env.storage().persistent().get::<_, bool>(&voted_key).unwrap_or(false) {
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&voted_key)
+            .unwrap_or(false)
+        {
             panic!("already voted");
         }
 
@@ -155,23 +245,20 @@ impl GovernanceContract {
 
         Self::save_proposal(&env, &proposal);
 
-        // record vote to prevent double-voting
         env.storage().persistent().set(&voted_key, &true);
         env.storage()
             .persistent()
             .extend_ttl(&voted_key, 2_678_400, 2_678_400);
 
-        // emit voted event
-        env.events().publish(
-            (symbol_short!("gov"), symbol_short!("voted")),
-            (proposal_id, voter, support),
-        );
+        emit_voted(&env, proposal_id, &voter, support);
     }
 
     // ── Finalise ──────────────────────────────────────────────────────────────
 
     /// Finalise a proposal after its voting period ends.
-    /// Updates status to Passed or Rejected based on votes and quorum.
+    ///
+    /// # Events
+    /// Emits `("gov", "finalised")` with `(schema_version, proposal_id, passed)`.
     pub fn finalise(env: Env, proposal_id: u32) {
         let mut proposal = Self::load_proposal(&env, proposal_id);
         assert!(
@@ -183,27 +270,25 @@ impl GovernanceContract {
             "voting period not ended"
         );
 
-        proposal.status = if proposal.yes_votes >= QUORUM && proposal.yes_votes > proposal.no_votes
-        {
+        let passed =
+            proposal.yes_votes >= QUORUM && proposal.yes_votes > proposal.no_votes;
+        proposal.status = if passed {
             ProposalStatus::Passed
         } else {
             ProposalStatus::Rejected
         };
 
-        let status = proposal.status.clone();
         Self::save_proposal(&env, &proposal);
 
-        // emit finalised event
-        env.events().publish(
-            (symbol_short!("gov"), symbol_short!("finalised")),
-            (proposal_id, status == ProposalStatus::Passed),
-        );
+        emit_finalised(&env, proposal_id, passed);
     }
 
     // ── Execution ─────────────────────────────────────────────────────────────
 
     /// Execute a passed proposal. Admin-gated.
-    /// Marks the proposal as Executed and emits an executed event.
+    ///
+    /// # Events
+    /// Emits `("gov", "executed")` with `(schema_version, proposal_id, proposer)`.
     pub fn execute(env: Env, proposal_id: u32) {
         Self::admin(&env).require_auth();
 
@@ -216,11 +301,7 @@ impl GovernanceContract {
         proposal.status = ProposalStatus::Executed;
         Self::save_proposal(&env, &proposal);
 
-        // emit executed event
-        env.events().publish(
-            (symbol_short!("gov"), symbol_short!("executed")),
-            (proposal_id, proposal.proposer),
-        );
+        emit_executed(&env, proposal_id, &proposal.proposer);
     }
 
     // ── Read-only ─────────────────────────────────────────────────────────────
@@ -230,7 +311,7 @@ impl GovernanceContract {
     }
 
     pub fn proposal_count(env: Env) -> u32 {
-        Self::proposal_count(&env)
+        Self::proposal_count_val(&env)
     }
 
     pub fn has_voted(env: Env, proposal_id: u32, voter: Address) -> bool {
@@ -239,6 +320,77 @@ impl GovernanceContract {
             .get(&DataKey::HasVoted(proposal_id, voter))
             .unwrap_or(false)
     }
+
+    // ── Upgrade (M-of-N multisig) ─────────────────────────────────────────────
+
+    /// Approve a pending WASM upgrade. Executes when threshold is reached.
+    ///
+    /// # Events
+    /// Emits `("gov", "upgraded")` with `(schema_version, new_wasm_hash)` when threshold is met.
+    ///
+    /// # Panics
+    /// - `"not an authorized signer"` if `signer` is not in the signer set.
+    /// - `"already approved"` if `signer` has already approved this hash.
+    pub fn approve_upgrade(env: Env, signer: Address, new_wasm_hash: BytesN<32>) {
+        signer.require_auth();
+
+        let signers: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Signers)
+            .expect("not initialized");
+        let is_authorized = signers.iter().any(|s| s == signer);
+        assert!(is_authorized, "not an authorized signer");
+
+        let approval_key = DataKey::UpgradeApprovals(new_wasm_hash.clone());
+        let mut approvals: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&approval_key)
+            .unwrap_or(Vec::new(&env));
+
+        let already_approved = approvals.iter().any(|a| a == signer);
+        assert!(!already_approved, "already approved");
+
+        approvals.push_back(signer);
+        env.storage().instance().set(&approval_key, &approvals);
+
+        let threshold: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Threshold)
+            .unwrap_or(1);
+
+        if approvals.len() >= threshold {
+            env.storage().instance().remove(&approval_key);
+            emit_contract_upgraded(&env, &new_wasm_hash);
+            env.deployer().update_current_contract_wasm(new_wasm_hash);
+        }
+    }
+
+    pub fn get_upgrade_approvals(env: Env, new_wasm_hash: BytesN<32>) -> u32 {
+        let approval_key = DataKey::UpgradeApprovals(new_wasm_hash);
+        let approvals: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&approval_key)
+            .unwrap_or(Vec::new(&env));
+        approvals.len()
+    }
+
+    pub fn get_threshold(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::Threshold)
+            .unwrap_or(1)
+    }
+
+    pub fn get_signers(env: Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Signers)
+            .unwrap_or(Vec::new(&env))
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -246,7 +398,10 @@ impl GovernanceContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Events, Ledger}, Env, String};
+    use soroban_sdk::{
+        testutils::{Address as _, Events, Ledger},
+        vec, BytesN, Env, String,
+    };
 
     fn setup() -> (Env, Address, GovernanceContractClient<'static>) {
         let env = Env::default();
@@ -254,7 +409,7 @@ mod tests {
         let id = env.register(GovernanceContract, ());
         let client = GovernanceContractClient::new(&env, &id);
         let admin = Address::generate(&env);
-        client.initialize(&admin);
+        client.initialize(&admin, &vec![&env, admin.clone()], &1);
         (env, admin, client)
     }
 
@@ -267,8 +422,6 @@ mod tests {
         );
         (id, proposer)
     }
-
-    // ── Proposal creation ─────────────────────────────────────────────────────
 
     #[test]
     fn test_create_proposal() {
@@ -302,8 +455,6 @@ mod tests {
         assert_eq!(id2, 2);
         assert_eq!(client.proposal_count(), 2);
     }
-
-    // ── Voting ────────────────────────────────────────────────────────────────
 
     #[test]
     fn test_vote_yes() {
@@ -348,7 +499,7 @@ mod tests {
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
         client.vote(&voter, &id, &true);
-        client.vote(&voter, &id, &false); // should panic
+        client.vote(&voter, &id, &false);
     }
 
     #[test]
@@ -368,8 +519,6 @@ mod tests {
         assert_eq!(p.no_votes, 1);
     }
 
-    // ── Finalise ──────────────────────────────────────────────────────────────
-
     #[test]
     fn test_finalise_passed() {
         let (env, _, client) = setup();
@@ -377,7 +526,6 @@ mod tests {
         let voter = Address::generate(&env);
         client.vote(&voter, &id, &true);
 
-        // advance ledger past voting period
         env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
 
@@ -388,7 +536,6 @@ mod tests {
     fn test_finalise_rejected_no_quorum() {
         let (env, _, client) = setup();
         let (id, _) = make_proposal(&env, &client);
-        // no votes cast → yes_votes = 0 < QUORUM
 
         env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
@@ -402,12 +549,9 @@ mod tests {
         let (id, _) = make_proposal(&env, &client);
         let v1 = Address::generate(&env);
         let v2 = Address::generate(&env);
+        let v3 = Address::generate(&env);
         client.vote(&v1, &id, &true);
         client.vote(&v2, &id, &false);
-        // tie → no_votes not strictly less than yes_votes → rejected
-        // Actually yes > no here (1 > 1 is false), so rejected
-        // Let's add another no vote
-        let v3 = Address::generate(&env);
         client.vote(&v3, &id, &false);
 
         env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
@@ -432,10 +576,8 @@ mod tests {
     fn test_finalise_before_period_ends_panics() {
         let (env, _, client) = setup();
         let (id, _) = make_proposal(&env, &client);
-        client.finalise(&id); // should panic — period not over
+        client.finalise(&id);
     }
-
-    // ── Execution ─────────────────────────────────────────────────────────────
 
     #[test]
     fn test_execute_passed_proposal() {
@@ -468,8 +610,8 @@ mod tests {
         let (env, _, client) = setup();
         let (id, _) = make_proposal(&env, &client);
         env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
-        client.finalise(&id); // rejected (no votes)
-        client.execute(&id);  // should panic
+        client.finalise(&id);
+        client.execute(&id);
     }
 
     #[test]
@@ -477,6 +619,49 @@ mod tests {
     fn test_execute_active_proposal_panics() {
         let (env, _, client) = setup();
         let (id, _) = make_proposal(&env, &client);
-        client.execute(&id); // should panic — still active
+        client.execute(&id);
+    }
+
+    // ── Upgrade tests ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_upgrade_approval_accumulates() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(GovernanceContract, ());
+        let client = GovernanceContractClient::new(&env, &id);
+        let s1 = Address::generate(&env);
+        let s2 = Address::generate(&env);
+        client.initialize(&s1, &vec![&env, s1.clone(), s2.clone()], &2);
+
+        let fake_hash = BytesN::from_array(&env, &[0u8; 32]);
+        client.approve_upgrade(&s1, &fake_hash);
+        assert_eq!(client.get_upgrade_approvals(&fake_hash), 1);
+        assert_eq!(client.get_threshold(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "not an authorized signer")]
+    fn test_unauthorized_upgrade_rejected() {
+        let (env, _, client) = setup();
+        let outsider = Address::generate(&env);
+        let fake_hash = BytesN::from_array(&env, &[1u8; 32]);
+        client.approve_upgrade(&outsider, &fake_hash);
+    }
+
+    #[test]
+    #[should_panic(expected = "already approved")]
+    fn test_duplicate_approval_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(GovernanceContract, ());
+        let client = GovernanceContractClient::new(&env, &id);
+        let s1 = Address::generate(&env);
+        let s2 = Address::generate(&env);
+        client.initialize(&s1, &vec![&env, s1.clone(), s2.clone()], &2);
+
+        let fake_hash = BytesN::from_array(&env, &[2u8; 32]);
+        client.approve_upgrade(&s1, &fake_hash);
+        client.approve_upgrade(&s1, &fake_hash);
     }
 }

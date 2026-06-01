@@ -7,6 +7,11 @@ dist/
 build/
 .DS_Store
 
+# Sentry
+.sentryclirc
+sentry.properties
+*.sentry-*
+
 # Terraform
 infra/terraform.tfvars
 infra/**/.terraform/

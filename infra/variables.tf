@@ -114,3 +114,14 @@ variable "app_secret_name" {
   type        = string
   default     = "nova-rewards/production/app-secrets"
 }
+variable "cloudwatch_error_threshold" {
+  description = "Number of ERROR log lines in 5 minutes that triggers the alarm"
+  type        = number
+  default     = 10
+}
+
+variable "cloudwatch_alarm_sns_arn" {
+  description = "SNS topic ARN for CloudWatch alarm notifications (leave empty to skip)"
+  type        = string
+  default     = ""
+}

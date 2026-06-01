@@ -2,6 +2,7 @@ jest.mock('../db/index', () => ({ query: jest.fn() }));
 
 const { query } = require('../db/index');
 const { getMerchantTotals } = require('../db/transactionRepository');
+const { TransactionFactory } = require('./fixtures');
 
 describe('getMerchantTotals', () => {
   beforeEach(() => {
@@ -9,10 +10,12 @@ describe('getMerchantTotals', () => {
   });
 
   test('returns grouped distribution and redemption totals as numeric strings', async () => {
+    const dist = TransactionFactory.distribution({ merchant_id: 7, amount: '125.5000000' });
+    const redeem = TransactionFactory.redemption({ merchant_id: 7, amount: '23.2500000' });
     query.mockResolvedValue({
       rows: [
-        { tx_type: 'distribution', total: '125.5000000' },
-        { tx_type: 'redemption', total: '23.2500000' },
+        { tx_type: dist.tx_type, total: dist.amount },
+        { tx_type: redeem.tx_type, total: redeem.amount },
       ],
     });
 
@@ -39,8 +42,9 @@ describe('getMerchantTotals', () => {
   });
 
   test('returns zero string for missing grouped type', async () => {
+    const dist = TransactionFactory.distribution({ merchant_id: 3, amount: '10.0000000' });
     query.mockResolvedValue({
-      rows: [{ tx_type: 'distribution', total: '10.0000000' }],
+      rows: [{ tx_type: dist.tx_type, total: dist.amount }],
     });
 
     const totals = await getMerchantTotals(3);

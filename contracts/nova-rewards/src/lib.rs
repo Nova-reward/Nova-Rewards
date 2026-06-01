@@ -1,11 +1,36 @@
+//! # Nova Rewards Contract
+//!
+//! Core rewards contract for the Nova Rewards platform. Manages user balances,
+//! staking with yield accrual, cross-asset swaps, emergency recovery, and
+//! contract upgrades.
+//!
+//! ## Features
+//! - User balance management with daily withdrawal limits
+//! - Staking with configurable annual yield (basis points)
+//! - Cross-asset swap: burn Nova points for XLM via a DEX router
+//! - Emergency pause / unpause with optional auto-expiry
+//! - Account snapshot and restore for emergency recovery
+//! - Two-step WASM upgrade with migration versioning
+//!
+//! ## Usage
+//! ```ignore
+//! client.initialize(&admin);
+//! client.set_annual_rate(&500); // 5% APY
+//! client.set_balance(&user, &10_000);
+//! client.stake(&user, &5_000);
+//! // time passes …
+//! let total = client.unstake(&user); // principal + yield
+//! ```
 #![no_std]
 
 pub mod utils;
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    Address, BytesN, Env, Symbol, Vec,
+    Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
+
+use crate::utils::events;
 
 // ---------------------------------------------------------------------------
 // Staking data structures
@@ -16,6 +41,8 @@ use soroban_sdk::{
 pub struct StakeRecord {
     pub amount: i128,
     pub staked_at: u64,
+    /// Timestamp of the last reward claim; used to calculate unclaimed yield.
+    pub last_claimed_at: u64,
 }
 
 #[contracttype]
@@ -67,6 +94,10 @@ pub enum DataKey {
     MigratedVersion,
     Paused,
     EmergencyProcedure,
+    /// Expiry timestamp for auto-clearing emergency pause (0 = no expiry)
+    EmergencyPauseExpiry,
+    /// Flag set on first initialization
+    Initialized,
     /// Address of the XLM SAC token contract
     XlmToken,
     /// Address of the DEX router contract used for multi-hop swaps
@@ -79,17 +110,29 @@ pub enum DataKey {
     Stake(Address),
     Snapshot(Address),
     RecoveryOperation(BytesN<32>),
+    /// Maximum daily withdrawal amount (0 = no limit)
+    DailyLimit,
+    /// Per-user rolling 24h usage window
+    DailyUsage(Address),
 }
 
 // ---------------------------------------------------------------------------
 // Fixed-point arithmetic (Issue #205)
 // ---------------------------------------------------------------------------
 
-/// Scale factor for 6 decimal places of precision.
-pub const SCALE_FACTOR: i128 = 1_000_000;
-
-/// Seconds per year for staking yield calculations.
-pub const SECONDS_PER_YEAR: u64 = 31_536_000; // 365 * 24 * 60 * 60
+// Re-export shared constants so existing code that references them from the
+// crate root continues to compile without changes.
+pub use crate::utils::constants::{
+    SCALE_FACTOR,
+    SECONDS_PER_YEAR,
+    BASIS_POINTS_DIVISOR,
+    MAX_ANNUAL_RATE_BPS,
+    MIN_ANNUAL_RATE_BPS,
+    SECONDS_PER_DAY,
+    DAILY_LIMIT_WINDOW_SECS,
+    DAILY_USAGE_TTL_SECS,
+    MAX_SWAP_PATH_HOPS,
+};
 
 /// Computes the reward payout for a given balance and rate using fixed-point
 /// arithmetic to eliminate rounding errors and dust accumulation.
@@ -173,15 +216,15 @@ fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
     // Extend TTL for persistent storage
     env.storage()
         .persistent()
-        .extend_ttl(&usage_key, 31_536_000, 31_536_000);
+        .extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
 
-    // Check if window has expired (24 hours = 86,400 seconds)
-    if now - usage.window_start >= 86_400 {
+    // Check if window has expired (24 hours)
+    if now - usage.window_start >= DAILY_LIMIT_WINDOW_SECS {
         usage.amount_used = 0;
         usage.window_start = now;
         env.storage().persistent().set(&usage_key, &usage);
-        // Set TTL for persistent storage (365 days)
-        env.storage().persistent().extend_ttl(&usage_key, 31_536_000, 31_536_000);
+        // Set TTL for persistent storage
+        env.storage().persistent().extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
     }
 
     // Check limit
@@ -192,8 +235,8 @@ fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
     // Update usage
     usage.amount_used += requested_amount;
     env.storage().persistent().set(&usage_key, &usage);
-    // Set TTL for persistent storage (365 days)
-    env.storage().persistent().extend_ttl(&usage_key, 31_536_000, 31_536_000);
+    // Set TTL for persistent storage
+    env.storage().persistent().extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
 }
 
 // ---------------------------------------------------------------------------
@@ -227,13 +270,15 @@ impl NovaRewardsContract {
     }
 
     fn require_paused(env: &Env) {
-        if !Self::is_paused(env.clone()) {
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if !paused {
             panic!("contract must be paused");
         }
     }
 
     fn assert_active(env: &Env) {
-        if Self::is_paused(env.clone()) {
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if paused {
             panic!("contract is paused");
         }
     }
@@ -317,14 +362,24 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     /// Initializes the contract and records the admin plus migration version state.
+    ///
+    /// # Parameters
+    /// - `admin` – Address authorized for all admin-gated operations.
+    ///
+    /// # Panics
+    /// - `"already initialized"` if called more than once.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
+        env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::RecoveryAdmin, &admin);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
         env.storage().instance().set(&DataKey::Paused, &false);
+
+        // Emit structured initialized event
+        events::emit_initialized(&env, &admin);
     }
 
     // -----------------------------------------------------------------------
@@ -363,7 +418,7 @@ impl NovaRewardsContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Paused, &true);
         env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
-        env.events().publish((symbol_short!("paused"),), ());
+        events::emit_paused(&env, symbol_short!("manual"), env.ledger().timestamp());
     }
 
     /// Unpause the contract. Admin only.
@@ -376,7 +431,7 @@ impl NovaRewardsContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &0u64);
-        env.events().publish((symbol_short!("unpaused"),), ());
+        events::emit_resumed(&env, env.ledger().timestamp());
     }
 
     /// Emergency pause with a maximum duration in seconds. Admin only.
@@ -394,7 +449,7 @@ impl NovaRewardsContract {
         let expiry = env.ledger().timestamp() + duration_secs;
         env.storage().instance().set(&DataKey::Paused, &true);
         env.storage().instance().set(&DataKey::EmergencyPauseExpiry, &expiry);
-        env.events().publish((symbol_short!("emrg_paus"),), expiry);
+        events::emit_emergency_pause(&env, expiry);
     }
 
     /// Returns true if the contract is currently paused.
@@ -416,7 +471,15 @@ impl NovaRewardsContract {
     }
 
     /// Sets the XLM SAC token address and DEX router address.
-    /// Admin only. Must be called before swap_for_xlm is usable.
+    ///
+    /// Must be called before [`swap_for_xlm`](NovaRewardsContract::swap_for_xlm) is usable.
+    ///
+    /// # Parameters
+    /// - `xlm_token` – Address of the XLM Stellar Asset Contract (SAC).
+    /// - `router` – Address of the DEX router contract for multi-hop swaps.
+    ///
+    /// # Authorization
+    /// Admin only.
     pub fn set_swap_config(env: Env, xlm_token: Address, router: Address) {
         Self::require_admin(&env);
         env.storage().instance().set(&DataKey::XlmToken, &xlm_token);
@@ -424,21 +487,27 @@ impl NovaRewardsContract {
     }
 
     /// Assigns a dedicated recovery operator for emergency procedures.
+    ///
+    /// # Parameters
+    /// - `recovery_admin` – Address authorized to call snapshot/restore/recover functions.
+    ///
+    /// # Authorization
     /// Admin only.
+    ///
+    /// # Events
+    /// Emits `("recovery", "operator")` with data `recovery_admin: Address`.
     pub fn set_recovery_admin(env: Env, recovery_admin: Address) {
         Self::require_admin(&env);
         env.storage()
             .instance()
             .set(&DataKey::RecoveryAdmin, &recovery_admin);
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("operator")),
-            recovery_admin,
-        );
+        events::emit_recovery_admin_set(&env, &recovery_admin);
     }
 
-    /// Pauses state-changing user operations and records the active procedure.
-    pub fn pause(env: Env, procedure: Symbol) {
+    /// Pauses state-changing user operations and records the active recovery procedure.
+    /// Use this for emergency recovery workflows; for simple pause use [`pause`](NovaRewardsContract::pause).
+    pub fn pause_for_recovery(env: Env, procedure: Symbol) {
         Self::require_admin(&env);
 
         env.storage().instance().set(&DataKey::Paused, &true);
@@ -446,10 +515,7 @@ impl NovaRewardsContract {
             .instance()
             .set(&DataKey::EmergencyProcedure, &procedure);
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("paused")),
-            (procedure, env.ledger().timestamp()),
-        );
+        events::emit_paused(&env, procedure, env.ledger().timestamp());
     }
 
     /// Resumes normal contract operations after a recovery workflow.
@@ -463,10 +529,7 @@ impl NovaRewardsContract {
             (symbol_short!("recovery"), symbol_short!("resumed")),
             env.ledger().timestamp(),
         );
-    }
-
-    pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        events::emit_resumed(&env, env.ledger().timestamp());
     }
 
     pub fn get_recovery_admin(env: Env) -> Address {
@@ -478,11 +541,119 @@ impl NovaRewardsContract {
     }
 
     // -----------------------------------------------------------------------
+    // Cooldown period (Issue #551)
+    // -----------------------------------------------------------------------
+
+    /// Sets the cooldown duration (in seconds) that must elapse between staking
+    /// and unstaking. Defaults to 0 (no cooldown). Admin only.
+    pub fn set_cooldown_period(env: Env, seconds: u64) {
+        Self::require_admin(&env);
+        env.storage().instance().set(&DataKey::CooldownPeriod, &seconds);
+    }
+
+    /// Returns the configured cooldown period in seconds (0 = no cooldown).
+    pub fn get_cooldown_period(env: Env) -> u64 {
+        env.storage().instance().get(&DataKey::CooldownPeriod).unwrap_or(0)
+    }
+
+    // -----------------------------------------------------------------------
+    // Reward claiming (Issue #551)
+    // -----------------------------------------------------------------------
+
+    /// Claims accrued staking rewards without removing the stake.
+    ///
+    /// Calculates yield from `last_claimed_at` to now, credits it to the
+    /// staker's balance, and resets `last_claimed_at` so the next claim
+    /// starts a fresh accrual window.
+    ///
+    /// # Parameters
+    /// - `staker` – Address claiming rewards (must authorize).
+    ///
+    /// # Returns
+    /// Reward amount credited to the staker's balance.
+    ///
+    /// # Events
+    /// Emits `("claimed", staker)` with data `(reward: i128, timestamp: u64)`.
+    ///
+    /// # Panics
+    /// - `"no active stake found"` if the staker has no open stake.
+    pub fn claim_staking_reward(env: Env, staker: Address) -> i128 {
+        Self::assert_active(&env);
+        staker.require_auth();
+
+        let mut stake_record: StakeRecord = Self::read_stake(&env, &staker)
+            .expect("no active stake found");
+
+        let annual_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnnualRate)
+            .unwrap_or(0);
+
+        let current_time = env.ledger().timestamp();
+        let time_elapsed = if current_time > stake_record.last_claimed_at {
+            current_time - stake_record.last_claimed_at
+        } else {
+            0
+        };
+
+        let reward = if annual_rate > 0 && time_elapsed > 0 {
+            stake_record
+                .amount
+                .checked_mul(annual_rate)
+                .expect("overflow in amount * annual_rate")
+                .checked_mul(time_elapsed as i128)
+                .expect("overflow in * time_elapsed")
+                .checked_div(BASIS_POINTS_DIVISOR * SECONDS_PER_YEAR as i128)
+                .expect("overflow in division")
+        } else {
+            0
+        };
+
+        if reward > 0 {
+            let balance = Self::read_balance(&env, &staker);
+            Self::write_balance(&env, &staker, balance + reward);
+            stake_record.last_claimed_at = current_time;
+            Self::write_stake(&env, &staker, &stake_record);
+        }
+
+        env.events().publish(
+            (symbol_short!("claimed"), staker),
+            (reward, current_time),
+        );
+
+        reward
+    }
+
+    // -----------------------------------------------------------------------
     // Cross-asset swap (Issue #200)
     // -----------------------------------------------------------------------
 
     /// Burns `nova_amount` Nova points for the caller and exchanges them for
     /// XLM via the configured DEX router.
+    ///
+    /// # Parameters
+    /// - `user` – Address burning Nova points (must authorize).
+    /// - `nova_amount` – Number of Nova points to burn (must be > 0).
+    /// - `min_xlm_out` – Minimum XLM to receive; reverts if slippage exceeds this.
+    /// - `path` – Swap path as a list of token addresses (max 5 hops).
+    ///
+    /// # Returns
+    /// The amount of XLM received from the swap.
+    ///
+    /// # Authorization
+    /// Requires `user` authorization.
+    ///
+    /// # Events
+    /// Emits `("swap", user)` with data `(nova_amount: i128, xlm_received: i128, path: Vec<Address>)`.
+    ///
+    /// # Panics
+    /// - `"nova_amount must be positive"` if `nova_amount <= 0`.
+    /// - `"min_xlm_out must be non-negative"` if `min_xlm_out < 0`.
+    /// - `"path exceeds maximum of 5 hops"` if `path.len() > 5`.
+    /// - `"insufficient Nova balance"` if the user holds fewer points than `nova_amount`.
+    /// - `"router not configured"` if [`set_swap_config`](NovaRewardsContract::set_swap_config) has not been called.
+    /// - `"slippage: received X < min Y"` if the DEX returns fewer XLM than `min_xlm_out`.
     pub fn swap_for_xlm(
         env: Env,
         user: Address,
@@ -499,7 +670,7 @@ impl NovaRewardsContract {
         if min_xlm_out < 0 {
             panic!("min_xlm_out must be non-negative");
         }
-        if path.len() > 5 {
+        if path.len() > MAX_SWAP_PATH_HOPS {
             panic!("path exceeds maximum of 5 hops");
         }
 
@@ -529,13 +700,10 @@ impl NovaRewardsContract {
         );
 
         if xlm_received < min_xlm_out {
-            panic!("slippage: received {} < min {}", xlm_received, min_xlm_out);
+            panic!("slippage: xlm received less than minimum");
         }
 
-        env.events().publish(
-            (symbol_short!("swap"), user),
-            (nova_amount, xlm_received, path),
-        );
+        events::emit_swap(&env, &user, nova_amount, xlm_received, path);
 
         xlm_received
     }
@@ -547,11 +715,17 @@ impl NovaRewardsContract {
     /// Replaces the contract WASM with `new_wasm_hash`. Admin only.
     ///
     /// - Increments `migration_version` in instance storage.
-    /// - Stores `new_wasm_hash` so `migrate()` can include it in the event.
+    /// - Stores `new_wasm_hash` so [`migrate`](NovaRewardsContract::migrate) can include it in the event.
     /// - Calls `env.deployer().update_current_contract_wasm(new_wasm_hash)`.
     ///
-    /// After this call the caller must invoke `migrate()` to apply any
+    /// After this call the caller must invoke [`migrate`](NovaRewardsContract::migrate) to apply any
     /// data transformations for the new version.
+    ///
+    /// # Parameters
+    /// - `new_wasm_hash` – 32-byte hash of the new contract WASM.
+    ///
+    /// # Authorization
+    /// Admin only.
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) {
         Self::require_admin(&env);
 
@@ -580,6 +754,16 @@ impl NovaRewardsContract {
     ///
     /// Gated: panics if `migrated_version >= migration_version` (already done).
     /// Emits `upgraded` event with the new WASM hash and migration version.
+    ///
+    /// # Authorization
+    /// Admin only.
+    ///
+    /// # Events
+    /// Emits `("upgraded",)` with data `(wasm_hash: BytesN<32>, migration_version: u32)`.
+    ///
+    /// # Panics
+    /// - `"migration already applied"` if `migrated_version >= migration_version`.
+    /// - `"no pending wasm hash"` if [`upgrade`](NovaRewardsContract::upgrade) was not called first.
     pub fn migrate(env: Env) {
         Self::require_admin(&env);
 
@@ -615,11 +799,8 @@ impl NovaRewardsContract {
             .get(&DataKey::PendingWasmHash)
             .expect("no pending wasm hash");
 
-        // Emit the upgraded event.
-        env.events().publish(
-            (symbol_short!("upgraded"),),
-            (wasm_hash, migration_version),
-        );
+        // Emit the upgraded event via centralized emitter.
+        events::emit_upgraded(&env, wasm_hash, migration_version);
     }
 
     // -----------------------------------------------------------------------
@@ -627,11 +808,22 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     /// Test helper that writes a balance directly into contract storage.
+    ///
+    /// # Parameters
+    /// - `user` – Address to update.
+    /// - `amount` – New balance value.
     pub fn set_balance(env: Env, user: Address, amount: i128) {
         Self::write_balance(&env, &user, amount);
+        events::emit_balance_set(&env, &user, amount);
     }
 
     /// Returns the raw Nova balance recorded for a user.
+    ///
+    /// # Parameters
+    /// - `user` – Address to query.
+    ///
+    /// # Returns
+    /// Balance in base units. Returns `0` if no balance is recorded.
     pub fn get_balance(env: Env, user: Address) -> i128 {
         Self::read_balance(&env, &user)
     }
@@ -660,14 +852,26 @@ impl NovaRewardsContract {
     // -----------------------------------------------------------------------
 
     /// Updates the annual staking rate in basis points.
+    ///
+    /// # Parameters
+    /// - `rate` – Annual rate in basis points (0–10 000, where 10 000 = 100%).
+    ///
+    /// # Authorization
+    /// Admin only.
+    ///
+    /// # Panics
+    /// - `"rate must be between 0 and 10000 basis points"` if `rate < 0 || rate > 10000`.
     pub fn set_annual_rate(env: Env, rate: i128) {
         Self::require_admin(&env);
         
-        if rate < 0 || rate > 10000 {
+        if rate < 0 || rate > MAX_ANNUAL_RATE_BPS {
             panic!("rate must be between 0 and 10000 basis points");
         }
         
         env.storage().instance().set(&DataKey::AnnualRate, &rate);
+
+        // Emit structured rate_set event
+        events::emit_rate_set(&env, rate);
     }
 
     /// Returns the configured annual staking rate in basis points.
@@ -709,19 +913,18 @@ impl NovaRewardsContract {
         Self::write_balance(&env, &staker, balance - amount);
         
         // Create stake record
+        let ts = env.ledger().timestamp();
         let stake_record = StakeRecord {
             amount,
-            staked_at: env.ledger().timestamp(),
+            staked_at: ts,
+            last_claimed_at: ts,
         };
         
         // Store stake record
         Self::write_stake(&env, &staker, &stake_record);
         
-        // Emit event
-        env.events().publish(
-            (symbol_short!("staked"), staker),
-            (amount, stake_record.staked_at),
-        );
+        // Emit event via centralized emitter
+        events::emit_staked(&env, &staker, amount, stake_record.staked_at);
     }
 
     /// Unstake Nova tokens and receive accrued yield.
@@ -742,34 +945,38 @@ impl NovaRewardsContract {
         let stake_record: StakeRecord = Self::read_stake(&env, &staker)
             .expect("no active stake found");
         
+        // Enforce configurable cooldown (default 0 = no cooldown)
+        let cooldown: u64 = env.storage().instance().get(&DataKey::CooldownPeriod).unwrap_or(0);
+        if cooldown > 0 && env.ledger().timestamp() < stake_record.staked_at + cooldown {
+            panic!("cooldown period not elapsed");
+        }
+
         // Get current annual rate
         let annual_rate: i128 = env
             .storage()
             .instance()
             .get(&DataKey::AnnualRate)
             .unwrap_or(0);
-        
-        // Calculate time elapsed
+
+        // Time elapsed since last claim (or since initial stake if never claimed)
         let current_time = env.ledger().timestamp();
-        let time_elapsed = if current_time > stake_record.staked_at {
-            current_time - stake_record.staked_at
+        let time_elapsed = if current_time > stake_record.last_claimed_at {
+            current_time - stake_record.last_claimed_at
         } else {
             0
         };
         
         // Calculate yield: amount × rate × (now - staked_at) / SECONDS_PER_YEAR
         let yield_amount = if annual_rate > 0 && time_elapsed > 0 {
-            // Convert annual rate from basis points to decimal (rate / 10000)
-            // Then apply time factor: (time_elapsed / SECONDS_PER_YEAR)
-            // Formula: amount × (annual_rate / 10000) × (time_elapsed / SECONDS_PER_YEAR)
-            // Simplified: amount × annual_rate × time_elapsed / (10000 × SECONDS_PER_YEAR)
+            // Formula: amount × (annual_rate / BASIS_POINTS_DIVISOR) × (time_elapsed / SECONDS_PER_YEAR)
+            // Simplified: amount × annual_rate × time_elapsed / (BASIS_POINTS_DIVISOR × SECONDS_PER_YEAR)
             stake_record
                 .amount
                 .checked_mul(annual_rate)
                 .expect("overflow in amount * annual_rate")
                 .checked_mul(time_elapsed as i128)
                 .expect("overflow in * time_elapsed")
-                .checked_div(10000 * SECONDS_PER_YEAR as i128)
+                .checked_div(BASIS_POINTS_DIVISOR * SECONDS_PER_YEAR as i128)
                 .expect("overflow in division")
         } else {
             0
@@ -784,11 +991,8 @@ impl NovaRewardsContract {
         // Remove stake record
         Self::clear_stake(&env, &staker);
         
-        // Emit event
-        env.events().publish(
-            (symbol_short!("unstaked"), staker),
-            (stake_record.amount, yield_amount, current_time),
-        );
+        // Emit event via centralized emitter
+        events::emit_unstaked(&env, &staker, stake_record.amount, yield_amount, current_time);
         
         total_return
     }
@@ -811,12 +1015,12 @@ impl NovaRewardsContract {
             .unwrap_or(0);
         
         let current_time = env.ledger().timestamp();
-        let time_elapsed = if current_time > stake_record.staked_at {
-            current_time - stake_record.staked_at
+        let time_elapsed = if current_time > stake_record.last_claimed_at {
+            current_time - stake_record.last_claimed_at
         } else {
             0
         };
-        
+
         if annual_rate > 0 && time_elapsed > 0 {
             stake_record
                 .amount
@@ -824,7 +1028,7 @@ impl NovaRewardsContract {
                 .expect("overflow in amount * annual_rate")
                 .checked_mul(time_elapsed as i128)
                 .expect("overflow in * time_elapsed")
-                .checked_div(10000 * SECONDS_PER_YEAR as i128)
+                .checked_div(BASIS_POINTS_DIVISOR * SECONDS_PER_YEAR as i128)
                 .expect("overflow in division")
         } else {
             0
@@ -862,10 +1066,7 @@ impl NovaRewardsContract {
             snapshot.balance,
         );
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("snapshot")),
-            (user, snapshot.balance, snapshot.captured_at),
-        );
+        events::emit_snapshot(&env, &user, snapshot.balance, snapshot.captured_at);
 
         snapshot
     }
@@ -909,10 +1110,7 @@ impl NovaRewardsContract {
             snapshot.balance,
         );
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("restore")),
-            (user, snapshot.balance, env.ledger().timestamp()),
-        );
+        events::emit_restore(&env, &user, snapshot.balance, env.ledger().timestamp());
 
         snapshot
     }
@@ -948,10 +1146,7 @@ impl NovaRewardsContract {
             amount_delta,
         );
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("tx")),
-            (user, amount_delta, new_balance),
-        );
+        events::emit_recovery_tx(&env, &user, amount_delta, new_balance);
 
         new_balance
     }
@@ -993,10 +1188,7 @@ impl NovaRewardsContract {
             amount,
         );
 
-        env.events().publish(
-            (symbol_short!("recovery"), symbol_short!("funds")),
-            (from, to, amount),
-        );
+        events::emit_recovery_funds(&env, &from, &to, amount);
     }
 
     pub fn get_recovery_operation(env: Env, operation_id: BytesN<32>) -> Option<RecoveryOperation> {

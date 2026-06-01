@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
 import NotificationCenter from './NotificationCenter';
+import BottomNav from './BottomNav';
 
 /**
  * Dashboard layout with collapsible sidebar and header
@@ -62,14 +63,15 @@ export default function DashboardLayout({ children }) {
 
   // Navigation links
   const navLinks = [
-    { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { href: '/dashboard',  label: 'Dashboard',  icon: '📊' },
+    { href: '/campaigns',  label: 'Campaigns',  icon: '🎯' },
     { href: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
-    { href: '/rewards', label: 'Rewards', icon: '🎁' },
-    { href: '/history', label: 'History', icon: '📜' },
-    { href: '/referral', label: 'Referral', icon: '👥', tourId: 'referral-link' },
-    { href: '/analytics', label: 'Analytics', icon: '📊' },
-    { href: '/settings', label: 'Settings', icon: '⚙️' },
-    { href: '/help', label: 'Help Center', icon: '❓' },
+    { href: '/rewards',    label: 'Rewards',    icon: '🎁' },
+    { href: '/history',    label: 'History',    icon: '📜' },
+    { href: '/referral',   label: 'Referral',   icon: '👥', tourId: 'referral-link' },
+    { href: '/analytics',  label: 'Analytics',  icon: '📈' },
+    { href: '/settings',   label: 'Settings',   icon: '⚙️' },
+    { href: '/help',       label: 'Help Center', icon: '❓' },
   ];
 
   // Get page title from current route

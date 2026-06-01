@@ -58,8 +58,8 @@ resource "aws_db_instance" "nova" {
   publicly_accessible    = false
   multi_az               = true
 
-  # Backups & PITR
-  backup_retention_period   = 7
+  # Backups & PITR — 30 days enables point-in-time recovery for the full window
+  backup_retention_period   = 30
   backup_window             = "03:00-04:00"
   maintenance_window        = "Mon:04:00-Mon:05:00"
   delete_automated_backups  = false

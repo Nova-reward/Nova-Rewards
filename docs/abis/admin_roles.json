@@ -1,0 +1,113 @@
+{
+  "contract": "admin_roles",
+  "version": "1.0.0",
+  "description": "Multi-signature admin role management with two-step ownership transfer.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the contract with an admin, signers, and threshold.",
+      "params": [
+        { "name": "admin", "type": "Address" },
+        { "name": "signers", "type": "Vec<Address>", "description": "Initial signer list." },
+        { "name": "threshold", "type": "u32", "description": "Minimum signatures required." }
+      ],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "propose_admin",
+      "description": "Proposes a new admin address. Current admin only.",
+      "params": [{ "name": "new_admin", "type": "Address" }],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "accept_admin",
+      "description": "Accepts the admin role. Proposed admin only.",
+      "params": [{ "name": "new_admin", "type": "Address" }],
+      "returns": null,
+      "errors": ["no pending proposal", "unauthorized"]
+    },
+    {
+      "name": "update_signers",
+      "description": "Replaces the signer list. Admin only.",
+      "params": [{ "name": "signers", "type": "Vec<Address>" }],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "update_threshold",
+      "description": "Updates the multisig threshold. Admin only.",
+      "params": [{ "name": "threshold", "type": "u32" }],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "mint",
+      "description": "Privileged mint — requires admin auth.",
+      "params": [{ "name": "to", "type": "Address" }, { "name": "amount", "type": "i128" }],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "withdraw",
+      "description": "Privileged withdraw — requires admin auth.",
+      "params": [{ "name": "to", "type": "Address" }, { "name": "amount", "type": "i128" }],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "update_rate",
+      "description": "Updates the staking rate — requires admin auth.",
+      "params": [{ "name": "rate_bps", "type": "u32" }],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "pause",
+      "description": "Pauses the protocol — requires admin auth.",
+      "params": [],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "get_admin",
+      "description": "Returns the current admin address.",
+      "params": [],
+      "returns": { "type": "Address" },
+      "errors": []
+    },
+    {
+      "name": "get_pending_admin",
+      "description": "Returns the pending admin address, if any.",
+      "params": [],
+      "returns": { "type": "Option<Address>" },
+      "errors": []
+    },
+    {
+      "name": "get_signers",
+      "description": "Returns the current signer list.",
+      "params": [],
+      "returns": { "type": "Vec<Address>" },
+      "errors": []
+    },
+    {
+      "name": "get_threshold",
+      "description": "Returns the current multisig threshold.",
+      "params": [],
+      "returns": { "type": "u32" },
+      "errors": []
+    }
+  ],
+  "events": [
+    { "name": "admin_proposed",  "fields": [{ "name": "new_admin", "type": "Address" }] },
+    { "name": "admin_accepted",  "fields": [{ "name": "new_admin", "type": "Address" }] },
+    { "name": "signers_updated", "fields": [] },
+    { "name": "threshold_updated","fields": [{ "name": "threshold", "type": "u32" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized", "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",        "message": "unauthorized" },
+    { "code": 3, "name": "NoPendingProposal",   "message": "no pending admin proposal" }
+  ]
+}

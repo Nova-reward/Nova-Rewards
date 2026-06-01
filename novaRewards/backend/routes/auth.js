@@ -4,6 +4,8 @@ const { query } = require('../db/index');
 const { signAccessToken, signRefreshToken } = require('../services/tokenService');
 const { validateRegisterDto } = require('../dtos/registerDto');
 const { validateLoginDto } = require('../dtos/loginDto');
+const { checkIpBlock, recordFailedLogin } = require('../middleware/abuseDetection');
+const { logAudit } = require('../db/auditLogRepository');
 
 const SALT_ROUNDS = 12;
 
@@ -38,23 +40,10 @@ const SALT_ROUNDS = 12;
  *     responses:
  *       201:
  *         description: User created.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data: { $ref: '#/components/schemas/User' }
  *       400:
  *         description: Validation error.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       409:
  *         description: Email already registered.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post('/register', async (req, res, next) => {
   try {
@@ -70,7 +59,6 @@ router.post('/register', async (req, res, next) => {
 
     const { email, password, firstName, lastName } = req.body;
     const normalizedEmail = email.trim().toLowerCase();
-
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     let result;
@@ -79,10 +67,9 @@ router.post('/register', async (req, res, next) => {
         `INSERT INTO users (email, password_hash, first_name, last_name)
          VALUES ($1, $2, $3, $4)
          RETURNING id, email, first_name, last_name, role, created_at`,
-        [normalizedEmail, passwordHash, firstName.trim(), lastName.trim()]
+        [encryptedEmail, passwordHash, firstName.trim(), lastName.trim()]
       );
     } catch (dbErr) {
-      // Postgres unique violation
       if (dbErr.code === '23505') {
         return res.status(409).json({
           success: false,
@@ -93,7 +80,20 @@ router.post('/register', async (req, res, next) => {
       throw dbErr;
     }
 
-    return res.status(201).json({ success: true, data: result.rows[0] });
+    const newUser = result.rows[0];
+
+    // Explicit audit log for registration
+    logAudit({
+      entityType: 'user',
+      entityId: newUser.id,
+      action: 'register',
+      performedBy: newUser.id,
+      actorType: 'user',
+      details: { email: normalizedEmail },
+      source: 'POST /api/auth/register',
+    }).catch((err) => console.error('[audit] register:', err.message));
+
+    return res.status(201).json({ success: true, data: newUser });
   } catch (err) {
     next(err);
   }
@@ -123,25 +123,12 @@ router.post('/register', async (req, res, next) => {
  *     responses:
  *       200:
  *         description: Login successful.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data: { $ref: '#/components/schemas/AuthTokens' }
  *       400:
  *         description: Validation error.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: Invalid credentials.
- *         content:
- *           application/json:
- *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/login', async (req, res, next) => {
+router.post('/login', checkIpBlock, async (req, res, next) => {
   try {
     const validation = validateLoginDto(req.body);
     if (!validation.valid) {
@@ -155,30 +142,44 @@ router.post('/login', async (req, res, next) => {
 
     const { email, password } = req.body;
     const normalizedEmail = email.trim().toLowerCase();
+    const encryptedEmail  = encrypt(normalizedEmail);
 
     const result = await query(
       `SELECT id, email, password_hash, first_name, last_name, role
        FROM users
        WHERE email = $1 AND is_deleted = FALSE`,
-      [normalizedEmail]
+      [encryptedEmail]
     );
 
     const user = result.rows[0];
+    // Decrypt email for the response
+    if (user && user.email) user.email = decrypt(user.email);
 
-    // Use a constant-time compare even when user doesn't exist to prevent
-    // timing-based user enumeration attacks.
+    // Constant-time compare to prevent timing-based user enumeration
     const DUMMY_HASH = '$2b$12$invalidhashpaddingtomatchbcryptlength000000000000000000000';
     const passwordMatch = user
       ? await bcrypt.compare(password, user.password_hash)
       : await bcrypt.compare(password, DUMMY_HASH).then(() => false);
 
     if (!user || !passwordMatch) {
+      await recordFailedLogin(req);
       return res.status(401).json({
         success: false,
         error: 'invalid_credentials',
         message: 'Email or password is incorrect',
       });
     }
+
+    // Log successful login
+    logAudit({
+      entityType: 'auth',
+      entityId: user.id,
+      action: 'login',
+      performedBy: user.id,
+      actorType: user.role === 'admin' ? 'admin' : 'user',
+      details: { email: normalizedEmail },
+      source: 'POST /api/auth/login',
+    }).catch((err) => console.error('[audit] login:', err.message));
 
     const accessToken  = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
@@ -197,6 +198,97 @@ router.post('/login', async (req, res, next) => {
         },
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /auth/refresh:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Rotate refresh token and issue new access + refresh tokens
+ */
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Refresh token required' });
+    }
+
+    const { verifyToken, consumeRefreshJti, signAccessToken, signRefreshToken, storeRefreshJti } =
+      require('../services/tokenService');
+
+    let decoded;
+    try {
+      decoded = verifyToken(refreshToken);
+    } catch {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Invalid or expired refresh token' });
+    }
+
+    if (decoded.type !== 'refresh' || !decoded.jti) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Invalid token type' });
+    }
+
+    // Consume jti — one-time use (rotation)
+    const walletAddress = await consumeRefreshJti(decoded.jti);
+    if (!walletAddress) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Refresh token already used or revoked' });
+    }
+
+    const result = await query(
+      `SELECT id, wallet_address, role FROM users WHERE wallet_address = $1 AND is_deleted = FALSE`,
+      [walletAddress]
+    );
+    const user = result.rows[0];
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'User not found' });
+    }
+
+    const accessToken = signAccessToken(user);
+    const { token: newRefreshToken, jti: newJti } = signRefreshToken(user);
+    await storeRefreshJti(newJti, user.wallet_address);
+
+    return res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /auth/logout:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Revoke access token and refresh token (add to blocklist)
+ */
+router.post('/logout', async (req, res, next) => {
+  try {
+    const { revokeToken, verifyToken, consumeRefreshJti } = require('../services/tokenService');
+
+    // Revoke access token
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = verifyToken(authHeader.substring(7));
+        if (decoded.jti) await revokeToken(decoded.jti, decoded.exp);
+      } catch { /* already expired */ }
+    }
+
+    // Revoke refresh token
+    const { refreshToken } = req.body || {};
+    if (refreshToken) {
+      try {
+        const decoded = verifyToken(refreshToken);
+        if (decoded.jti) {
+          await consumeRefreshJti(decoded.jti);
+          await revokeToken(decoded.jti, decoded.exp);
+        }
+      } catch { /* already expired */ }
+    }
+
+    return res.json({ success: true, message: 'Logged out' });
   } catch (err) {
     next(err);
   }

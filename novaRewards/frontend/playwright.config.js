@@ -4,10 +4,10 @@ const { defineConfig, devices } = require('@playwright/test');
 module.exports = defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.STAGING_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -24,24 +24,22 @@ module.exports = defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: '**/accessibility.spec.js',
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      testIgnore: '**/accessibility.spec.js',
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      testIgnore: '**/accessibility.spec.js',
     },
     // Mobile browsers
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
       name: 'chromium-mobile',
       use: { ...devices['Pixel 5'] },
-      // Only run mobile-specific tests on mobile project
       testMatch: '**/mobile-overflow.spec.js',
     },
     {
@@ -49,11 +47,22 @@ module.exports = defineConfig({
       use: { ...devices['iPhone 12'] },
       testMatch: '**/mobile-overflow.spec.js',
     },
+    // Accessibility — axe-core scans on Chromium only (Issue #956)
+    {
+      name: 'accessibility',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: '**/accessibility.spec.js',
+    },
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // Skip local webServer when running against staging in CI
+  ...(process.env.STAGING_URL
+    ? {}
+    : {
+        webServer: {
+          command: 'npm run dev',
+          url: 'http://localhost:3000',
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
+      }),
 });

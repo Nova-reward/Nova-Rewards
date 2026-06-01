@@ -6,7 +6,14 @@ members = [
     "admin_roles",
     "vesting",
     "referral",
+    "campaign",
     "nova-rewards",
+    "redemption",
+    "escrow",
+    "contract_state",
+    "distribution",
+    "governance",
+    "integration_tests",
 ]
 default-members = [
     "nova_token",
@@ -15,6 +22,13 @@ default-members = [
     "vesting",
     "referral",
     "nova-rewards",
+    "redemption",
+    "escrow",
+    "contract_state",
+    "distribution",
+    "governance",
+    "campaign",
+    "integration_tests",
 ]
 
 [workspace.package]
@@ -22,7 +36,7 @@ edition = "2021"
 publish = false
 
 [workspace.dependencies]
-soroban-sdk = "22.0.11"
+soroban-sdk = "25.3.1"
 
 [profile.release]
 opt-level = "z"
@@ -37,3 +51,9 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+
+[workspace.metadata.tarpaulin]
+exclude = ["nova-rewards"]
+out = ["Html", "Lcov"]
+output-dir = "coverage"
+timeout = "120"

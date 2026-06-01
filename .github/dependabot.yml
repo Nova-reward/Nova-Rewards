@@ -1,0 +1,56 @@
+version: 2
+
+updates:
+  # Backend npm
+  - package-ecosystem: npm
+    directory: /novaRewards/backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels: [dependencies, backend]
+    groups:
+      backend-minor-patch:
+        update-types: [minor, patch]
+
+  # Frontend npm
+  - package-ecosystem: npm
+    directory: /novaRewards/frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels: [dependencies, frontend]
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+
+  # Root npm (shared workspace)
+  - package-ecosystem: npm
+    directory: /novaRewards
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+
+  # Rust / Cargo
+  - package-ecosystem: cargo
+    directory: /contracts
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels: [dependencies, contracts]
+    groups:
+      contracts-minor-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, ci]

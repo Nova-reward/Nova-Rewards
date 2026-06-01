@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
-const { verifyTrustline, buildTrustlineXDR } = require('../../blockchain/trustline');
+const { verifyTrustline, buildTrustlineXDR, checkTrustline, establishTrustline } = require('../../blockchain/trustline');
+const { server } = require('../../blockchain/stellarService');
+const { TransactionEnvelope } = require('stellar-sdk').xdr;
+const StellarSdk = require('stellar-sdk');
 
 /**
  * @openapi
@@ -124,7 +127,7 @@ router.post('/build-xdr', async (req, res, next) => {
 
 router.post('/build', async (req, res, next) => {
   try {
-    const { walletAddress } = req.body;
+    const { walletAddress, assetCode, issuer } = req.body;
 
     if (!walletAddress || !isValidStellarAddress(walletAddress)) {
       return res.status(400).json({
@@ -134,8 +137,76 @@ router.post('/build', async (req, res, next) => {
       });
     }
 
+    // If assetCode + issuer provided, use the generic establishTrustline helper
+    if (assetCode && issuer) {
+      const { xdr } = await establishTrustline({ walletAddress, assetCode, issuer });
+      return res.json({ xdr });
+    }
+
     const xdr = await buildTrustlineXDR(walletAddress);
     res.json({ xdr });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /trustline/verify?walletAddress=<key>
+ * Convenience GET endpoint used by the frontend TrustlineButton.
+ */
+router.get('/verify', async (req, res, next) => {
+  try {
+    const { walletAddress } = req.query;
+
+    if (!walletAddress || !isValidStellarAddress(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'walletAddress must be a valid Stellar public key',
+      });
+    }
+
+    const { exists } = await verifyTrustline(walletAddress);
+    res.json({ exists });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /trustline/submit
+ * Accepts a signed XDR and submits it to Horizon.
+ */
+router.post('/submit', async (req, res, next) => {
+  try {
+    const { signedXdr } = req.body;
+    if (!signedXdr || typeof signedXdr !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'signedXdr is required',
+      });
+    }
+
+    const HORIZON_URL =
+      process.env.STELLAR_NETWORK === 'mainnet'
+        ? 'https://horizon.stellar.org'
+        : 'https://horizon-testnet.stellar.org';
+
+    const response = await fetch(`${HORIZON_URL}/transactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ tx: signedXdr }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      const detail =
+        data?.extras?.result_codes?.transaction || data?.title || 'Submission failed';
+      return res.status(400).json({ success: false, message: detail });
+    }
+
+    res.json({ success: true, txHash: data.hash });
   } catch (err) {
     next(err);
   }
