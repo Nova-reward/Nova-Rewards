@@ -2,87 +2,68 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import * as Sentry from '@sentry/nextjs';
 
-export default function Custom500({ statusCode, err }) {
+export default function Custom500({ err }) {
   useEffect(() => {
-    // Log 500 errors to Sentry
-    if (err) {
-      Sentry.captureException(err);
-    }
+    if (err) Sentry.captureException(err);
   }, [err]);
 
+  function handleReport() {
+    Sentry.showReportDialog();
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-100 dark:from-gray-900 dark:to-gray-800 px-4">
-      <div className="max-w-lg w-full text-center">
-        <div className="mb-8">
-          <h1 className="text-9xl font-bold text-red-600 dark:text-red-400 mb-4">
-            500
-          </h1>
-          <div className="relative">
-            <svg 
-              className="mx-auto h-32 w-32 text-gray-400 dark:text-gray-600" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={1.5} 
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
-              />
-            </svg>
-          </div>
+    <main
+      className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900 px-4"
+      aria-labelledby="error-heading"
+    >
+      <div className="max-w-md w-full text-center">
+        {/* Illustration */}
+        <div className="mb-8 flex justify-center" aria-hidden="true">
+          <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="80" cy="80" r="72" fill="#fef2f2" />
+            <circle cx="80" cy="80" r="52" fill="#fee2e2" />
+            <text x="80" y="96" textAnchor="middle" fontSize="48" fontWeight="700" fill="#dc2626">500</text>
+            <path d="M72 60 L88 76 M88 60 L72 76" stroke="#dc2626" strokeWidth="3" strokeLinecap="round" />
+          </svg>
         </div>
 
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-          Server Error
-        </h2>
-        
-        <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
-          Something went wrong on our end. Our team has been notified and is working on a fix.
+        <h1 id="error-heading" className="text-3xl font-bold text-neutral-900 dark:text-neutral-50 mb-3">
+          Something went wrong
+        </h1>
+        <p className="text-neutral-500 dark:text-neutral-400 mb-8">
+          An unexpected error occurred on our end. Our team has been notified and is working on a fix.
         </p>
 
         {process.env.NODE_ENV === 'development' && err && (
-          <div className="mb-8 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg text-left">
-            <p className="text-sm font-mono text-red-800 dark:text-red-300 break-all">
-              {err.toString()}
-            </p>
-          </div>
+          <pre className="mb-6 p-4 rounded-lg bg-error-50 dark:bg-error-950 text-left text-xs text-error-700 dark:text-error-300 overflow-auto">
+            {err.toString()}
+          </pre>
         )}
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link
-            href="/"
-            className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors shadow-lg hover:shadow-xl"
-          >
-            Go Home
-          </Link>
-          
+        <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
           <button
             onClick={() => window.location.reload()}
-            className="px-8 py-3 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-white rounded-lg font-medium transition-colors shadow-md border border-gray-200 dark:border-gray-700"
+            className="px-6 py-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
           >
             Try Again
           </button>
+          <button
+            onClick={handleReport}
+            className="px-6 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 font-medium text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+          >
+            Report Issue
+          </button>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
-            Need immediate assistance?
-          </p>
-          <Link 
-            href="/help" 
-            className="text-red-600 dark:text-red-400 hover:underline font-medium"
-          >
-            Visit our Help Center
-          </Link>
-        </div>
+        <Link href="/dashboard" className="text-sm text-primary-600 dark:text-primary-400 hover:underline">
+          Return to Dashboard
+        </Link>
       </div>
-    </div>
+    </main>
   );
 }
 
 Custom500.getInitialProps = ({ res, err }) => {
-  const statusCode = res ? res.statusCode : err ? err.statusCode : 404;
+  const statusCode = res ? res.statusCode : err ? err.statusCode : 500;
   return { statusCode, err };
 };

@@ -19,7 +19,7 @@ export default function DashboardLayout({ children }) {
         <Header />
 
         {/* Main content — extra bottom padding on mobile to clear the bottom nav */}
-        <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8 pb-20 lg:pb-8 animate-in fade-in slide-in-from-bottom-2 duration-500 ease-out">
+        <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8 pb-20 lg:pb-8" style={{ animation: 'nova-fade-in 150ms ease-out both' }}>
           {children}
         </main>
 

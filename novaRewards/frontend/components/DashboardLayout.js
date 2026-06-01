@@ -32,6 +32,21 @@ export default function DashboardLayout({ children }) {
     setProfileMenuOpen(false);
   }, [router.pathname]);
 
+  // Dismiss mobile drawer on Escape
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'Escape' && mobileMenuOpen) setMobileMenuOpen(false);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [mobileMenuOpen]);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileMenuOpen]);
+
   // Close profile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -136,9 +151,9 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      {/* Mobile overlay — shown when sidebar is open on mobile/tablet */}
+      {/* Mobile overlay — always rendered; CSS handles fade in/out */}
       <div
-        className={`mobile-overlay${mobileMenuOpen ? ' active' : ''}`}
+        className={`mobile-overlay${mobileMenuOpen ? ' mobile-overlay-visible' : ''}`}
         onClick={() => setMobileMenuOpen(false)}
         aria-hidden="true"
       />
@@ -149,9 +164,11 @@ export default function DashboardLayout({ children }) {
         <header className="header">
           <div className="header-left">
             <button
-              className="mobile-menu-btn mobile-only"
+              className="mobile-menu-btn"
               onClick={toggleMobileMenu}
-              aria-label="Toggle menu"
+              aria-label="Open navigation menu"
+              aria-haspopup="dialog"
+              aria-expanded={mobileMenuOpen}
             >
               ☰
             </button>
