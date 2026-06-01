@@ -1,5 +1,5 @@
 [package]
-name = "campaign"
+name = "errors"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true
@@ -9,7 +9,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
-errors = { path = "../errors" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

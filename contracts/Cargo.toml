@@ -12,6 +12,7 @@ members = [
     "escrow",
     "contract_state",
     "distribution",
+    "errors",
     "integration_tests",
 ]
 default-members = [
@@ -25,6 +26,8 @@ default-members = [
     "escrow",
     "contract_state",
     "distribution",
+    "errors",
+    "campaign",
     "integration_tests",
 ]
 
