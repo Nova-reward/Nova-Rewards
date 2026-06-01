@@ -238,6 +238,13 @@ td {
   margin-bottom: 1.5rem;
 }
 
+/* Tablet: stack to single column */
+@media (max-width: 1024px) {
+  .dashboard-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dashboard-summary-grid .card {
   margin-bottom: 0;
 }
@@ -263,10 +270,6 @@ td {
     width: 100%;
     flex-wrap: wrap;
     gap: 0.75rem;
-  }
-
-  .dashboard-summary-grid {
-    grid-template-columns: 1fr;
   }
 
   .header {
@@ -636,6 +639,7 @@ td {
 .main-wrapper {
   flex: 1;
   min-width: 0;
+  overflow-x: hidden;
   margin-left: 260px;
   transition: margin-left 0.3s ease;
   display: flex;
@@ -908,6 +912,10 @@ td {
   z-index: 90;
 }
 
+.mobile-overlay.active {
+  display: block;
+}
+
 /* Mobile menu button */
 .mobile-menu-btn {
   display: none;
@@ -940,10 +948,6 @@ td {
 
   .main-wrapper.sidebar-collapsed {
     margin-left: 0;
-  }
-
-  .mobile-overlay {
-    display: block;
   }
 
   .mobile-menu-btn {
