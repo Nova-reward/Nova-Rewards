@@ -12,7 +12,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env, Symbol,
+    Vec,
 };
 
 // ── Errors ────────────────────────────────────────────────────────────────────
@@ -43,6 +44,8 @@ pub enum DistributionError {
     InsufficientBalance = 10,
     /// Contract has not been initialized.
     NotInitialized = 11,
+    /// User has not met the campaign's minimum qualifying action count.
+    Ineligible = 12,
 }
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
@@ -53,7 +56,12 @@ pub enum DataKey {
     Admin,
     TokenId,
     Campaign(u64),
+    /// Qualifying action count for (campaign_id, user).
+    UserActions(u64, Address),
 }
+
+/// Persistent storage TTL: ~31 days at 5 s/ledger.
+const CAMPAIGN_TTL: u32 = 535_680;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -139,9 +147,11 @@ impl DistributionContract {
             rule: EligibilityRule { min_actions },
             active: true,
         };
+        let key = DataKey::Campaign(campaign_id);
+        env.storage().persistent().set(&key, &campaign);
         env.storage()
             .persistent()
-            .set(&DataKey::Campaign(campaign_id), &campaign);
+            .extend_ttl(&key, CAMPAIGN_TTL, CAMPAIGN_TTL);
 
         env.events().publish(
             (symbol_short!("campaign"), campaign_id),
@@ -153,12 +163,45 @@ impl DistributionContract {
     /// Deactivate a campaign. Only the admin may call this.
     pub fn deactivate_campaign(env: Env, campaign_id: u64) -> Result<(), DistributionError> {
         Self::require_admin(&env)?;
-        let mut campaign = Self::get_campaign(&env, campaign_id)?;
+        let mut campaign = Self::load_campaign(&env, campaign_id)?;
         campaign.active = false;
+        let key = DataKey::Campaign(campaign_id);
+        env.storage().persistent().set(&key, &campaign);
         env.storage()
             .persistent()
-            .set(&DataKey::Campaign(campaign_id), &campaign);
+            .extend_ttl(&key, CAMPAIGN_TTL, CAMPAIGN_TTL);
         Ok(())
+    }
+
+    // ── Eligibility ───────────────────────────────────────────────────────────
+
+    /// Record a qualifying action for `user` in `campaign_id`.
+    ///
+    /// Admin-gated. Increments the user's action counter by 1.
+    pub fn record_action(
+        env: Env,
+        campaign_id: u64,
+        user: Address,
+    ) -> Result<(), DistributionError> {
+        Self::require_admin(&env)?;
+        // Ensure campaign exists
+        Self::load_campaign(&env, campaign_id)?;
+
+        let key = DataKey::UserActions(campaign_id, user.clone());
+        let count: u32 = env.storage().persistent().get(&key).unwrap_or(0);
+        env.storage().persistent().set(&key, &(count + 1));
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, CAMPAIGN_TTL, CAMPAIGN_TTL);
+        Ok(())
+    }
+
+    /// Returns the qualifying action count for `user` in `campaign_id`.
+    pub fn get_user_actions(env: Env, campaign_id: u64, user: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::UserActions(campaign_id, user))
+            .unwrap_or(0)
     }
 
     // ── Distribution ──────────────────────────────────────────────────────────
@@ -167,6 +210,7 @@ impl DistributionContract {
     ///
     /// The caller must be the merchant registered for `campaign_id`.
     /// `amount` must be > 0 and ≤ the campaign's `reward_amount`.
+    /// The user must have met the campaign's `min_actions` eligibility rule.
     ///
     /// Emits a `RewardIssued` event on success.
     pub fn distribute_reward(
@@ -175,7 +219,7 @@ impl DistributionContract {
         user: Address,
         amount: i128,
     ) -> Result<(), DistributionError> {
-        let campaign = Self::get_campaign(&env, campaign_id)?;
+        let campaign = Self::load_campaign(&env, campaign_id)?;
         campaign.merchant.require_auth();
 
         if !campaign.active {
@@ -184,6 +228,7 @@ impl DistributionContract {
         if amount <= 0 || amount > campaign.reward_amount {
             return Err(DistributionError::InvalidAmount);
         }
+        Self::check_eligibility(&env, campaign_id, &user, &campaign.rule)?;
 
         Self::do_transfer(&env, &user, amount)?;
         Self::emit_reward_issued(&env, campaign_id, &user, amount);
@@ -194,6 +239,7 @@ impl DistributionContract {
     ///
     /// The caller must be the merchant registered for `campaign_id`.
     /// All amounts must be > 0 and ≤ the campaign's `reward_amount`.
+    /// Every recipient must meet the campaign's `min_actions` eligibility rule.
     /// The entire batch is validated before any transfer executes.
     ///
     /// Emits a `RewardIssued` event per recipient.
@@ -203,7 +249,7 @@ impl DistributionContract {
         recipients: Vec<Address>,
         amounts: Vec<i128>,
     ) -> Result<(), DistributionError> {
-        let campaign = Self::get_campaign(&env, campaign_id)?;
+        let campaign = Self::load_campaign(&env, campaign_id)?;
         campaign.merchant.require_auth();
 
         if !campaign.active {
@@ -218,18 +264,20 @@ impl DistributionContract {
             return Err(DistributionError::BatchLengthMismatch);
         }
 
-        // Pre-validate all amounts and compute total
+        // Pre-validate all amounts, eligibility, and compute total
         let mut total: i128 = 0;
         for i in 0..n {
             let amt = amounts.get(i).unwrap();
             if amt <= 0 || amt > campaign.reward_amount {
                 return Err(DistributionError::InvalidAmount);
             }
+            let recipient = recipients.get(i).unwrap();
+            Self::check_eligibility(&env, campaign_id, &recipient, &campaign.rule)?;
             total = total.checked_add(amt).ok_or(DistributionError::InvalidAmount)?;
         }
 
         // Check contract balance covers the whole batch
-        let tok = Self::token_client(&env);
+        let tok = Self::token_client(&env)?;
         if tok.balance(&env.current_contract_address()) < total {
             return Err(DistributionError::InsufficientBalance);
         }
@@ -248,12 +296,12 @@ impl DistributionContract {
 
     /// Returns the campaign data for `campaign_id`.
     pub fn get_campaign_info(env: Env, campaign_id: u64) -> Result<Campaign, DistributionError> {
-        Self::get_campaign(&env, campaign_id)
+        Self::load_campaign(&env, campaign_id)
     }
 
     /// Returns the Nova token balance held by this contract.
-    pub fn contract_balance(env: Env) -> i128 {
-        Self::token_client(&env).balance(&env.current_contract_address())
+    pub fn contract_balance(env: Env) -> Result<i128, DistributionError> {
+        Ok(Self::token_client(&env)?.balance(&env.current_contract_address()))
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
@@ -268,24 +316,51 @@ impl DistributionContract {
         Ok(admin)
     }
 
-    fn token_client(env: &Env) -> token::Client {
+    fn token_client(env: &Env) -> Result<token::Client, DistributionError> {
         let id: Address = env
             .storage()
             .instance()
             .get(&DataKey::TokenId)
-            .expect("not initialized");
-        token::Client::new(env, &id)
+            .ok_or(DistributionError::NotInitialized)?;
+        Ok(token::Client::new(env, &id))
     }
 
-    fn get_campaign(env: &Env, campaign_id: u64) -> Result<Campaign, DistributionError> {
+    fn load_campaign(env: &Env, campaign_id: u64) -> Result<Campaign, DistributionError> {
+        let key = DataKey::Campaign(campaign_id);
+        let campaign = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(DistributionError::CampaignNotFound)?;
+        // Refresh TTL on read
         env.storage()
             .persistent()
-            .get(&DataKey::Campaign(campaign_id))
-            .ok_or(DistributionError::CampaignNotFound)
+            .extend_ttl(&key, CAMPAIGN_TTL, CAMPAIGN_TTL);
+        Ok(campaign)
+    }
+
+    fn check_eligibility(
+        env: &Env,
+        campaign_id: u64,
+        user: &Address,
+        rule: &EligibilityRule,
+    ) -> Result<(), DistributionError> {
+        if rule.min_actions == 0 {
+            return Ok(());
+        }
+        let actions: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserActions(campaign_id, user.clone()))
+            .unwrap_or(0);
+        if actions < rule.min_actions {
+            return Err(DistributionError::Ineligible);
+        }
+        Ok(())
     }
 
     fn do_transfer(env: &Env, to: &Address, amount: i128) -> Result<(), DistributionError> {
-        let tok = Self::token_client(env);
+        let tok = Self::token_client(env)?;
         let contract_addr = env.current_contract_address();
         if tok.balance(&contract_addr) < amount {
             return Err(DistributionError::InsufficientBalance);
@@ -297,7 +372,7 @@ impl DistributionContract {
     /// Emits `("RewardIssued", campaign_id)` with data `(user, amount)`.
     fn emit_reward_issued(env: &Env, campaign_id: u64, user: &Address, amount: i128) {
         env.events().publish(
-            (symbol_short!("RwdIssued"), campaign_id),
+            (Symbol::new(env, "RewardIssued"), campaign_id),
             (user.clone(), amount),
         );
     }
@@ -380,13 +455,68 @@ mod tests {
         let (env, _admin, client, token_id, merchant) = setup();
         let user = Address::generate(&env);
 
+        // min_actions = 0 → no eligibility check
         client
-            .register_campaign(&1, &merchant, &1_000, &3)
+            .register_campaign(&1, &merchant, &1_000, &0)
             .unwrap();
         client.distribute_reward(&1, &user, &500).unwrap();
 
         let tok = mock_token::MockTokenClient::new(&env, &token_id);
         assert_eq!(tok.balance(&user), 500);
+    }
+
+    #[test]
+    fn test_eligibility_enforced() {
+        let (env, _admin, client, token_id, merchant) = setup();
+        let user = Address::generate(&env);
+
+        // min_actions = 2
+        client
+            .register_campaign(&10, &merchant, &1_000, &2)
+            .unwrap();
+
+        // 0 actions → Ineligible
+        let err = client
+            .try_distribute_reward(&10, &user, &500)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::Ineligible);
+
+        // Record 1 action → still ineligible
+        client.record_action(&10, &user).unwrap();
+        let err = client
+            .try_distribute_reward(&10, &user, &500)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::Ineligible);
+
+        // Record 2nd action → now eligible
+        client.record_action(&10, &user).unwrap();
+        client.distribute_reward(&10, &user, &500).unwrap();
+
+        let tok = mock_token::MockTokenClient::new(&env, &token_id);
+        assert_eq!(tok.balance(&user), 500);
+    }
+
+    #[test]
+    fn test_batch_eligibility_enforced() {
+        let (env, _admin, client, _token_id, merchant) = setup();
+        let eligible = Address::generate(&env);
+        let ineligible = Address::generate(&env);
+
+        client
+            .register_campaign(&11, &merchant, &100, &1)
+            .unwrap();
+        client.record_action(&11, &eligible).unwrap();
+
+        let recipients = soroban_sdk::vec![&env, eligible.clone(), ineligible.clone()];
+        let amounts = soroban_sdk::vec![&env, 100_i128, 100_i128];
+
+        let err = client
+            .try_distribute_batch(&11, &recipients, &amounts)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, DistributionError::Ineligible);
     }
 
     #[test]
@@ -433,21 +563,12 @@ mod tests {
     }
 
     #[test]
-    fn test_unauthorized_caller_rejected() {
-        let (env, _admin, client, _token_id, merchant) = setup();
-        let impostor = Address::generate(&env);
+    fn test_campaign_not_found_rejected() {
+        let (env, _admin, client, _token_id, _merchant) = setup();
         let user = Address::generate(&env);
 
-        // Register campaign with `merchant`, then try to distribute as `impostor`.
-        // mock_all_auths means we need to check the error path differently —
-        // register with impostor as merchant so auth passes but campaign lookup fails.
-        client
-            .register_campaign(&4, &merchant, &500, &1)
-            .unwrap();
-
-        // Campaign 99 does not exist → CampaignNotFound (unauthorized path)
         let err = client
-            .try_distribute_reward(&99, &impostor, &100)
+            .try_distribute_reward(&99, &user, &100)
             .unwrap_err()
             .unwrap();
         assert_eq!(err, DistributionError::CampaignNotFound);
