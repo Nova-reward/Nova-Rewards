@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useWalletStore } from '../../store/walletStore';
 import WalletConnectButton from '../WalletConnectButton';
+import BalanceDisplay from '../BalanceDisplay';
 import NotificationBell from '../NotificationBell';
 import ThemeToggle from './ThemeToggle';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
@@ -35,6 +36,12 @@ export default function Header() {
 
       <div className="flex items-center gap-2 md:gap-4">
         <WalletConnectButton />
+        <BalanceDisplay />
+        <button className="p-2 text-slate-500 hover:bg-gray-100 dark:hover:bg-brand-border rounded-lg transition-colors relative">
+          <Bell className="w-5 h-5" />
+          <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-brand-card"></span>
+        </button>
+        
         <NotificationBell />
         <ThemeToggle />
 

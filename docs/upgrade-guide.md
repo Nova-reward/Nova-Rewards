@@ -142,3 +142,85 @@ Soroban does not support automatic rollback. To revert:
 1. Install the previous WASM and note its hash.
 2. Call `upgrade()` with the old hash.
 3. Call `migrate()` — add compensating data transformations if needed.
+
+---
+
+## M-of-N Multisig Upgrade — All Other Contracts
+
+The following contracts use a **M-of-N multisig approval** pattern instead of the two-step `upgrade()`/`migrate()` flow:
+
+- `campaign`
+- `escrow`
+- `distribution`
+- `governance`
+- `admin_roles`
+- `contract_state`
+
+### How it works
+
+1. Each contract is initialized with a `signers` list and a `threshold` (M-of-N).
+2. Each authorized signer calls `approve_upgrade(signer, new_wasm_hash)`.
+3. When the approval count reaches `threshold`, the upgrade executes automatically:
+   - A `ContractUpgraded` event is emitted with the new WASM hash.
+   - `env.deployer().update_current_contract_wasm(new_wasm_hash)` is called.
+   - All instance storage (state, admin, config) is preserved.
+
+### Security guarantees
+
+- Unauthorized callers (not in the signer set) are rejected with `"not an authorized signer"`.
+- Duplicate approvals from the same signer are rejected with `"already approved"`.
+- The upgrade fires exactly once per hash — approvals are cleared before the WASM swap.
+
+### Example: 2-of-3 upgrade for the campaign contract
+
+```bash
+# Signer 1 approves
+stellar contract invoke --network testnet --source signer1 \
+  --id <CAMPAIGN_CONTRACT_ID> \
+  -- approve_upgrade \
+  --signer <SIGNER1_ADDRESS> \
+  --new_wasm_hash <NEW_WASM_HASH>
+
+# Signer 2 approves — threshold reached, upgrade fires
+stellar contract invoke --network testnet --source signer2 \
+  --id <CAMPAIGN_CONTRACT_ID> \
+  -- approve_upgrade \
+  --signer <SIGNER2_ADDRESS> \
+  --new_wasm_hash <NEW_WASM_HASH>
+```
+
+### Checking approval status
+
+```bash
+stellar contract invoke --network testnet --id <CONTRACT_ID> \
+  -- get_upgrade_approvals \
+  --new_wasm_hash <NEW_WASM_HASH>
+# Returns: current approval count (u32)
+
+stellar contract invoke --network testnet --id <CONTRACT_ID> \
+  -- get_threshold
+# Returns: required approvals (u32)
+```
+
+### ContractUpgraded event
+
+All contracts emit this event when the upgrade executes:
+
+| Contract       | topics                        | data                                          |
+|----------------|-------------------------------|-----------------------------------------------|
+| campaign       | `("camp", "upgraded")`        | `(schema_version: 1, new_wasm_hash: BytesN<32>)` |
+| escrow         | `("escrow", "upgraded")`      | `(schema_version: 1, new_wasm_hash: BytesN<32>)` |
+| distribution   | `("dist", "upgraded")`        | `(schema_version: 1, new_wasm_hash: BytesN<32>)` |
+| governance     | `("gov", "upgraded")`         | `(schema_version: 1, new_wasm_hash: BytesN<32>)` |
+| admin_roles    | `("adm_roles", "upgraded")`   | `(schema_version: 1, new_wasm_hash: BytesN<32>)` |
+| contract_state | `("state", "upgraded")`       | `(schema_version: 1, new_wasm_hash: BytesN<32>)` |
+
+The `nova-rewards` contract emits `("nova_rwd", "upgraded")` with an additional `migration_version: u32` field from its `migrate()` function.
+
+### State preservation
+
+All contracts store operational state in Soroban **instance storage**, which persists across WASM upgrades. After an upgrade:
+
+- Admin addresses, signer sets, and thresholds are unchanged.
+- All contract-specific state (campaigns, escrows, distributions, proposals, etc.) is preserved.
+- The new WASM code takes effect immediately for all subsequent invocations.
