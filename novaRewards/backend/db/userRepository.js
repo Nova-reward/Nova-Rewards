@@ -110,7 +110,7 @@ async function getUnprocessedReferrals(hoursAgo = 24) {
      FROM users u
      WHERE u.referred_by IS NOT NULL
        AND u.referral_bonus_claimed = FALSE
-       AND u.referred_at <= NOW() - INTERVAL '${hoursAgo} hours'
+       AND u.referred_at <= NOW() - ($1 * INTERVAL '1 hour')
        AND NOT EXISTS (
          SELECT 1 FROM point_transactions pt
          WHERE pt.user_id = u.referred_by
@@ -118,7 +118,7 @@ async function getUnprocessedReferrals(hoursAgo = 24) {
            AND pt.referred_user_id = u.id
        )
      ORDER BY u.referred_at ASC`,
-    []
+    [hoursAgo]
   );
   return result.rows;
 }
