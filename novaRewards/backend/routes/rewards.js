@@ -7,6 +7,7 @@ const { verifyTrustline } = require('../../blockchain/trustline');
 const { slidingRewards } = require('../middleware/rateLimiter');
 const { enqueueRewardIssuance } = require('../services/rewardIssuanceService');
 const { checkRewardFarming, recordRewardClaim } = require('../middleware/abuseDetection');
+const { validateIssueReward, validateDistributeReward } = require('../dtos/middleware');
 
 /**
  * @openapi
@@ -34,7 +35,7 @@ const { checkRewardFarming, recordRewardClaim } = require('../middleware/abuseDe
  *       200: { description: Duplicate — already processed }
  *       400: { description: Validation error }
  */
-router.post('/issue', slidingRewards, authenticateMerchant, async (req, res, next) => {
+router.post('/issue', slidingRewards, authenticateMerchant, validateIssueReward, async (req, res, next) => {
   try {
     const { idempotencyKey, walletAddress, amount, campaignId, userId } = req.body;
     if (!idempotencyKey || !walletAddress || !amount || !campaignId) {
@@ -115,7 +116,7 @@ router.post('/issue', slidingRewards, authenticateMerchant, async (req, res, nex
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/distribute', slidingRewards, authenticateMerchant, checkRewardFarming, async (req, res, next) => {
+router.post('/distribute', slidingRewards, authenticateMerchant, checkRewardFarming, validateDistributeReward, async (req, res, next) => {
   try {
     const { walletAddress, customerWallet, amount, campaignId } = req.body;
     const recipientWallet = walletAddress || customerWallet;

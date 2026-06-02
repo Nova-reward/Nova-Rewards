@@ -6,4 +6,5 @@ metadata:
 data:
   NODE_ENV: production
   PORT: "4000"
+  LOG_LEVEL: info
   NEXT_PUBLIC_API_URL: https://api.nova-rewards.io

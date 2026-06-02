@@ -1,47 +1,91 @@
-const pino = require('pino');
-const pinoHttp = require('pino-http');
-const { AsyncLocalStorage } = require('async_hooks');
+'use strict';
 
-const serviceName = process.env.SERVICE_NAME || 'nova-rewards-backend';
-const level = process.env.LOG_LEVEL || 'info';
+const { createLogger, format, transports } = require('winston');
 
-const asyncLocalStorage = new AsyncLocalStorage();
+// Patterns for PII/sensitive data redaction
+const REDACT_PATTERNS = [
+  // JWT tokens (Bearer + raw)
+  { pattern: /Bearer\s+[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]*/gi, replacement: 'Bearer [REDACTED]' },
+  { pattern: /eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]*/g, replacement: '[JWT_REDACTED]' },
+  // Passwords in JSON bodies / query strings
+  { pattern: /"password"\s*:\s*"[^"]*"/gi, replacement: '"password":"[REDACTED]"' },
+  { pattern: /password=[^&\s]*/gi, replacement: 'password=[REDACTED]' },
+  // Stellar secret keys (S... 56-char base32)
+  { pattern: /S[A-Z2-7]{55}/g, replacement: '[STELLAR_SECRET_REDACTED]' },
+  // AWS secret keys
+  { pattern: /(?:AWS_SECRET_ACCESS_KEY|aws_secret_access_key)[=:\s]+\S+/gi, replacement: '[AWS_SECRET_REDACTED]' },
+  // Generic secret/token/key fields
+  { pattern: /"(?:secret|token|apiKey|api_key|privateKey|private_key)"\s*:\s*"[^"]*"/gi, replacement: (m) => m.replace(/"[^"]*"$/, '"[REDACTED]"') },
+  // Email addresses
+  { pattern: /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, replacement: '[EMAIL_REDACTED]' },
+];
 
-const baseLogger = pino({
-  level,
-  base: { service: serviceName },
-  timestamp: pino.stdTimeFunctions.isoTime,
+function redact(value) {
+  if (typeof value !== 'string') return value;
+  return REDACT_PATTERNS.reduce((s, { pattern, replacement }) => s.replace(pattern, replacement), value);
+}
+
+const redactFormat = format((info) => {
+  info.message = redact(String(info.message ?? ''));
+  if (info.stack) info.stack = redact(info.stack);
+  return info;
 });
 
-function getLogger() {
-  return baseLogger;
+const baseFormats = [
+  format.timestamp(),
+  redactFormat(),
+  format.errors({ stack: true }),
+];
+
+const isProduction = process.env.NODE_ENV === 'production';
+const logLevel = process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug');
+
+const loggerTransports = [
+  new transports.Console({
+    format: isProduction
+      ? format.combine(...baseFormats, format.json())
+      : format.combine(...baseFormats, format.colorize(), format.simple()),
+  }),
+];
+
+// Add CloudWatch transport only when credentials + group are configured
+if (process.env.CLOUDWATCH_LOG_GROUP) {
+  try {
+    const WinstonCloudWatch = require('winston-cloudwatch');
+    const awsRegion = process.env.AWS_REGION || 'us-east-1';
+    const environment = process.env.NODE_ENV || 'development';
+
+    loggerTransports.push(
+      new WinstonCloudWatch({
+        logGroupName: process.env.CLOUDWATCH_LOG_GROUP,
+        logStreamName: `backend/${environment}/{hostname}`,
+        awsRegion,
+        // Credentials picked up from env / instance profile automatically
+        jsonValueFormatter: (v) => redact(JSON.stringify(v)),
+        messageFormatter: ({ level, message, timestamp, ...meta }) => {
+          const metaStr = Object.keys(meta).length ? ' ' + redact(JSON.stringify(meta)) : '';
+          return `[${timestamp}] ${level.toUpperCase()}: ${message}${metaStr}`;
+        },
+        retentionInDays: 90,
+        uploadRate: 2000,
+        errorHandler: (err) => {
+          // Avoid infinite loop — write directly to stderr
+          process.stderr.write(`[winston-cloudwatch] ${err.message}\n`);
+        },
+      })
+    );
+  } catch (e) {
+    process.stderr.write(`[logger] winston-cloudwatch not available: ${e.message}\n`);
+  }
 }
 
-function getCorrelationId() {
-  const store = asyncLocalStorage.getStore();
-  return store && store.correlationId;
-}
+const logger = createLogger({
+  level: logLevel,
+  defaultMeta: {
+    service: 'nova-rewards-backend',
+    environment: process.env.NODE_ENV || 'development',
+  },
+  transports: loggerTransports,
+});
 
-function pinoMiddleware() {
-  return pinoHttp({
-    logger: baseLogger,
-    genReqId: (req) => {
-      // Prefer existing headers, fallback to generated id
-      return req.headers['x-correlation-id'] || req.headers['x-trace-id'] || undefined;
-    },
-    customLogLevel: function (res, err) {
-      if (res.statusCode >= 500 || err) return 'error';
-      if (res.statusCode >= 400) return 'warn';
-      return 'info';
-    },
-    serializers: {
-      req: (req) => ({ method: req.method, url: req.url, id: req.id }),
-      res: (res) => ({ statusCode: res.statusCode }),
-    },
-    customProps: function (req, res) {
-      return { correlationId: req.correlationId || req.id };
-    },
-  });
-}
-
-module.exports = { getLogger, pinoMiddleware, asyncLocalStorage, getCorrelationId };
+module.exports = logger;

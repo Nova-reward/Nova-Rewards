@@ -12,11 +12,7 @@ async function logAudit({ entityType, entityId = null, action, performedBy = nul
 }
 
 
-async function getAuditLogs({ entityType, entityId, actor, action, startDate, endDate, page = 1, limit = 20 } = {}) {
-     const conditions = [];
-     const params = [];
-     let i = 1;
-
+async function getAuditLogs({ entityType, entityId, performedBy, actorType, merchantId, action, startDate, endDate, statusCode, httpMethod, endpoint, ipAddress, page = 1, limit = 20 } = {}) {
   const conditions = [];
   const params = [];
   let i = 1;
@@ -25,29 +21,6 @@ async function getAuditLogs({ entityType, entityId, actor, action, startDate, en
     conditions.push(`entity_type = $${i++}`);
     params.push(entityType);
   }
-
-     if (actor != null) {
-          conditions.push(`performed_by = $${i++}`);
-          params.push(actor);
-     }
-
-     if (action) {
-          conditions.push(`action = $${i++}`);
-          params.push(action);
-     }
-
-     if (startDate) {
-          conditions.push(`created_at >= $${i++}`);
-          params.push(startDate);
-     }
-
-     if (endDate) {
-          conditions.push(`created_at <= $${i++}`);
-          params.push(endDate);
-     }
-
-     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-     const offset = (page - 1) * limit;
 
   if (action) {
     conditions.push(`action = $${i++}`);

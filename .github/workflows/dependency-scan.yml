@@ -1,6 +1,8 @@
 name: Dependency Vulnerability Scan
 
 on:
+  push:
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
   schedule:
@@ -13,6 +15,129 @@ permissions:
   pull-requests: write   # needed to post PR comments
 
 jobs:
+  # ── depcheck: unused dependency detection ───────────────────────────────────
+  depcheck:
+    name: Unused Dependency Check (depcheck)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend deps
+        run: npm ci
+        working-directory: novaRewards/backend
+
+      - name: Install frontend deps
+        run: npm ci
+        working-directory: novaRewards/frontend
+
+      - name: Install depcheck globally
+        run: npm install -g depcheck@1.4.7
+
+      - name: Run depcheck (backend)
+        id: depcheck_backend
+        run: |
+          set +e
+          REPORT=$(depcheck . --json 2>&1)
+          EXIT=$?
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          echo "$REPORT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "exit_code=$EXIT" >> $GITHUB_OUTPUT
+          # Human-readable summary
+          echo "$REPORT" | node -e "
+            const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const unused = d.dependencies || [];
+            const unusedDev = d.devDependencies || [];
+            const missing = Object.keys(d.missing || {});
+            console.log('Unused dependencies:', unused.length ? unused.join(', ') : 'none');
+            console.log('Unused devDependencies:', unusedDev.length ? unusedDev.join(', ') : 'none');
+            console.log('Missing (used but not declared):', missing.length ? missing.join(', ') : 'none');
+          " 2>/dev/null || echo "$REPORT"
+        working-directory: novaRewards/backend
+
+      - name: Run depcheck (frontend)
+        id: depcheck_frontend
+        run: |
+          set +e
+          REPORT=$(depcheck . --json 2>&1)
+          EXIT=$?
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          echo "$REPORT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "exit_code=$EXIT" >> $GITHUB_OUTPUT
+          echo "$REPORT" | node -e "
+            const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const unused = d.dependencies || [];
+            const unusedDev = d.devDependencies || [];
+            const missing = Object.keys(d.missing || {});
+            console.log('Unused dependencies:', unused.length ? unused.join(', ') : 'none');
+            console.log('Unused devDependencies:', unusedDev.length ? unusedDev.join(', ') : 'none');
+            console.log('Missing (used but not declared):', missing.length ? missing.join(', ') : 'none');
+          " 2>/dev/null || echo "$REPORT"
+        working-directory: novaRewards/frontend
+
+      - name: Post depcheck PR comment
+        continue-on-error: true
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            function parseReport(raw) {
+              try { return JSON.parse(raw); } catch { return {}; }
+            }
+            const backendReport  = parseReport(`${{ steps.depcheck_backend.outputs.report }}`);
+            const frontendReport = parseReport(`${{ steps.depcheck_frontend.outputs.report }}`);
+
+            function section(label, report) {
+              const unused    = report.dependencies    || [];
+              const unusedDev = report.devDependencies || [];
+              const missing   = Object.keys(report.missing || {});
+              const lines = [`**${label}**`];
+              if (unused.length)    lines.push(`- Unused deps: \`${unused.join('`, `')}\``);
+              if (unusedDev.length) lines.push(`- Unused devDeps: \`${unusedDev.join('`, `')}\``);
+              if (missing.length)   lines.push(`- Missing (used but undeclared): \`${missing.join('`, `')}\``);
+              if (!unused.length && !unusedDev.length && !missing.length) lines.push('- ✅ No unused or missing dependencies');
+              return lines.join('\n');
+            }
+
+            const body = [
+              '## 🧹 depcheck — Unused Dependency Report',
+              '',
+              section('Backend (`novaRewards/backend`)', backendReport),
+              '',
+              section('Frontend (`novaRewards/frontend`)', frontendReport),
+              '',
+              '> Review unused entries and remove them to reduce install time, bundle size, and attack surface.',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes('depcheck — Unused Dependency Report'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  # ── npm audit: vulnerability scanning ───────────────────────────────────────
   npm-audit:
     name: npm audit
     runs-on: ubuntu-latest
@@ -25,11 +150,11 @@ jobs:
           node-version: 20
 
       - name: Install backend deps
-        run: npm install
+        run: npm ci
         working-directory: novaRewards/backend
 
       - name: Install frontend deps
-        run: npm install
+        run: npm ci
         working-directory: novaRewards/frontend
 
       - name: Run npm audit (backend)
@@ -68,6 +193,7 @@ jobs:
         working-directory: novaRewards/frontend
 
       - name: Post PR comment
+        continue-on-error: true
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v9
         with:
@@ -152,6 +278,7 @@ jobs:
         working-directory: contracts
 
       - name: Post PR comment (cargo)
+        continue-on-error: true
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v9
         with:

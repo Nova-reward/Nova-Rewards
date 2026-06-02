@@ -1,8 +1,21 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol};
+use soroban_sdk::{testutils::Address as _, testutils::Events as _, Address, BytesN, Env, Symbol};
 
 use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient, RecoveryKind};
+
+pub fn check_event_emitted(env: &Env, event_name: &str) -> bool {
+    env.events()
+        .all()
+        .iter()
+        .any(|(_, topics, _)| {
+            topics
+                .first()
+                .and_then(|first| first.clone().try_into_val(env).ok())
+                .map(|symbol: Symbol| symbol == Symbol::new(env, event_name))
+                .unwrap_or(false)
+        })
+}
 
 fn deploy(env: &Env) -> (NovaRewardsContractClient, Address) {
     let admin = Address::generate(env);
@@ -59,6 +72,9 @@ fn test_snapshot_and_restore_account_state() {
     assert_eq!(restored.balance, 600);
     assert_eq!(client.get_balance(&user), 600);
     assert_eq!(client.get_stake(&user).unwrap().amount, 400);
+
+    assert!(check_event_emitted(&env, "recover_tx"), "recover_tx event missing");
+    assert!(check_event_emitted(&env, "restore_acc"), "restore_acc event missing");
 }
 
 #[test]
@@ -104,4 +120,6 @@ fn test_recover_funds_moves_internal_balances() {
     assert_eq!(operation.kind, RecoveryKind::Fund);
     assert_eq!(operation.amount, 200);
     assert_eq!(operation.counterparty, Some(to));
+
+    assert!(check_event_emitted(&env, "recover_funds"), "recover_funds event missing");
 }

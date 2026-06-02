@@ -82,7 +82,7 @@ router.patch('/:id', authenticateMerchant, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'validation_error', message: errors.join('; ') });
     }
 
-    const updated = await updateMerchant(id, req.body);
+8    const updated = await updateMerchant(id, req.body);
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);

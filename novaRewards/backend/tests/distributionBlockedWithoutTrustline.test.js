@@ -254,7 +254,6 @@ describe('POST /api/rewards/distribute — no trustline blocked at route (integr
               srv,
               '/api/rewards/distribute',
               { walletAddress, amount, campaignId },
-              { walletAddress: customerWallet, amount, campaignId },
               { 'x-api-key': VALID_API_KEY }
             );
 

@@ -1,226 +1,402 @@
-const { Server } = require('stellar-sdk');
+'use strict';
+
+/**
+ * Horizon SSE event streaming and indexing service.
+ * Connects to Horizon's /events endpoint, parses XDR contract events,
+ * persists them to PostgreSQL, and manages cursor + reconnection.
+ * Requirements: #657
+ */
+
+const { StellarSdk } = require('stellar-sdk');
 const {
   recordContractEvent,
   markEventProcessed,
   markEventFailed,
   getPendingEvents,
+  getStreamCursor,
+  saveStreamCursor,
 } = require('../db/contractEventRepository');
-const { HORIZON_URL, NOVA_TOKEN_CONTRACT_ID, REWARD_POOL_CONTRACT_ID } = require('./configService');
+const {
+  HORIZON_URL,
+  NOVA_TOKEN_CONTRACT_ID,
+  REWARD_POOL_CONTRACT_ID,
+} = require('./configService');
+
+const RECONNECT_BASE_MS = 1_000;
+const RECONNECT_MAX_MS = 60_000;
+const RETRY_LOOP_INTERVAL_MS = 60_000;
+const MAX_RETRIES = 5;
+
+/** Active EventSource handles keyed by contractId */
+const activeStreams = new Map();
 
 /**
- * Contract event listener service for processing Soroban smart contract events.
- * Requirements: #182
- */
-
-const server = new Server(HORIZON_URL);
-
-// Event type to handler mapping
-const eventHandlers = {
-  mint: handleMintEvent,
-  claim: handleClaimEvent,
-  stake: handleStakeEvent,
-  unstake: handleUnstakeEvent,
-};
-
-/**
- * Starts listening to contract events from Horizon.
- * @returns {Promise<void>}
+ * Starts the Horizon SSE stream for all configured contracts
+ * and the failed-event retry loop.
  */
 async function startEventListener() {
-  console.log('Starting contract event listener...');
-
-  // Subscribe to events for NovaToken and Reward Pool contracts
   const contracts = [NOVA_TOKEN_CONTRACT_ID, REWARD_POOL_CONTRACT_ID].filter(Boolean);
-
   for (const contractId of contracts) {
-    if (contractId) {
-      listenToContractEvents(contractId);
-    }
+    await connectStream(contractId, 0);
   }
-
-  // Start retry loop for failed events
   startRetryLoop();
 }
 
 /**
- * Listens to events for a specific contract.
- * @param {string} contractId - Contract ID to listen to
+ * Connects (or reconnects) the SSE stream for a single contract.
+ * @param {string} contractId
+ * @param {number} attempt - reconnect attempt count (for backoff)
  */
-async function listenToContractEvents(contractId) {
+async function connectStream(contractId, attempt) {
+  // Load persisted cursor so we resume from where we left off
+  const cursor = (await getStreamCursor(contractId)) || 'now';
+
+  const url = `${HORIZON_URL}/events?contract_id=${contractId}&cursor=${cursor}&limit=200`;
+
+  console.log(`[horizon-stream] Connecting to ${url} (attempt ${attempt})`);
+
+  // Use Node's built-in fetch (Node 18+) or fall back to http.get for SSE
+  let es;
   try {
-    console.log(`Listening to events for contract: ${contractId}`);
-
-    // Use Horizon's events endpoint to subscribe to contract events
-    const builder = server.operations().forContract(contractId).limit(100);
-
-    // This is a simplified implementation - in production, you'd use
-    // the Stellar SDK's EventsAPI or Horizon's /events endpoint
-    // For now, we'll set up a polling mechanism
-    pollForEvents(contractId);
-  } catch (error) {
-    console.error(`Error setting up event listener for ${contractId}:`, error);
+    es = new EventSource(url);
+  } catch {
+    // EventSource not available in Node — use manual SSE via http
+    es = createNodeSSE(url, contractId, attempt);
+    return;
   }
-}
 
-/**
- * Polls for new events from the contract.
- * @param {string} contractId - Contract ID to poll
- */
-async function pollForEvents(contractId) {
-  // This is a placeholder for the actual event polling logic
-  // In production, you would use Horizon's /events endpoint or Stellar SDK's EventsAPI
-  console.log(`Polling for events from contract: ${contractId}`);
+  activeStreams.set(contractId, es);
 
-  // Simulate event polling - replace with actual implementation
-  setInterval(async () => {
+  es.onmessage = async (event) => {
     try {
-      // Fetch events from Horizon
-      // const events = await server.events().forContract(contractId).limit(10).call();
-      // Process each event
-      // for (const event of events.records) {
-      //   await processEvent(contractId, event);
-      // }
-    } catch (error) {
-      console.error(`Error polling events for ${contractId}:`, error);
+      const raw = JSON.parse(event.data);
+      await handleRawEvent(contractId, raw);
+      // Persist cursor after each successful event
+      if (raw.paging_token) {
+        await saveStreamCursor(contractId, raw.paging_token);
+      }
+    } catch (err) {
+      console.error(`[horizon-stream] Error handling event for ${contractId}:`, err.message);
     }
-  }, 10000); // Poll every 10 seconds
+  };
+
+  es.onerror = () => {
+    console.warn(`[horizon-stream] Stream error for ${contractId}, scheduling reconnect`);
+    es.close();
+    activeStreams.delete(contractId);
+    scheduleReconnect(contractId, attempt + 1);
+  };
 }
 
 /**
- * Processes a contract event.
- * @param {string} contractId - Contract ID
- * @param {object} event - Event object from Horizon
- * @returns {Promise<void>}
+ * Manual SSE client for Node.js environments without EventSource.
+ * Uses the stellar-sdk Horizon server's streaming API.
  */
-async function processEvent(contractId, event) {
-  try {
-    // Extract event type from the event data
-    const eventType = extractEventType(event);
+function createNodeSSE(url, contractId, attempt) {
+  const server = new StellarSdk.Horizon.Server(HORIZON_URL);
 
-    if (!eventType) {
-      console.log(`Unknown event type for contract ${contractId}`);
-      return;
-    }
-
-    // Record the event in the database
-    const recordedEvent = await recordContractEvent({
-      contractId,
-      eventType,
-      eventData: event,
-      transactionHash: event.tx_hash,
-      ledgerSequence: event.ledger,
+  const closeHandler = server
+    .operations()
+    .cursor('now')
+    .stream({
+      onmessage: async (record) => {
+        try {
+          await handleRawEvent(contractId, record);
+          if (record.paging_token) {
+            await saveStreamCursor(contractId, record.paging_token);
+          }
+        } catch (err) {
+          console.error(`[horizon-stream] Error handling record for ${contractId}:`, err.message);
+        }
+      },
+      onerror: (err) => {
+        console.warn(`[horizon-stream] SDK stream error for ${contractId}:`, err?.message);
+        if (typeof closeHandler === 'function') closeHandler();
+        activeStreams.delete(contractId);
+        scheduleReconnect(contractId, attempt + 1);
+      },
     });
 
-    // Process the event based on its type
-    const handler = eventHandlers[eventType];
-    if (handler) {
-      await handler(contractId, event, recordedEvent.id);
-      await markEventProcessed(recordedEvent.id);
-      console.log(`Processed ${eventType} event for contract ${contractId}`);
-    }
-  } catch (error) {
-    console.error(`Error processing event for ${contractId}:`, error);
+  activeStreams.set(contractId, { close: closeHandler });
+  return closeHandler;
+}
+
+/**
+ * Schedules a reconnect with exponential backoff.
+ * @param {string} contractId
+ * @param {number} attempt
+ */
+function scheduleReconnect(contractId, attempt) {
+  const delay = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
+  console.log(`[horizon-stream] Reconnecting ${contractId} in ${delay}ms (attempt ${attempt})`);
+  setTimeout(() => connectStream(contractId, attempt), delay);
+}
+
+/**
+ * Parses a raw Horizon event record and stores it in the DB.
+ * @param {string} contractId
+ * @param {object} raw - raw record from Horizon SSE
+ */
+async function handleRawEvent(contractId, raw) {
+  const eventType = extractEventType(raw);
+  if (!eventType) return; // skip unknown event types
+
+  const recorded = await recordContractEvent({
+    contractId,
+    eventType,
+    eventData: raw,
+    transactionHash: raw.transaction_hash || raw.tx_hash,
+    ledgerSequence: raw.ledger || raw.ledger_sequence,
+  });
+
+  try {
+    await dispatchEvent(contractId, eventType, raw, recorded.id);
+    await markEventProcessed(recorded.id);
+  } catch (err) {
+    await markEventFailed(recorded.id, err.message);
+    throw err;
   }
 }
 
 /**
- * Extracts the event type from an event object.
- * @param {object} event - Event object
- * @returns {string|null} - Event type or null if unknown
+ * Dispatches a parsed event to the appropriate handler.
+ * Supports both legacy plain types and new namespaced types (e.g. "nova_rwd:staked").
  */
-function extractEventType(event) {
-  // This is a placeholder - implement based on your contract's event structure
-  // You might need to decode the event data or check the event topic
-  const eventType = event.type || event.event_type;
-  const validTypes = ['mint', 'claim', 'stake', 'unstake'];
-  return validTypes.includes(eventType) ? eventType : null;
+async function dispatchEvent(contractId, eventType, raw, eventId) {
+  switch (eventType) {
+    // ── Legacy plain types (backward compat) ──────────────────────────────
+    case 'mint':
+    case 'nova_tok:mint':
+      return handleMintEvent(contractId, raw, eventId);
+    case 'claim':
+      return handleClaimEvent(contractId, raw, eventId);
+    case 'stake':
+    case 'nova_rwd:staked':
+      return handleStakeEvent(contractId, raw, eventId);
+    case 'unstake':
+    case 'nova_rwd:unstaked':
+      return handleUnstakeEvent(contractId, raw, eventId);
+    // ── Token events ──────────────────────────────────────────────────────
+    case 'nova_tok:burn':
+    case 'nova_tok:transfer':
+    case 'nova_tok:transfer_from':
+    case 'nova_tok:approve':
+    case 'nova_tok:inc_allow':
+    case 'nova_tok:dec_allow':
+      return handleTokenEvent(contractId, eventType, raw, eventId);
+    // ── Nova Rewards core events ──────────────────────────────────────────
+    case 'nova_rwd:init':
+    case 'nova_rwd:bal_set':
+    case 'nova_rwd:rate_set':
+    case 'nova_rwd:swap':
+    case 'nova_rwd:paused':
+    case 'nova_rwd:resumed':
+    case 'nova_rwd:emrg_paus':
+    case 'nova_rwd:rec_op':
+    case 'nova_rwd:snap':
+    case 'nova_rwd:restore':
+    case 'nova_rwd:rec_tx':
+    case 'nova_rwd:rec_funds':
+    case 'nova_rwd:upgraded':
+      return handleNovaRewardsEvent(contractId, eventType, raw, eventId);
+    // ── Campaign events ───────────────────────────────────────────────────
+    case 'camp:created':
+    case 'camp:activated':
+    case 'camp:deactivated':
+    case 'camp:joined':
+    case 'camp:rwd_issued':
+    case 'camp:paused':
+    case 'camp:unpaused':
+    case 'camp:upgraded':
+      return handleCampaignEvent(contractId, eventType, raw, eventId);
+    // ── Escrow events ─────────────────────────────────────────────────────
+    case 'escrow:created':
+    case 'escrow:funded':
+    case 'escrow:released':
+    case 'escrow:refunded':
+    case 'escrow:upgraded':
+      return handleEscrowEvent(contractId, eventType, raw, eventId);
+    // ── Distribution events ───────────────────────────────────────────────
+    case 'dist:distributed':
+    case 'dist:batch_dist':
+    case 'dist:clawback':
+    case 'dist:upgraded':
+      return handleDistributionEvent(contractId, eventType, raw, eventId);
+    // ── Governance events ─────────────────────────────────────────────────
+    case 'gov:proposed':
+    case 'gov:voted':
+    case 'gov:finalised':
+    case 'gov:executed':
+    case 'gov:upgraded':
+      return handleGovernanceEvent(contractId, eventType, raw, eventId);
+    // ── Admin roles events ────────────────────────────────────────────────
+    case 'adm_roles:adm_prop':
+    case 'adm_roles:adm_xfer':
+    case 'adm_roles:role_chg':
+    case 'adm_roles:upgraded':
+      return handleAdminRolesEvent(contractId, eventType, raw, eventId);
+    // ── ContractState events ──────────────────────────────────────────────
+    case 'state:set':
+    case 'state:delete':
+    case 'state:snapshot':
+    case 'state:migrate':
+    case 'state:recover':
+    case 'state:upgraded':
+      return handleStateEvent(contractId, eventType, raw, eventId);
+    default:
+      console.log(`[horizon-stream] No handler for event type: ${eventType}`);
+  }
 }
 
 /**
- * Handles a mint event.
- * @param {string} contractId - Contract ID
- * @param {object} event - Event object
- * @param {number} eventId - Event ID in database
+ * Extracts the event type from a Horizon record.
+ * Soroban contract events carry their topic in the `topic` array as XDR symbols.
+ * Returns a namespaced key like "nova_rwd:staked" for structured events,
+ * or a plain type string for legacy events.
  */
+function extractEventType(record) {
+  // Structured Soroban events: topics[0] = contract tag, topics[1] = event name
+  if (Array.isArray(record.topic) && record.topic.length >= 2) {
+    let tag = null;
+    let eventName = null;
+
+    for (let i = 0; i < Math.min(record.topic.length, 2); i++) {
+      const topic = record.topic[i];
+      let decoded = null;
+
+      try {
+        const xdrVal = StellarSdk.xdr.ScVal.fromXDR(topic, 'base64');
+        if (xdrVal.switch().name === 'scvSymbol') {
+          decoded = xdrVal.sym().toString().toLowerCase();
+        }
+      } catch {
+        // Not XDR — use plain string value
+        decoded = (typeof topic === 'object' && topic.value)
+          ? String(topic.value).toLowerCase()
+          : String(topic).toLowerCase();
+      }
+
+      if (i === 0) tag = decoded;
+      else eventName = decoded;
+    }
+
+    if (tag && eventName) {
+      return `${tag}:${eventName}`;
+    }
+  }
+
+  // Legacy fallback: plain type field
+  const plain = (record.type || record.event_type || '').toLowerCase();
+  return plain || null;
+}
+
 async function handleMintEvent(contractId, event, eventId) {
-  console.log(`Handling mint event for contract ${contractId}`);
-  // Implement mint event logic here
-  // e.g., credit tokens to a user, update balances, etc.
+  console.log(`[horizon-stream] mint event — contract=${contractId} id=${eventId}`);
 }
 
-/**
- * Handles a claim event.
- * @param {string} contractId - Contract ID
- * @param {object} event - Event object
- * @param {number} eventId - Event ID in database
- */
 async function handleClaimEvent(contractId, event, eventId) {
-  console.log(`Handling claim event for contract ${contractId}`);
-  // Implement claim event logic here
-  // e.g., record redemption, send confirmation email, etc.
+  console.log(`[horizon-stream] claim event — contract=${contractId} id=${eventId}`);
 }
 
-/**
- * Handles a stake event.
- * @param {string} contractId - Contract ID
- * @param {object} event - Event object
- * @param {number} eventId - Event ID in database
- */
 async function handleStakeEvent(contractId, event, eventId) {
-  console.log(`Handling stake event for contract ${contractId}`);
-  // Implement stake event logic here
-  // e.g., update staking records, calculate rewards, etc.
+  console.log(`[horizon-stream] stake event — contract=${contractId} id=${eventId}`);
 }
 
-/**
- * Handles an unstake event.
- * @param {string} contractId - Contract ID
- * @param {object} event - Event object
- * @param {number} eventId - Event ID in database
- */
 async function handleUnstakeEvent(contractId, event, eventId) {
-  console.log(`Handling unstake event for contract ${contractId}`);
-  // Implement unstake event logic here
-  // e.g., update staking records, process withdrawal, etc.
+  console.log(`[horizon-stream] unstake event — contract=${contractId} id=${eventId}`);
+}
+
+async function handleTokenEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] token event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleNovaRewardsEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] nova-rewards event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleCampaignEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] campaign event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleEscrowEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] escrow event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleDistributionEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] distribution event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleGovernanceEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] governance event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleAdminRolesEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] admin-roles event type=${eventType} contract=${contractId} id=${eventId}`);
+}
+
+async function handleStateEvent(contractId, eventType, event, eventId) {
+  console.log(`[horizon-stream] contract-state event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 /**
- * Starts a retry loop for failed events.
+ * Retry loop: re-processes failed events up to MAX_RETRIES times.
  */
 function startRetryLoop() {
   setInterval(async () => {
     try {
-      const pendingEvents = await getPendingEvents(5); // Max 5 retries
-
-      for (const event of pendingEvents) {
+      const pending = await getPendingEvents(MAX_RETRIES);
+      for (const ev of pending) {
         try {
-          const handler = eventHandlers[event.event_type];
-          if (handler) {
-            await handler(event.contract_id, event.event_data, event.id);
-            await markEventProcessed(event.id);
-            console.log(`Retried and processed event ${event.id}`);
-          }
-        } catch (error) {
-          console.error(`Failed to retry event ${event.id}:`, error);
-          await markEventFailed(event.id, error.message);
+          await dispatchEvent(ev.contract_id, ev.event_type, ev.event_data, ev.id);
+          await markEventProcessed(ev.id);
+        } catch (err) {
+          await markEventFailed(ev.id, err.message);
         }
       }
-    } catch (error) {
-      console.error('Error in retry loop:', error);
+    } catch (err) {
+      console.error('[horizon-stream] Retry loop error:', err.message);
     }
-  }, 60000); // Retry every minute
+  }, RETRY_LOOP_INTERVAL_MS);
 }
 
 /**
- * Stops the event listener.
+ * Gracefully stops all active streams.
  */
 function stopEventListener() {
-  console.log('Stopping contract event listener...');
-  // Clean up any active connections
+  for (const [contractId, handle] of activeStreams.entries()) {
+    try {
+      if (typeof handle.close === 'function') handle.close();
+    } catch {
+      // ignore
+    }
+    console.log(`[horizon-stream] Stopped stream for ${contractId}`);
+  }
+  activeStreams.clear();
 }
 
-module.exports = {
-  startEventListener,
-  stopEventListener,
-  processEvent,
-};
+/**
+ * Parses the structured data payload from a Soroban event value array.
+ * Returns { schemaVersion, fields } for v1 events, or { fields } for legacy events.
+ *
+ * @param {Array} value - The decoded event value array
+ * @returns {{ schemaVersion: number|null, fields: Array }}
+ */
+function parseEventData(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return { schemaVersion: null, fields: [] };
+  }
+  const first = value[0];
+  if (typeof first === 'number' && first >= 1) {
+    return { schemaVersion: first, fields: value.slice(1) };
+  }
+  return { schemaVersion: null, fields: value };
+}
+
+/**
+ * Process a single raw event — exposed for testing.
+ */
+async function processEvent(contractId, raw) {
+  return handleRawEvent(contractId, raw);
+}
+
+module.exports = { startEventListener, stopEventListener, extractEventType, parseEventData, processEvent };

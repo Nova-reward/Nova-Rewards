@@ -3,12 +3,12 @@
   "info": {
     "title": "NovaRewards API",
     "version": "1.0.0",
-    "description": "REST API for the Nova Rewards blockchain loyalty platform. All protected endpoints require a Bearer JWT obtained from `POST /auth/login`. Merchant endpoints require an `x-api-key` header instead.",
+    "description": "REST API for the Nova Rewards blockchain loyalty platform. User endpoints require a Bearer JWT from `POST /auth/login`. Merchant endpoints require an `x-api-key` header.",
     "contact": {
       "name": "Nova Rewards Team"
     },
     "license": {
-      "name": "MIT"
+      "name": "Proprietary"
     }
   },
   "servers": [
@@ -27,7 +27,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "JWT access token obtained from `POST /auth/login`."
+        "description": "JWT access token from `POST /auth/login`."
       },
       "merchantApiKey": {
         "type": "apiKey",
@@ -37,15 +37,6 @@
       }
     },
     "schemas": {
-      "SuccessEnvelope": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "example": true
-          }
-        }
-      },
       "ErrorResponse": {
         "type": "object",
         "properties": {
@@ -93,24 +84,7 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time",
-            "example": "2025-01-15T10:30:00Z"
-          }
-        }
-      },
-      "AuthTokens": {
-        "type": "object",
-        "properties": {
-          "accessToken": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-          },
-          "refreshToken": {
-            "type": "string",
-            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-          },
-          "user": {
-            "$ref": "#/components/schemas/User"
+            "format": "date-time"
           }
         }
       },
@@ -135,8 +109,7 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time",
-            "example": "2025-02-01T08:00:00Z"
+            "format": "date-time"
           }
         }
       },
@@ -172,6 +145,19 @@
           "is_active": {
             "type": "boolean",
             "example": true
+          },
+          "on_chain_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "failed"
+            ],
+            "example": "confirmed"
+          },
+          "tx_hash": {
+            "type": "string",
+            "example": "a1b2c3d4..."
           }
         }
       },
@@ -201,11 +187,11 @@
           },
           "from_wallet": {
             "type": "string",
-            "example": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN"
+            "example": "GAAZI4..."
           },
           "to_wallet": {
             "type": "string",
-            "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+            "example": "GBBD47..."
           },
           "stellar_ledger": {
             "type": "integer",
@@ -213,8 +199,7 @@
           },
           "created_at": {
             "type": "string",
-            "format": "date-time",
-            "example": "2025-03-10T14:22:00Z"
+            "format": "date-time"
           }
         }
       },
@@ -233,10 +218,38 @@
             "type": "integer",
             "example": 12
           },
+          "points_spent": {
+            "type": "number",
+            "example": 100
+          },
           "created_at": {
             "type": "string",
-            "format": "date-time",
-            "example": "2025-03-15T09:00:00Z"
+            "format": "date-time"
+          }
+        }
+      },
+      "Reward": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 12
+          },
+          "name": {
+            "type": "string",
+            "example": "Free Coffee"
+          },
+          "points_cost": {
+            "type": "number",
+            "example": 100
+          },
+          "stock": {
+            "type": "integer",
+            "example": 500
+          },
+          "is_active": {
+            "type": "boolean",
+            "example": true
           }
         }
       },
@@ -247,7 +260,7 @@
             "type": "integer",
             "example": 1
           },
-          "title": {
+          "name": {
             "type": "string",
             "example": "Genesis Drop"
           },
@@ -255,93 +268,60 @@
             "type": "number",
             "example": 100
           },
-          "merkle_root": {
+          "ends_at": {
             "type": "string",
-            "nullable": true,
-            "example": null
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2025-12-31T23:59:59Z"
+            "format": "date-time"
           }
         }
       },
-      "ContractEvent": {
+      "Notification": {
         "type": "object",
         "properties": {
           "id": {
             "type": "integer",
-            "example": 200
+            "example": 10
           },
-          "contract_id": {
+          "type": {
             "type": "string",
-            "example": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+            "example": "reward_issued"
           },
-          "event_type": {
+          "message": {
             "type": "string",
-            "enum": [
-              "mint",
-              "claim",
-              "stake",
-              "unstake"
-            ],
-            "example": "mint"
+            "example": "You earned 50 NOVA!"
           },
-          "payload": {
-            "type": "object",
-            "example": {
-              "to": "GAAZI4...",
-              "amount": 500
-            }
-          },
-          "ledger": {
-            "type": "integer",
-            "example": 48293847
+          "read": {
+            "type": "boolean",
+            "example": false
           },
           "created_at": {
             "type": "string",
-            "format": "date-time",
-            "example": "2025-03-20T11:00:00Z"
+            "format": "date-time"
           }
         }
       },
-      "EmailLog": {
+      "Webhook": {
         "type": "object",
         "properties": {
           "id": {
             "type": "integer",
-            "example": 300
+            "example": 5
           },
-          "recipient_email": {
+          "url": {
             "type": "string",
-            "format": "email",
-            "example": "alice@example.com"
+            "example": "https://myapp.com/hooks/nova"
           },
-          "email_type": {
-            "type": "string",
-            "enum": [
-              "redemption_confirmation",
-              "milestone_achieved",
-              "welcome",
-              "password_reset"
-            ],
-            "example": "welcome"
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "reward.issued"
+            ]
           },
-          "status": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "sent",
-              "delivered",
-              "failed"
-            ],
-            "example": "delivered"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2025-03-21T07:00:00Z"
+          "isActive": {
+            "type": "boolean",
+            "example": true
           }
         }
       },
@@ -358,433 +338,17 @@
           },
           "display_name": {
             "type": "string",
-            "example": "Alice S."
+            "example": "Alice"
           },
           "points": {
             "type": "number",
-            "example": 4200
-          }
-        }
-      },
-      "AdminStats": {
-        "type": "object",
-        "properties": {
-          "total_users": {
-            "type": "integer",
-            "example": 1500
-          },
-          "total_points_issued": {
-            "type": "number",
-            "example": 750000
-          },
-          "total_redemptions": {
-            "type": "integer",
-            "example": 320
-          },
-          "active_rewards": {
-            "type": "integer",
-            "example": 18
-          }
-        }
-      },
-      "Reward": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "example": 12
-          },
-          "name": {
-            "type": "string",
-            "example": "10% Off Voucher"
-          },
-          "cost": {
-            "type": "integer",
-            "example": 500
-          },
-          "stock": {
-            "type": "integer",
-            "nullable": true,
-            "example": 100
-          },
-          "is_active": {
-            "type": "boolean",
-            "example": true
+            "example": 5000
           }
         }
       }
     }
   },
   "paths": {
-    "/admin/stats": {
-      "get": {
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Get aggregate platform statistics",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Platform stats.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/AdminStats"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Admin role required.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/admin/users": {
-      "get": {
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Paginated user list, searchable by email or name",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "search",
-            "schema": {
-              "type": "string",
-              "example": "alice"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "example": 1
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "maximum": 100,
-              "example": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated user list.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "users": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/User"
-                          }
-                        },
-                        "total": {
-                          "type": "integer",
-                          "example": 1500
-                        },
-                        "page": {
-                          "type": "integer",
-                          "example": 1
-                        },
-                        "limit": {
-                          "type": "integer",
-                          "example": 20
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/admin/rewards": {
-      "post": {
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Create a new reward",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "name",
-                  "cost"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "example": "10% Off Voucher"
-                  },
-                  "cost": {
-                    "type": "integer",
-                    "example": 500
-                  },
-                  "stock": {
-                    "type": "integer",
-                    "example": 100
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "example": true
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Reward created.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Reward"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/admin/rewards/{id}": {
-      "patch": {
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Update a reward",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 12
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "example": "15% Off Voucher"
-                  },
-                  "cost": {
-                    "type": "integer",
-                    "example": 600
-                  },
-                  "stock": {
-                    "type": "integer",
-                    "example": 80
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "example": false
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated reward.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Reward"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Reward not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Soft-delete a reward",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 12
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reward deleted.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "Reward deleted"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Reward not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/auth/register": {
       "post": {
         "tags": [
@@ -829,15 +393,13 @@
         },
         "responses": {
           "201": {
-            "description": "User created.",
+            "description": "User created",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "properties": {
                     "success": {
-                      "type": "boolean",
-                      "example": true
+                      "type": "boolean"
                     },
                     "data": {
                       "$ref": "#/components/schemas/User"
@@ -848,7 +410,7 @@
             }
           },
           "400": {
-            "description": "Validation error.",
+            "description": "Validation error",
             "content": {
               "application/json": {
                 "schema": {
@@ -858,7 +420,7 @@
             }
           },
           "409": {
-            "description": "Email already registered.",
+            "description": "Email already registered",
             "content": {
               "application/json": {
                 "schema": {
@@ -903,18 +465,26 @@
         },
         "responses": {
           "200": {
-            "description": "Login successful.",
+            "description": "Login successful",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "properties": {
                     "success": {
-                      "type": "boolean",
-                      "example": true
+                      "type": "boolean"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/AuthTokens"
+                      "properties": {
+                        "accessToken": {
+                          "type": "string"
+                        },
+                        "refreshToken": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        }
+                      }
                     }
                   }
                 }
@@ -922,24 +492,792 @@
             }
           },
           "400": {
-            "description": "Validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Validation error"
           },
           "401": {
-            "description": "Invalid credentials.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Rotate refresh token and issue new tokens",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refreshToken"
+                ],
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
                 }
               }
             }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New tokens issued"
+          },
+          "401": {
+            "description": "Invalid or expired refresh token"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Revoke tokens",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logged out"
+          }
+        }
+      }
+    },
+    "/auth/challenge": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Request a Stellar wallet challenge nonce",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "walletAddress"
+                ],
+                "properties": {
+                  "walletAddress": {
+                    "type": "string",
+                    "example": "GABC..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Challenge nonce generated"
+          },
+          "400": {
+            "description": "Invalid wallet address"
+          }
+        }
+      }
+    },
+    "/auth/verify-challenge": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Submit signed challenge to obtain JWT tokens",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "walletAddress",
+                  "signedXDR"
+                ],
+                "properties": {
+                  "walletAddress": {
+                    "type": "string"
+                  },
+                  "signedXDR": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tokens issued"
+          },
+          "400": {
+            "description": "Invalid signature"
+          },
+          "401": {
+            "description": "Challenge expired"
+          }
+        }
+      }
+    },
+    "/users": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Create a new user (wallet-based registration)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "walletAddress"
+                ],
+                "properties": {
+                  "walletAddress": {
+                    "type": "string",
+                    "example": "GBBD47..."
+                  },
+                  "referralCode": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "Wallet already registered"
+          }
+        }
+      }
+    },
+    "/users/{walletAddress}/points": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get off-chain point balance for a wallet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "walletAddress",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Point balance"
+          },
+          "400": {
+            "description": "Invalid wallet address"
+          }
+        }
+      }
+    },
+    "/users/{id}/token-balance": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get on-chain NOVA token balance (cached 30s)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token balance"
+          },
+          "400": {
+            "description": "Invalid id"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user profile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 42
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Partial profile update",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "bio": {
+                    "type": "string"
+                  },
+                  "stellarPublicKey": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated profile"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Soft-delete user account",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account deleted"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/users/{id}/referrals": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get referral statistics",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Referral stats"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/users/{id}/referrals/process": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Process a referral bonus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "referredUserId"
+                ],
+                "properties": {
+                  "referredUserId": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bonus processed"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/users/{id}/profile-picture": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Upload avatar image (max 5 MB)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "avatar": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Avatar uploaded"
+          },
+          "400": {
+            "description": "No file or wrong type"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/users/{id}/password": {
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Change password",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ],
+                "properties": {
+                  "currentPassword": {
+                    "type": "string"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Wrong current password"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/users/{id}/balance": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get combined on-chain + off-chain balance (cached 30s)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance data"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/users/{id}/rewards/history": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Cursor-paginated reward history",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reward history"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/merchants": {
+      "post": {
+        "tags": [
+          "Merchants"
+        ],
+        "summary": "Register a new merchant (returns one-time API key)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "walletAddress"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Stellar Coffee Co."
+                  },
+                  "walletAddress": {
+                    "type": "string"
+                  },
+                  "businessCategory": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Merchant created with api_key"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "Wallet already registered"
+          }
+        }
+      }
+    },
+    "/merchants/register": {
+      "post": {
+        "tags": [
+          "Merchants"
+        ],
+        "summary": "Alias for POST /merchants",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Merchant"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Merchant created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "Duplicate"
+          }
+        }
+      }
+    },
+    "/merchants/{id}": {
+      "get": {
+        "tags": [
+          "Merchants"
+        ],
+        "summary": "Get merchant profile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 7
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Merchant profile"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Merchants"
+        ],
+        "summary": "Update merchant profile",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "businessCategory": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated merchant"
+          },
+          "403": {
+            "description": "Not own record"
+          },
+          "404": {
+            "description": "Not found"
           }
         }
       }
@@ -949,7 +1287,7 @@
         "tags": [
           "Campaigns"
         ],
-        "summary": "Create a reward campaign",
+        "summary": "Create campaign and register on-chain",
         "security": [
           {
             "merchantApiKey": []
@@ -969,8 +1307,7 @@
                 ],
                 "properties": {
                   "name": {
-                    "type": "string",
-                    "example": "Summer Loyalty Drive"
+                    "type": "string"
                   },
                   "rewardRate": {
                     "type": "number",
@@ -978,13 +1315,11 @@
                   },
                   "startDate": {
                     "type": "string",
-                    "format": "date",
-                    "example": "2025-06-01"
+                    "format": "date"
                   },
                   "endDate": {
                     "type": "string",
-                    "format": "date",
-                    "example": "2025-08-31"
+                    "format": "date"
                   }
                 }
               }
@@ -993,43 +1328,13 @@
         },
         "responses": {
           "201": {
-            "description": "Campaign created.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Campaign"
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Campaign created"
           },
           "400": {
-            "description": "Validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Validation error"
           },
-          "401": {
-            "description": "Missing or invalid API key.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+          "502": {
+            "description": "On-chain error"
           }
         }
       },
@@ -1037,7 +1342,7 @@
         "tags": [
           "Campaigns"
         ],
-        "summary": "List campaigns for the authenticated merchant",
+        "summary": "List campaigns for authenticated merchant (cached 60s)",
         "security": [
           {
             "merchantApiKey": []
@@ -1045,210 +1350,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Campaign list.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Campaign"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Campaign list"
           }
         }
       }
     },
-    "/campaigns/{merchantId}": {
+    "/campaigns/{id}": {
       "get": {
         "tags": [
           "Campaigns"
         ],
-        "summary": "List campaigns for a given merchant ID",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "merchantId",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 7
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Campaign list.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Campaign"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid merchantId.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/contract-events": {
-      "get": {
-        "tags": [
-          "Contract Events"
-        ],
-        "summary": "List paginated contract events",
-        "security": [
-          {
-            "merchantApiKey": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "contractId",
-            "schema": {
-              "type": "string",
-              "example": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
-            }
-          },
-          {
-            "in": "query",
-            "name": "type",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "mint",
-                "claim",
-                "stake",
-                "unstake"
-              ]
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "example": 1
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "maximum": 100,
-              "example": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated contract events.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ContractEvent"
-                      }
-                    },
-                    "total": {
-                      "type": "integer",
-                      "example": 42
-                    },
-                    "page": {
-                      "type": "integer",
-                      "example": 1
-                    },
-                    "limit": {
-                      "type": "integer",
-                      "example": 20
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/contract-events/{id}": {
-      "get": {
-        "tags": [
-          "Contract Events"
-        ],
-        "summary": "Get a specific contract event by ID",
+        "summary": "Get campaign by ID",
         "security": [
           {
             "merchantApiKey": []
@@ -1260,766 +1372,30 @@
             "name": "id",
             "required": true,
             "schema": {
-              "type": "integer",
-              "example": 200
+              "type": "integer"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Contract event.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/ContractEvent"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid id.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Event not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/drops/eligible": {
-      "get": {
-        "tags": [
-          "Drops"
-        ],
-        "summary": "List active drops the authenticated user qualifies for",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Eligible drops.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Drop"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/drops/{id}/claim": {
-      "post": {
-        "tags": [
-          "Drops"
-        ],
-        "summary": "Claim a drop for the authenticated user",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 1
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "proof": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "example": [
-                      "0xabc...",
-                      "0xdef..."
-                    ],
-                    "description": "Merkle proof (required when drop has a merkle_root)"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Drop claimed.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Ineligible or invalid drop id.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Drop not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/admin/email-logs": {
-      "get": {
-        "tags": [
-          "Admin"
-        ],
-        "summary": "List paginated email logs",
-        "security": [
-          {
-            "merchantApiKey": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "recipientEmail",
-            "schema": {
-              "type": "string",
-              "format": "email",
-              "example": "alice@example.com"
-            }
-          },
-          {
-            "in": "query",
-            "name": "type",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "redemption_confirmation",
-                "milestone_achieved",
-                "welcome",
-                "password_reset"
-              ]
-            }
-          },
-          {
-            "in": "query",
-            "name": "status",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "queued",
-                "sent",
-                "delivered",
-                "failed"
-              ]
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "example": 1
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "maximum": 100,
-              "example": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated email logs.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/EmailLog"
-                      }
-                    },
-                    "total": {
-                      "type": "integer",
-                      "example": 120
-                    },
-                    "page": {
-                      "type": "integer",
-                      "example": 1
-                    },
-                    "limit": {
-                      "type": "integer",
-                      "example": 20
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/admin/email-logs/{id}": {
-      "get": {
-        "tags": [
-          "Admin"
-        ],
-        "summary": "Get a specific email log by ID",
-        "security": [
-          {
-            "merchantApiKey": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 300
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Email log entry.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/EmailLog"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid id.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Log not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/leaderboard": {
-      "get": {
-        "tags": [
-          "Leaderboard"
-        ],
-        "summary": "Get top users by earned points",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "period",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "weekly",
-                "alltime"
-              ],
-              "default": "weekly",
-              "example": "weekly"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer",
-              "default": 50,
-              "maximum": 100,
-              "example": 50
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Leaderboard rankings.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "period": {
-                          "type": "string",
-                          "example": "weekly"
-                        },
-                        "rankings": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/LeaderboardEntry"
-                          }
-                        },
-                        "currentUser": {
-                          "$ref": "#/components/schemas/LeaderboardEntry"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/merchants/register": {
-      "post": {
-        "tags": [
-          "Merchants"
-        ],
-        "summary": "Register a new merchant",
-        "description": "Returns the merchant record plus a one-time plain-text API key. Store it securely — it is never shown again.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "name",
-                  "walletAddress"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "example": "Stellar Coffee Co."
-                  },
-                  "walletAddress": {
-                    "type": "string",
-                    "example": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN"
-                  },
-                  "businessCategory": {
-                    "type": "string",
-                    "example": "Food & Beverage"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Merchant registered.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "allOf": [
-                        {
-                          "$ref": "#/components/schemas/Merchant"
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "api_key": {
-                              "type": "string",
-                              "example": "a1b2c3d4e5f6..."
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Wallet address already registered.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/redemptions": {
-      "post": {
-        "tags": [
-          "Redemptions"
-        ],
-        "summary": "Redeem a reward",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-Idempotency-Key",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "example": "550e8400-e29b-41d4-a716-446655440000"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "userId",
-                  "rewardId"
-                ],
-                "properties": {
-                  "userId": {
-                    "type": "integer",
-                    "example": 42
-                  },
-                  "rewardId": {
-                    "type": "integer",
-                    "example": 12
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Idempotent replay — same result returned."
-          },
-          "201": {
-            "description": "Redemption created.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "redemption": {
-                          "$ref": "#/components/schemas/Redemption"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or missing idempotency key.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Campaign"
           },
           "403": {
-            "description": "Redeeming for another user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Not own campaign"
           },
           "404": {
-            "description": "Reward not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Out of stock, insufficient points, or reward inactive.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Not found"
           }
         }
       },
-      "get": {
+      "patch": {
         "tags": [
-          "Redemptions"
+          "Campaigns"
         ],
-        "summary": "List redemption history for the authenticated user",
+        "summary": "Update campaign and push on-chain",
         "security": [
           {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "example": 1
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "maximum": 100,
-              "example": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated redemption list.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Redemption"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/redemptions/{id}": {
-      "get": {
-        "tags": [
-          "Redemptions"
-        ],
-        "summary": "Get a single redemption by ID",
-        "security": [
-          {
-            "bearerAuth": []
+            "merchantApiKey": []
           }
         ],
         "parameters": [
@@ -2028,60 +1404,134 @@
             "name": "id",
             "required": true,
             "schema": {
-              "type": "integer",
-              "example": 55
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "rewardRate": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated campaign"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Not confirmed on-chain"
+          },
+          "502": {
+            "description": "Chain error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Campaigns"
+        ],
+        "summary": "Pause on-chain then soft-delete",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Redemption record.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Redemption"
-                    }
+            "description": "Deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "502": {
+            "description": "Chain error"
+          }
+        }
+      }
+    },
+    "/rewards/issue": {
+      "post": {
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Enqueue idempotent reward issuance",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "idempotencyKey",
+                  "walletAddress",
+                  "amount",
+                  "campaignId"
+                ],
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string"
+                  },
+                  "walletAddress": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "number"
+                  },
+                  "campaignId": {
+                    "type": "integer"
+                  },
+                  "userId": {
+                    "type": "integer"
                   }
                 }
               }
             }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Duplicate — already processed"
+          },
+          "202": {
+            "description": "Job queued"
           },
           "400": {
-            "description": "Invalid id.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Redemption not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Validation error"
           }
         }
       }
@@ -2110,7 +1560,7 @@
                 "properties": {
                   "walletAddress": {
                     "type": "string",
-                    "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+                    "example": "GBBD47..."
                   },
                   "amount": {
                     "type": "number",
@@ -2127,19 +1577,16 @@
         },
         "responses": {
           "200": {
-            "description": "Tokens distributed.",
+            "description": "Tokens distributed",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "properties": {
                     "success": {
-                      "type": "boolean",
-                      "example": true
+                      "type": "boolean"
                     },
                     "txHash": {
-                      "type": "string",
-                      "example": "a1b2c3d4..."
+                      "type": "string"
                     }
                   }
                 }
@@ -2147,44 +1594,157 @@
             }
           },
           "400": {
-            "description": "Validation error or no trustline.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "No trustline or validation error"
           },
           "403": {
-            "description": "Campaign does not belong to this merchant.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Campaign not owned by merchant"
           },
           "404": {
-            "description": "Campaign not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+            "description": "Campaign not found"
+          },
+          "502": {
+            "description": "Chain error"
+          }
+        }
+      }
+    },
+    "/redemptions": {
+      "post": {
+        "tags": [
+          "Redemptions"
+        ],
+        "summary": "Redeem a reward (idempotent)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "userId",
+                  "rewardId"
+                ],
+                "properties": {
+                  "userId": {
+                    "type": "integer"
+                  },
+                  "rewardId": {
+                    "type": "integer"
+                  },
+                  "campaignId": {
+                    "type": "integer"
+                  }
                 }
               }
             }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay"
+          },
+          "201": {
+            "description": "Redemption created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Redeeming for another user"
+          },
+          "404": {
+            "description": "Reward not found"
+          },
+          "409": {
+            "description": "Out of stock / insufficient points / inactive"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Redemptions"
+        ],
+        "summary": "List redemption history",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated redemptions"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        }
+      }
+    },
+    "/redemptions/{id}": {
+      "get": {
+        "tags": [
+          "Redemptions"
+        ],
+        "summary": "Get redemption by ID",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Redemption record"
+          },
+          "400": {
+            "description": "Invalid id"
+          },
+          "404": {
+            "description": "Not found"
           }
         }
       }
@@ -2195,7 +1755,6 @@
           "Transactions"
         ],
         "summary": "Verify and record a Stellar transaction",
-        "description": "Verifies the transaction exists on Horizon then persists it in the database.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2208,8 +1767,7 @@
                 ],
                 "properties": {
                   "txHash": {
-                    "type": "string",
-                    "example": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789"
+                    "type": "string"
                   },
                   "txType": {
                     "type": "string",
@@ -2217,28 +1775,22 @@
                       "distribution",
                       "redemption",
                       "transfer"
-                    ],
-                    "example": "distribution"
+                    ]
                   },
                   "amount": {
-                    "type": "number",
-                    "example": 50
+                    "type": "number"
                   },
                   "fromWallet": {
-                    "type": "string",
-                    "example": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN"
+                    "type": "string"
                   },
                   "toWallet": {
-                    "type": "string",
-                    "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+                    "type": "string"
                   },
                   "merchantId": {
-                    "type": "integer",
-                    "example": 7
+                    "type": "integer"
                   },
                   "campaignId": {
-                    "type": "integer",
-                    "example": 3
+                    "type": "integer"
                   }
                 }
               }
@@ -2247,43 +1799,13 @@
         },
         "responses": {
           "201": {
-            "description": "Transaction recorded.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Transaction"
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Transaction recorded"
           },
           "400": {
-            "description": "Validation error or transaction not found on Stellar.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Validation error"
           },
           "409": {
-            "description": "Transaction already recorded.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Duplicate transaction"
           }
         }
       }
@@ -2293,7 +1815,7 @@
         "tags": [
           "Transactions"
         ],
-        "summary": "Get total NOVA distributed and redeemed for the authenticated merchant",
+        "summary": "Aggregate totals for authenticated merchant",
         "security": [
           {
             "merchantApiKey": []
@@ -2301,105 +1823,194 @@
         ],
         "responses": {
           "200": {
-            "description": "Merchant totals.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "total_distributed": {
-                          "type": "number",
-                          "example": 12500
-                        },
-                        "total_redeemed": {
-                          "type": "number",
-                          "example": 3200
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Merchant totals"
           }
         }
       }
     },
-    "/transactions/{walletAddress}": {
+    "/transactions/merchant/history": {
       "get": {
         "tags": [
           "Transactions"
         ],
-        "summary": "Get NOVA transaction history for a wallet",
-        "description": "Queries Horizon first; falls back to PostgreSQL if Horizon is unavailable.",
+        "summary": "Paginated transaction history for merchant",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
         "parameters": [
           {
-            "in": "path",
-            "name": "walletAddress",
-            "required": true,
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "txType",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startDate",
             "schema": {
               "type": "string",
-              "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Transaction list.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Transaction"
-                      }
-                    },
-                    "source": {
-                      "type": "string",
-                      "enum": [
-                        "horizon",
-                        "database"
-                      ],
-                      "example": "horizon"
-                    }
+            "description": "Transaction history"
+          }
+        }
+      }
+    },
+    "/transactions/report": {
+      "get": {
+        "tags": [
+          "Transactions"
+        ],
+        "summary": "Generate merchant transaction report",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report data"
+          }
+        }
+      }
+    },
+    "/transactions/refund": {
+      "post": {
+        "tags": [
+          "Transactions"
+        ],
+        "summary": "Refund a transaction",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "transactionId"
+                ],
+                "properties": {
+                  "transactionId": {
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "type": "string"
                   }
                 }
               }
             }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Refund created"
           },
           "400": {
-            "description": "Invalid wallet address.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+            "description": "Validation error"
+          },
+          "404": {
+            "description": "Transaction not found"
+          }
+        }
+      }
+    },
+    "/transactions/reconcile": {
+      "post": {
+        "tags": [
+          "Transactions"
+        ],
+        "summary": "Reconcile merchant transactions against Horizon",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endDate": {
+                    "type": "string",
+                    "format": "date"
+                  }
                 }
               }
             }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reconciliation result"
           }
         }
       }
@@ -2409,121 +2020,59 @@
         "tags": [
           "Transactions"
         ],
-        "summary": "Paginated transaction history for a user",
+        "summary": "Paginated transaction history (all users)",
         "parameters": [
-          {
-            "in": "query",
-            "name": "userId",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 42
-            }
-          },
           {
             "in": "query",
             "name": "page",
             "schema": {
-              "type": "integer",
-              "default": 1,
-              "example": 1
+              "type": "integer"
             }
           },
           {
             "in": "query",
             "name": "limit",
             "schema": {
-              "type": "integer",
-              "default": 20,
-              "maximum": 100,
-              "example": 20
+              "type": "integer"
             }
           },
           {
             "in": "query",
-            "name": "type",
+            "name": "walletAddress",
             "schema": {
-              "type": "string",
-              "enum": [
-                "distribution",
-                "redemption",
-                "transfer"
-              ]
-            }
-          },
-          {
-            "in": "query",
-            "name": "startDate",
-            "schema": {
-              "type": "string",
-              "format": "date",
-              "example": "2025-01-01"
-            }
-          },
-          {
-            "in": "query",
-            "name": "endDate",
-            "schema": {
-              "type": "string",
-              "format": "date",
-              "example": "2025-12-31"
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Paginated transaction history.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Transaction"
-                      }
-                    },
-                    "total": {
-                      "type": "integer",
-                      "example": 85
-                    },
-                    "page": {
-                      "type": "integer",
-                      "example": 1
-                    },
-                    "limit": {
-                      "type": "integer",
-                      "example": 20
-                    }
-                  }
-                }
-              }
+            "description": "Transaction history"
+          }
+        }
+      }
+    },
+    "/transactions/{walletAddress}": {
+      "get": {
+        "tags": [
+          "Transactions"
+        ],
+        "summary": "NOVA payment history for a wallet (Horizon with DB fallback)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "walletAddress",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment history"
           },
           "400": {
-            "description": "Validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Invalid wallet address"
           }
         }
       }
@@ -2546,7 +2095,7 @@
                 "properties": {
                   "walletAddress": {
                     "type": "string",
-                    "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+                    "example": "GBBD47..."
                   }
                 }
               }
@@ -2555,22 +2104,18 @@
         },
         "responses": {
           "200": {
-            "description": "Trustline status.",
+            "description": "Trustline status",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "properties": {
                     "success": {
-                      "type": "boolean",
-                      "example": true
+                      "type": "boolean"
                     },
                     "data": {
-                      "type": "object",
                       "properties": {
                         "exists": {
-                          "type": "boolean",
-                          "example": true
+                          "type": "boolean"
                         }
                       }
                     }
@@ -2580,14 +2125,7 @@
             }
           },
           "400": {
-            "description": "Invalid wallet address.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Invalid wallet address"
           }
         }
       }
@@ -2597,7 +2135,7 @@
         "tags": [
           "Trustline"
         ],
-        "summary": "Build an unsigned changeTrust XDR for the user to sign with Freighter",
+        "summary": "Build unsigned changeTrust XDR for Freighter signing",
         "requestBody": {
           "required": true,
           "content": {
@@ -2609,8 +2147,7 @@
                 ],
                 "properties": {
                   "walletAddress": {
-                    "type": "string",
-                    "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+                    "type": "string"
                   }
                 }
               }
@@ -2619,58 +2156,33 @@
         },
         "responses": {
           "200": {
-            "description": "XDR envelope or already_exists status.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "pending_signature",
-                            "already_exists"
-                          ],
-                          "example": "pending_signature"
-                        },
-                        "xdr": {
-                          "type": "string",
-                          "nullable": true,
-                          "example": "AAAAAgAAAAA..."
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "description": "XDR envelope"
           },
           "400": {
-            "description": "Invalid wallet address.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Invalid wallet address"
           }
         }
       }
     },
-    "/users": {
+    "/wallet/supported": {
+      "get": {
+        "tags": [
+          "Wallet"
+        ],
+        "summary": "List supported wallet types",
+        "responses": {
+          "200": {
+            "description": "Supported wallets"
+          }
+        }
+      }
+    },
+    "/wallet/verify": {
       "post": {
         "tags": [
-          "Users"
+          "Wallet"
         ],
-        "summary": "Create a new user with optional referral tracking",
+        "summary": "Verify wallet connection",
         "requestBody": {
           "required": true,
           "content": {
@@ -2678,16 +2190,14 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "walletAddress"
+                  "publicKey"
                 ],
                 "properties": {
-                  "walletAddress": {
-                    "type": "string",
-                    "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+                  "publicKey": {
+                    "type": "string"
                   },
-                  "referralCode": {
-                    "type": "string",
-                    "example": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN"
+                  "walletType": {
+                    "type": "string"
                   }
                 }
               }
@@ -2695,114 +2205,114 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "User created.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/User"
-                    }
-                  }
-                }
-              }
-            }
+          "200": {
+            "description": "Wallet info"
           },
           "400": {
-            "description": "Validation error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Wallet address already registered.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Invalid wallet"
           }
         }
       }
     },
-    "/users/{walletAddress}/points": {
+    "/wallet/balance": {
       "get": {
         "tags": [
-          "Users"
+          "Wallet"
         ],
-        "summary": "Get current point balance for a wallet address",
+        "summary": "Get authenticated user live NOVA balance",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance"
+          },
+          "400": {
+            "description": "No wallet linked"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        }
+      }
+    },
+    "/leaderboard": {
+      "get": {
+        "tags": [
+          "Leaderboard"
+        ],
+        "summary": "Get top users by earned points",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
-            "in": "path",
-            "name": "walletAddress",
-            "required": true,
+            "in": "query",
+            "name": "period",
             "schema": {
               "type": "string",
-              "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+              "enum": [
+                "weekly",
+                "alltime"
+              ],
+              "default": "weekly"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Point balance.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "walletAddress": {
-                          "type": "string",
-                          "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-                        },
-                        "balance": {
-                          "type": "number",
-                          "example": 1250.5
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Leaderboard rankings"
           },
-          "400": {
-            "description": "Invalid wallet address.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+          "401": {
+            "description": "Unauthenticated"
           }
         }
       }
     },
-    "/users/{id}/token-balance": {
+    "/drops/eligible": {
       "get": {
-        "summary": "Get user's on-chain token balance",
-        "description": "Reads the user's linked Stellar public key and returns token balance from Horizon/Soroban.",
         "tags": [
-          "Users"
+          "Drops"
+        ],
+        "summary": "List drops the authenticated user qualifies for",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eligible drops"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        }
+      }
+    },
+    "/drops/{id}/claim": {
+      "post": {
+        "tags": [
+          "Drops"
+        ],
+        "summary": "Claim a drop",
+        "security": [
+          {
+            "bearerAuth": []
+          }
         ],
         "parameters": [
           {
@@ -2811,36 +2321,31 @@
             "required": true,
             "schema": {
               "type": "integer"
-            },
-            "description": "User ID"
+            }
           }
         ],
         "responses": {
-          "200": {
-            "description": "Token balance retrieved successfully.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
+          "201": {
+            "description": "Drop claimed"
           },
           "400": {
-            "description": "Validation error on input."
+            "description": "Already claimed or not eligible"
+          },
+          "401": {
+            "description": "Unauthenticated"
           },
           "404": {
-            "description": "User not found or no linked Stellar public key."
+            "description": "Drop not found"
           }
         }
       }
     },
-    "/users/{id}": {
+    "/notifications": {
       "get": {
         "tags": [
-          "Users"
+          "Notifications"
         ],
-        "summary": "Get user profile (public or private depending on ownership)",
+        "summary": "Paginated in-app notifications",
         "security": [
           {
             "bearerAuth": []
@@ -2848,72 +2353,39 @@
         ],
         "parameters": [
           {
-            "in": "path",
-            "name": "id",
-            "required": true,
+            "in": "query",
+            "name": "page",
             "schema": {
               "type": "integer",
-              "example": 42
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "User profile.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/User"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid id.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Notifications"
           },
           "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Unauthenticated"
           }
         }
-      },
+      }
+    },
+    "/notifications/{id}/read": {
       "patch": {
         "tags": [
-          "Users"
+          "Notifications"
         ],
-        "summary": "Partial profile update",
+        "summary": "Mark notification as read",
         "security": [
           {
             "bearerAuth": []
@@ -2925,251 +2397,32 @@
             "name": "id",
             "required": true,
             "schema": {
-              "type": "integer",
-              "example": 42
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "firstName": {
-                    "type": "string",
-                    "example": "Alice"
-                  },
-                  "lastName": {
-                    "type": "string",
-                    "example": "Smith"
-                  },
-                  "bio": {
-                    "type": "string",
-                    "example": "Stellar enthusiast"
-                  },
-                  "stellarPublicKey": {
-                    "type": "string",
-                    "example": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated user profile.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/User"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden — not owner or admin.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Soft-delete and anonymise a user account",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 42
+              "type": "integer"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Account deleted.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "User account deleted successfully"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthenticated.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/users/{id}/referrals": {
-      "get": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Get referral statistics for a user",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 42
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Referral stats.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "total_referrals": {
-                          "type": "integer",
-                          "example": 5
-                        },
-                        "total_bonus_earned": {
-                          "type": "number",
-                          "example": 250
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Notification marked read"
           },
           "400": {
-            "description": "Invalid id.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Invalid id"
           },
           "404": {
-            "description": "User not found.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "description": "Not found"
           }
         }
       }
     },
-    "/users/{id}/referrals/process": {
+    "/webhooks": {
       "post": {
         "tags": [
-          "Users"
+          "Webhooks"
         ],
-        "summary": "Manually process a referral bonus",
-        "parameters": [
+        "summary": "Register a webhook",
+        "security": [
           {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "example": 42
-            },
-            "description": "Referrer user ID"
+            "merchantApiKey": []
           }
         ],
         "requestBody": {
@@ -3179,12 +2432,137 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "referredUserId"
+                  "url",
+                  "events"
                 ],
                 "properties": {
-                  "referredUserId": {
-                    "type": "integer",
-                    "example": 99
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook created"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List webhooks for authenticated merchant",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook list"
+          }
+        }
+      }
+    },
+    "/webhooks/events": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List supported webhook event types",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event types"
+          }
+        }
+      }
+    },
+    "/webhooks/actions": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Receive inbound webhook (requires x-signature header)",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accepted"
+          },
+          "401": {
+            "description": "Missing or invalid signature"
+          }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "patch": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Update webhook",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "isActive": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -3193,22 +2571,863 @@
         },
         "responses": {
           "200": {
-            "description": "Referral bonus processed.",
+            "description": "Updated webhook"
+          },
+          "403": {
+            "description": "Not own webhook"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Delete webhook",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/webhooks/{id}/deliveries": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Paginated delivery log for a webhook",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delivery log"
+          }
+        }
+      }
+    },
+    "/webhooks/{id}/test": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Send a test event to the webhook URL",
+        "security": [
+          {
+            "merchantApiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test result"
+          }
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Full-text search across rewards, campaigns, and users",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "rewards",
+                "campaigns",
+                "users",
+                "all"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "in": "query",
+            "name": "is_active",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "merchant_id",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results with facets"
+          },
+          "400": {
+            "description": "Missing query"
+          }
+        }
+      }
+    },
+    "/search/suggest": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Autocomplete suggestions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suggestions"
+          }
+        }
+      }
+    },
+    "/search/click": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Record a click-through event",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  },
+                  "resultId": {
+                    "type": "integer"
+                  },
+                  "resultType": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded"
+          }
+        }
+      }
+    },
+    "/search/analytics/top-queries": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Top search queries (admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top queries"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/search/analytics/stats": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Aggregate search statistics (admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search stats"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/search/reindex": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Trigger bulk reindex (admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Reindex job queued"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/admin/stats": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Aggregate platform statistics",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Platform stats"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Paginated user list",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User list"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/admin/rewards": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List all platform rewards",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rewards list"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Create a reward",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "pointsCost"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "pointsCost": {
+                    "type": "number"
+                  },
+                  "stock": {
+                    "type": "integer"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reward created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/admin/rewards/{id}": {
+      "patch": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update a reward",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "pointsCost": {
+                    "type": "number"
+                  },
+                  "stock": {
+                    "type": "integer"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated reward"
+          },
+          "403": {
+            "description": "Admin required"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Delete a reward",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "403": {
+            "description": "Admin required"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/admin/campaigns/{id}": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Force-delete a campaign (admin override)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "403": {
+            "description": "Admin required"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/admin/audit-logs": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Paginated audit log",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entityType",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit log"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/admin/backups": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List available database backups",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Backup list"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/admin/backups/run": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Trigger an immediate backup cycle",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Backup job started"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/admin/feature-flags": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List all feature flags",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flags"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/admin/feature-flags/{key}": {
+      "patch": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Toggle or update a feature flag",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated flag"
+          },
+          "403": {
+            "description": "Admin required"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/admin/unblock-ip": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Remove an IP from the abuse blocklist",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ip"
+                ],
+                "properties": {
+                  "ip": {
+                    "type": "string",
+                    "example": "203.0.113.42"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "IP unblocked"
+          },
+          "403": {
+            "description": "Admin required"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Basic liveness check",
+        "responses": {
+          "200": {
+            "description": "Server is running",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
                   "properties": {
                     "success": {
-                      "type": "boolean",
-                      "example": true
+                      "type": "boolean"
                     },
                     "data": {
-                      "type": "object",
                       "properties": {
-                        "bonus": {
-                          "type": "number",
-                          "example": 50
+                        "status": {
+                          "type": "string",
+                          "example": "ok"
                         }
                       }
                     }
@@ -3216,20 +3435,41 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/health/detailed": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Comprehensive health check (DB, Redis, Stellar, disk, memory)",
+        "responses": {
+          "200": {
+            "description": "Healthy or degraded"
           },
-          "400": {
-            "description": "Validation or referral error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+          "503": {
+            "description": "Unhealthy"
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Readiness check — 200 only when DB and cache are reachable",
+        "responses": {
+          "200": {
+            "description": "Service ready"
+          },
+          "503": {
+            "description": "Not ready"
           }
         }
       }
     }
-  },
-  "tags": []
+  }
 }

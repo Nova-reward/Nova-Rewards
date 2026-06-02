@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import ThemeToggle from './ThemeToggle';
 import NotificationCenter from './NotificationCenter';
+import BottomNav from './BottomNav';
 
 /**
  * Dashboard layout with collapsible sidebar and header
@@ -30,6 +31,21 @@ export default function DashboardLayout({ children }) {
     setMobileMenuOpen(false);
     setProfileMenuOpen(false);
   }, [router.pathname]);
+
+  // Dismiss mobile drawer on Escape
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'Escape' && mobileMenuOpen) setMobileMenuOpen(false);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [mobileMenuOpen]);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileMenuOpen]);
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -62,14 +78,15 @@ export default function DashboardLayout({ children }) {
 
   // Navigation links
   const navLinks = [
-    { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { href: '/dashboard',  label: 'Dashboard',  icon: '📊' },
+    { href: '/campaigns',  label: 'Campaigns',  icon: '🎯' },
     { href: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
-    { href: '/rewards', label: 'Rewards', icon: '🎁' },
-    { href: '/history', label: 'History', icon: '📜' },
-    { href: '/referral', label: 'Referral', icon: '👥', tourId: 'referral-link' },
-    { href: '/analytics', label: 'Analytics', icon: '📊' },
-    { href: '/settings', label: 'Settings', icon: '⚙️' },
-    { href: '/help', label: 'Help Center', icon: '❓' },
+    { href: '/rewards',    label: 'Rewards',    icon: '🎁' },
+    { href: '/history',    label: 'History',    icon: '📜' },
+    { href: '/referral',   label: 'Referral',   icon: '👥', tourId: 'referral-link' },
+    { href: '/analytics',  label: 'Analytics',  icon: '📈' },
+    { href: '/settings',   label: 'Settings',   icon: '⚙️' },
+    { href: '/help',       label: 'Help Center', icon: '❓' },
   ];
 
   // Get page title from current route
@@ -134,13 +151,12 @@ export default function DashboardLayout({ children }) {
         </div>
       </aside>
 
-      {/* Mobile overlay */}
-      {mobileMenuOpen && (
-        <div
-          className="mobile-overlay"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
+      {/* Mobile overlay — always rendered; CSS handles fade in/out */}
+      <div
+        className={`mobile-overlay${mobileMenuOpen ? ' mobile-overlay-visible' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
 
       {/* Main content area */}
       <div className={`main-wrapper ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
@@ -148,9 +164,11 @@ export default function DashboardLayout({ children }) {
         <header className="header">
           <div className="header-left">
             <button
-              className="mobile-menu-btn mobile-only"
+              className="mobile-menu-btn"
               onClick={toggleMobileMenu}
-              aria-label="Toggle menu"
+              aria-label="Open navigation menu"
+              aria-haspopup="dialog"
+              aria-expanded={mobileMenuOpen}
             >
               ☰
             </button>

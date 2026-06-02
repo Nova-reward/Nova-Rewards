@@ -1,0 +1,80 @@
+{
+  "contract": "distribution",
+  "version": "1.0.0",
+  "description": "Distributes NOVA token rewards to recipients with optional clawback window.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the distribution contract.",
+      "params": [{ "name": "admin", "type": "Address" }, { "name": "token", "type": "Address" }],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "distribute",
+      "description": "Distributes tokens to a single recipient.",
+      "params": [
+        { "name": "recipient", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "insufficient balance", "amount must be positive"]
+    },
+    {
+      "name": "distribute_batch",
+      "description": "Distributes tokens to multiple recipients in one transaction.",
+      "params": [
+        { "name": "recipients", "type": "Vec<Address>" },
+        { "name": "amounts", "type": "Vec<i128>", "description": "Must match recipients length." }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "length mismatch", "insufficient balance"]
+    },
+    {
+      "name": "clawback",
+      "description": "Claws back tokens from a recipient within the clawback window. Admin only.",
+      "params": [
+        { "name": "recipient", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "clawback window expired", "insufficient balance"]
+    },
+    {
+      "name": "calculate_reward",
+      "description": "Calculates the reward amount for a given base amount and rate.",
+      "params": [
+        { "name": "base_amount", "type": "i128" },
+        { "name": "rate_bps", "type": "u32" }
+      ],
+      "returns": { "type": "i128" },
+      "errors": []
+    },
+    {
+      "name": "get_distributed",
+      "description": "Returns the total amount distributed to a recipient.",
+      "params": [{ "name": "recipient", "type": "Address" }],
+      "returns": { "type": "i128" },
+      "errors": []
+    },
+    {
+      "name": "get_clawback_deadline",
+      "description": "Returns the ledger number after which clawback is no longer possible.",
+      "params": [],
+      "returns": { "type": "u32" },
+      "errors": []
+    }
+  ],
+  "events": [
+    { "name": "distributed", "fields": [{ "name": "recipient", "type": "Address" }, { "name": "amount", "type": "i128" }] },
+    { "name": "clawback",    "fields": [{ "name": "recipient", "type": "Address" }, { "name": "amount", "type": "i128" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized",   "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",          "message": "unauthorized" },
+    { "code": 3, "name": "InsufficientBalance",   "message": "insufficient balance" },
+    { "code": 4, "name": "LengthMismatch",        "message": "recipients and amounts length mismatch" },
+    { "code": 5, "name": "ClawbackWindowExpired", "message": "clawback window has expired" },
+    { "code": 6, "name": "AmountMustBePositive",  "message": "amount must be positive" }
+  ]
+}

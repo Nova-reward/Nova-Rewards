@@ -1,7 +1,12 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { connectWallet as connectFreighter, isFreighterInstalled, signTransaction as freighterSign } from '../lib/freighter';
+import {
+  connectWallet as connectFreighter,
+  isFreighterInstalled,
+  getFreighterNetwork,
+  checkNetworkMismatch,
+} from '../lib/freighter';
 import { getNOVABalance, getTransactionHistory } from '../lib/horizonClient';
 
 const WalletContext = createContext(null);
@@ -11,7 +16,7 @@ const WalletContext = createContext(null);
  * Dynamically imports albedo-link to avoid SSR issues.
  */
 async function connectAlbedo() {
-  const albedo = (await import('albedo-link')).default;
+  const albedo = (await import(/* webpackIgnore: true */ 'albedo-link')).default;
   const result = await albedo.publicKey({ require_existing: false });
   if (!result.pubkey) throw new Error('Albedo did not return a public key.');
   return result.pubkey;
@@ -33,9 +38,7 @@ async function connectXBull() {
  * Returns { publicKey, session } so the session can be stored for signing.
  */
 async function connectWalletConnect() {
-  const { StellarWalletsKit, WalletNetwork, WalletType } = await import(
-    '@creit.tech/stellar-wallets-kit'
-  );
+  const { StellarWalletsKit, WalletNetwork, WalletType } = await import(/* webpackIgnore: true */ '@creit.tech/stellar-wallets-kit');
   const network =
     process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'mainnet'
       ? WalletNetwork.PUBLIC
@@ -63,6 +66,8 @@ export function WalletProvider({ children }) {
   const [balance, setBalance] = useState('0');
   const [transactions, setTransactions] = useState([]);
   const [freighterInstalled, setFreighterInstalled] = useState(null);
+  const [networkMismatch, setNetworkMismatch] = useState(false);
+  const [freighterNetwork, setFreighterNetwork] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hydrated, setHydrated] = useState(false);
@@ -103,6 +108,8 @@ export function WalletProvider({ children }) {
   const connect = useCallback(async (type = 'freighter') => {
     setLoading(true);
     setError(null);
+    setNetworkMismatch(false);
+    setFreighterNetwork(null);
     try {
       let key;
       if (type === 'freighter') {
@@ -110,6 +117,16 @@ export function WalletProvider({ children }) {
         setFreighterInstalled(installed);
         if (!installed) throw new Error('Freighter wallet extension is not installed. Please install it from freighter.app');
         key = await connectFreighter();
+
+        // Detect network mismatch after successful Freighter connection
+        try {
+          const netInfo = await getFreighterNetwork();
+          setFreighterNetwork(netInfo.network);
+          const mismatch = await checkNetworkMismatch();
+          setNetworkMismatch(mismatch);
+        } catch (netErr) {
+          console.warn('Could not verify Freighter network:', netErr);
+        }
       } else if (type === 'albedo') {
         key = await connectAlbedo();
       } else if (type === 'xbull') {
@@ -145,6 +162,8 @@ export function WalletProvider({ children }) {
     setBalance('0');
     setTransactions([]);
     setError(null);
+    setNetworkMismatch(false);
+    setFreighterNetwork(null);
     localStorage.removeItem('walletPublicKey');
     localStorage.removeItem('walletType');
   }, []);
@@ -173,7 +192,7 @@ export function WalletProvider({ children }) {
     }
 
     if (walletType === 'albedo') {
-      const albedo = (await import('albedo-link')).default;
+      const albedo = (await import(/* webpackIgnore: true */ 'albedo-link')).default;
       const result = await albedo.tx({ xdr, submit: false });
       return result.signed_envelope_xdr;
     }
@@ -194,6 +213,8 @@ export function WalletProvider({ children }) {
       balance,
       transactions,
       freighterInstalled,
+      networkMismatch,
+      freighterNetwork,
       loading,
       error,
       connect,

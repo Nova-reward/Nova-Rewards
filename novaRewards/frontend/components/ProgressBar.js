@@ -19,18 +19,18 @@ export default function ProgressBar({
   };
 
   const variantClasses = {
-    default: 'bg-blue-600',
-    success: 'bg-green-600',
-    warning: 'bg-yellow-600',
-    error: 'bg-red-600'
+    default: 'bg-primary-600',
+    success: 'bg-success-600',
+    warning: 'bg-warning-600',
+    error:   'bg-error-600',
   };
 
   return (
     <div className="w-full">
       {showLabel && label && (
-        <div className="flex justify-between mb-1 text-sm">
-          <span className="text-gray-700">{label}</span>
-          <span className="text-gray-600">{Math.round(percentage)}%</span>
+        <div className="flex justify-between mb-1">
+          <span className="type-body-sm text-neutral-700 dark:text-neutral-300">{label}</span>
+          <span className="type-body-sm text-neutral-600 dark:text-neutral-400">{Math.round(percentage)}%</span>
         </div>
       )}
       <div 

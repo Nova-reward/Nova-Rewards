@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/router';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ThemeProvider } from 'next-themes';
 import { WalletProvider } from '../context/WalletContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
@@ -7,6 +9,7 @@ import { TourProvider } from '../context/TourContext';
 import { ModalProvider } from '../context/ModalContext';
 import { ToastProvider } from '../components/Toast';
 import { NotificationProvider } from '../context/NotificationContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 import Footer from '../components/Footer';
 import OnboardingModal from '../components/OnboardingModal';
 import { useOnboardingStore } from '../store/onboardingStore';
@@ -37,30 +40,54 @@ function OnboardingTrigger() {
   return null;
 }
 
+const pageVariants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit:    { opacity: 0 },
+};
+
+const pageTransition = { duration: 0.15, ease: 'easeOut' };
+
 export default function App({ Component, pageProps }) {
+  const router = useRouter();
+
   useEffect(() => {
     registerServiceWorker();
   }, []);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <AuthProvider>
-        <ToastProvider>
-          <NotificationProvider>
-            <WalletProvider>
-              <TourProvider>
-                <ModalProvider>
-                  <OnboardingTrigger />
-                  <Component {...pageProps} />
-                  <Footer />
-                  <OnboardingModal />
-                  <OnboardingTour />
-                </ModalProvider>
-              </TourProvider>
-            </WalletProvider>
-          </NotificationProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <AuthProvider>
+          <ToastProvider>
+            <NotificationProvider>
+              <WalletProvider>
+                <TourProvider>
+                  <ModalProvider>
+                    <OnboardingTrigger />
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.div
+                        key={router.asPath}
+                        variants={pageVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        transition={pageTransition}
+                        style={{ isolation: 'isolate' }}
+                      >
+                        <Component {...pageProps} />
+                      </motion.div>
+                    </AnimatePresence>
+                    <Footer />
+                    <OnboardingModal />
+                    <OnboardingTour />
+                  </ModalProvider>
+                </TourProvider>
+              </WalletProvider>
+            </NotificationProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
