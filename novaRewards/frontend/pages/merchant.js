@@ -387,6 +387,50 @@ function TutorialOverlay({ onClose }) {
   );
 }
 
+            {/* Campaign list — Requirements 10.1 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Campaigns</h2>
+              {campaigns.length === 0 ? (
+                <p style={{ color: "#94a3b8" }}>
+                  No campaigns yet. Create one above.
+                </p>
+              ) : (
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Rate</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campaigns.map((c) => {
+                        const expired = new Date(c.end_date) < new Date();
+                        return (
+                          <tr key={c.id}>
+                            <td data-label="Name">{c.name}</td>
+                            <td data-label="Rate">{c.reward_rate} NOVA/unit</td>
+                            <td data-label="Start">{c.start_date?.slice(0, 10)}</td>
+                            <td data-label="End">{c.end_date?.slice(0, 10)}</td>
+                            <td data-label="Status">
+                              <span
+                                className={`badge ${c.is_active && !expired ? "badge-green" : "badge-gray"}`}
+                              >
+                                {c.is_active && !expired ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function MerchantPage() {
   const [step, setStep] = useState(0);

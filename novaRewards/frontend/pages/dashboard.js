@@ -106,6 +106,23 @@ function DashboardContent() {
           <SkeletonDashboard />
         ) : (
           <>
+            <div className="dashboard-summary-grid">
+              {/* Balance card */}
+              <div className="card" style={{ textAlign: "center" }}>
+                <p style={{ color: "#94a3b8", marginBottom: "0.4rem" }}>
+                  NOVA Balance
+                </p>
+                <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }} className="balance-amount">
+                  {parseFloat(balance).toFixed(2)}
+                </p>
+                <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>NOVA</p>
+                <button
+                  className="btn btn-secondary"
+                  style={{ marginTop: "1rem" }}
+                  onClick={() => refreshBalance()}
+                >
+                  Refresh
+                </button>
             {/* Summary grid — 1 col mobile, 2 col md, 3 col lg */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Balance cards per campaign */}
@@ -173,6 +190,38 @@ function DashboardContent() {
                     ))}
                   </ul>
                 ) : (
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Type</th>
+                          <th>Amount</th>
+                          <th>Counterparty</th>
+                          <th>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {transactions.map((tx, i) => {
+                          const { type, counterparty, amount, date } = formatTx(tx);
+                          return (
+                            <tr key={tx.id || i}>
+                              <td data-label="Type">{type}</td>
+                              <td data-label="Amount">{parseFloat(amount).toFixed(4)} NOVA</td>
+                              <td
+                                data-label="Counterparty"
+                                style={{
+                                  fontFamily: "monospace",
+                                  fontSize: "0.85rem",
+                                }}
+                              >
+                                {counterparty}
+                              </td>
+                              <td data-label="Date">{date}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   <div className="text-center py-4">
                     <p className="text-slate-400 text-sm mb-2">No transactions yet.</p>
                     <a href="/merchant" className="text-brand-purple font-semibold text-sm">Browse merchants →</a>
