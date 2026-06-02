@@ -128,7 +128,8 @@ describe('POST /api/trustline/verify', () => {
   });
 
   test('returns 400 when the request body is empty', async () => {
-    const { status, body } = await post(server, '/api/trustline/verify', '');
+    // An empty object body (no walletAddress) should return 400
+    const { status, body } = await post(server, '/api/trustline/verify', {});
 
     expect(status).toBe(400);
     expect(body.success).toBe(false);

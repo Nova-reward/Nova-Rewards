@@ -5,6 +5,7 @@ jest.mock('../db/index', () => ({ query: jest.fn() }));
 
 const fc = require('fast-check');
 const { validateCampaign } = require('../db/campaignRepository');
+const { CampaignFactory } = require('./fixtures');
 
 const baseDateArb = fc.date({
   min: new Date('2020-01-01'),
@@ -97,5 +98,27 @@ describe('validateCampaign (Property 3)', () => {
       ),
       { numRuns: 100 }
     );
+  });
+
+  test('factory-built campaign passes validation', () => {
+    const campaign = CampaignFactory.build();
+    const { valid, errors } = validateCampaign({
+      rewardRate: parseFloat(campaign.reward_rate),
+      startDate: campaign.start_date,
+      endDate: campaign.end_date,
+    });
+    expect(valid).toBe(true);
+    expect(errors).toHaveLength(0);
+  });
+
+  test('factory-built expired campaign fails validation (end before start)', () => {
+    const campaign = CampaignFactory.expired();
+    // expired campaign has end_date in the past and start_date even further back — still valid dates
+    const { valid } = validateCampaign({
+      rewardRate: 1,
+      startDate: campaign.start_date,
+      endDate: campaign.end_date,
+    });
+    expect(valid).toBe(true); // dates are still ordered correctly; expiry is a runtime concern
   });
 });

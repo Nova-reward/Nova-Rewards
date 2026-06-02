@@ -1,0 +1,13 @@
+[Unit]
+Description=Certbot SSL Certificate Renewal Timer for Nova Rewards
+Requires=certbot-renewal.service
+
+[Timer]
+# Run at 02:00 AM and 02:00 PM UTC daily
+OnCalendar=*-*-* 02:00:00
+OnCalendar=*-*-* 14:00:00
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

@@ -288,7 +288,9 @@ describe("POST /api/merchants/register", () => {
     });
 
     expect(status).toBe(201);
-    expect(body.data.api_key).toBe("generatedapikey1234567890abcdef");
+    // The route generates a fresh UUID-based key — verify it's a 32-char hex string
+    expect(typeof body.data.api_key).toBe("string");
+    expect(body.data.api_key).toMatch(/^[0-9a-f]{32}$/);
   });
 
   test("400 – name is not a string", async () => {

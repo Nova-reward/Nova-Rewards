@@ -1,0 +1,60 @@
+# AWS Configuration
+aws_region = "us-east-1"
+environment = "prod"  # dev, staging, or prod
+
+# Application Configuration
+app_name = "nova-rewards"
+
+# EC2 Configuration
+instance_type = "t3.medium"
+min_size      = 2
+max_size      = 6
+desired_capacity = 2
+
+# Health Check Configuration
+health_check_path = "/health"
+app_port          = 4000
+
+# Network Configuration
+vpc_id = "vpc-xxxxxxxxx"  # Replace with your VPC ID
+private_subnet_ids = [
+  "subnet-xxxxxxxxx",  # Replace with your private subnet IDs
+  "subnet-yyyyyyyyy"
+]
+public_subnet_ids = [
+  "subnet-zzzzzzzzz",  # Replace with your public subnet IDs
+  "subnet-wwwwwwwww"
+]
+
+# Database Configuration
+rds_endpoint = "nova-rewards-db.xxxxxxxxx.rds.amazonaws.com"
+rds_port     = 5432
+
+# Cache Configuration
+redis_endpoint = "nova-rewards-cache.xxxxxxxxx.cache.amazonaws.com"
+redis_port     = 6379
+
+# S3 Configuration
+s3_bucket_name = "nova-rewards-app-bucket"
+
+# Secrets Manager Configuration
+secrets_manager_path = "nova-rewards/*"
+
+# SSL Certificate (must be created in ACM first)
+certificate_arn = "arn:aws:acm:us-east-1:xxxxxxxxx:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# CloudWatch Alarms Configuration
+cpu_threshold    = 70
+memory_threshold = 80
+error_rate_threshold = 1
+
+# Monitoring
+enable_detailed_monitoring = true
+
+# Tags
+tags = {
+  Project     = "NovaRewards"
+  Environment = "prod"
+  ManagedBy   = "Terraform"
+  CostCenter  = "Engineering"
+}

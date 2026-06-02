@@ -1,0 +1,225 @@
+name: CD — Staging
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: cd-staging
+  cancel-in-progress: false   # never cancel an in-flight deploy
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # 1. Deploy backend to Railway staging
+  # ──────────────────────────────────────────────────────────────────────────
+  deploy-backend:
+    name: Deploy Backend → Railway Staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ secrets.STAGING_BACKEND_URL }}
+    outputs:
+      deployment_id: ${{ steps.deploy.outputs.deployment_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        id: deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          cd novaRewards/backend
+          DEPLOY_OUTPUT=$(railway up --service nova-rewards-backend --environment staging --detach 2>&1)
+          echo "$DEPLOY_OUTPUT"
+          DEPLOYMENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -oP 'deployment/\K[a-zA-Z0-9]+' | head -1 || echo "")
+          echo "deployment_id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Railway deployment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Waiting for Railway deployment to become healthy..."
+          for i in $(seq 1 24); do
+            STATUS=$(railway status --service nova-rewards-backend --environment staging --json 2>/dev/null | jq -r '.status // "unknown"' || echo "unknown")
+            echo "Attempt $i: status=$STATUS"
+            if [ "$STATUS" = "SUCCESS" ]; then
+              echo "Deployment healthy."
+              exit 0
+            fi
+            if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CRASHED" ]; then
+              echo "Deployment failed with status: $STATUS"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for deployment."
+          exit 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 2. Deploy frontend to Vercel staging
+  # ──────────────────────────────────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend → Vercel Staging
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.preview_url }}
+    outputs:
+      preview_url: ${{ steps.deploy.outputs.preview_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Deploy to Vercel (staging)
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          cd novaRewards/frontend
+          DEPLOY_URL=$(vercel deploy \
+            --token "$VERCEL_TOKEN" \
+            --env NEXT_PUBLIC_API_URL="${{ secrets.STAGING_BACKEND_URL }}" \
+            --env NEXT_PUBLIC_STELLAR_NETWORK=TESTNET \
+            --build-env NEXT_PUBLIC_API_URL="${{ secrets.STAGING_BACKEND_URL }}" \
+            --build-env NEXT_PUBLIC_STELLAR_NETWORK=TESTNET \
+            2>&1 | tail -1)
+          echo "preview_url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed to: $DEPLOY_URL"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 3. Smoke tests against staging
+  # ──────────────────────────────────────────────────────────────────────────
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    outputs:
+      passed: ${{ steps.smoke.outputs.passed }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run smoke tests
+        id: smoke
+        env:
+          STAGING_BACKEND_URL: ${{ secrets.STAGING_BACKEND_URL }}
+          STAGING_FRONTEND_URL: ${{ needs.deploy-frontend.outputs.preview_url }}
+        run: |
+          set +e
+          FAILED=0
+
+          check() {
+            local label="$1"
+            local url="$2"
+            local expected_status="${3:-200}"
+            local response
+            response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$url")
+            if [ "$response" = "$expected_status" ]; then
+              echo "✅ $label ($url) → $response"
+            else
+              echo "❌ $label ($url) → $response (expected $expected_status)"
+              FAILED=$((FAILED + 1))
+            fi
+          }
+
+          # Backend health
+          check "Backend /health"   "$STAGING_BACKEND_URL/health"
+          check "Backend /metrics"  "$STAGING_BACKEND_URL/metrics"
+          check "API docs"          "$STAGING_BACKEND_URL/api/docs"
+
+          # Auth endpoints exist (expect 400/422 without body, not 404/500)
+          AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+            -X POST "$STAGING_BACKEND_URL/api/auth/login" \
+            -H "Content-Type: application/json" -d '{}')
+          if [ "$AUTH_STATUS" = "400" ] || [ "$AUTH_STATUS" = "422" ] || [ "$AUTH_STATUS" = "401" ]; then
+            echo "✅ Auth /login endpoint reachable ($AUTH_STATUS)"
+          else
+            echo "❌ Auth /login unexpected status: $AUTH_STATUS"
+            FAILED=$((FAILED + 1))
+          fi
+
+          # Frontend
+          if [ -n "$STAGING_FRONTEND_URL" ]; then
+            check "Frontend home" "$STAGING_FRONTEND_URL"
+          fi
+
+          if [ "$FAILED" -gt 0 ]; then
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            echo "$FAILED smoke test(s) failed."
+            exit 1
+          else
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            echo "All smoke tests passed."
+          fi
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 4. Auto-rollback if smoke tests fail
+  # ──────────────────────────────────────────────────────────────────────────
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: failure() && needs.smoke-tests.outputs.passed == 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Rollback Railway backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Smoke tests failed — rolling back Railway backend..."
+          railway rollback --service nova-rewards-backend --environment staging || true
+          echo "Rollback triggered."
+
+      - name: Notify rollback
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'failure',
+              description: 'Staging deploy failed smoke tests — rolled back',
+              context: 'cd/staging',
+            });
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 5. Report success back to GitHub
+  # ──────────────────────────────────────────────────────────────────────────
+  report-success:
+    name: Report Deployment Status
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: success()
+
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'success',
+              description: 'Staging deploy passed all smoke tests',
+              context: 'cd/staging',
+              target_url: '${{ needs.deploy-frontend.outputs.preview_url || secrets.STAGING_BACKEND_URL }}',
+            });
