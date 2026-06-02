@@ -28,6 +28,11 @@ spec:
           image: nova-rewards-backend:latest
           ports:
             - containerPort: 4000
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+            - name: SERVICE_NAME
+              value: "nova-rewards-backend"
           envFrom:
             - configMapRef:
                 name: nova-rewards-config

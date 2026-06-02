@@ -4,6 +4,7 @@ const { verifyTrustline, buildTrustlineXDR, checkTrustline, establishTrustline }
 const { server } = require('../../blockchain/stellarService');
 const { TransactionEnvelope } = require('stellar-sdk').xdr;
 const StellarSdk = require('stellar-sdk');
+const { asyncLocalStorage, getLogger } = require('../lib/logger');
 
 /**
  * @openapi
@@ -193,9 +194,11 @@ router.post('/submit', async (req, res, next) => {
         ? 'https://horizon.stellar.org'
         : 'https://horizon-testnet.stellar.org';
 
+    const store = asyncLocalStorage.getStore();
+    const correlationId = store && store.correlationId;
     const response = await fetch(`${HORIZON_URL}/transactions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: Object.assign({ 'Content-Type': 'application/x-www-form-urlencoded' }, correlationId ? { 'x-correlation-id': correlationId } : {}),
       body: new URLSearchParams({ tx: signedXdr }),
     });
 
@@ -208,6 +211,8 @@ router.post('/submit', async (req, res, next) => {
 
     res.json({ success: true, txHash: data.hash });
   } catch (err) {
+    const logger = getLogger();
+    logger.error({ err }, 'Error submitting trustline transaction');
     next(err);
   }
 });

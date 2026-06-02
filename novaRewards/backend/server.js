@@ -20,6 +20,7 @@ const {
   registry,
 } = require("./middleware/metricsMiddleware");
 const { tracingMiddleware } = require("./middleware/tracingMiddleware");
+const { pinoMiddleware, getLogger } = require('./lib/logger');
 
 const app = express();
 
@@ -54,6 +55,8 @@ app.use(
 );
 app.use(express.json());
 app.use(tracingMiddleware);
+// Attach pino HTTP logger after correlationId is established
+app.use(pinoMiddleware());
 app.use(metricsMiddleware);
 app.use(require('./middleware/auditMiddleware').auditMiddleware);
 
