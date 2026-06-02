@@ -186,10 +186,18 @@ describe('POST /api/auth/logout', () => {
     expect(res.body.success).toBe(true);
   });
 
-  it('200 — logout without tokens still returns success (idempotent)', async () => {
-    const res = await request(app).post('/api/auth/logout').send({});
+  it('200 — logout without refresh token body still returns success (idempotent)', async () => {
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({});
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  it('401 — logout without Authorization header is rejected', async () => {
+    const res = await request(app).post('/api/auth/logout').send({ refreshToken });
+    expect(res.status).toBe(401);
   });
 
   it('refresh token is invalidated after logout', async () => {
@@ -197,6 +205,47 @@ describe('POST /api/auth/logout', () => {
       .post('/api/auth/logout')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ refreshToken });
+
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken });
+    expect(res.status).toBe(401);
+  });
+});
+
+// ── Logout-all ────────────────────────────────────────────────────────────
+
+describe('POST /api/auth/logout-all', () => {
+  let accessToken;
+  let refreshToken;
+
+  beforeEach(async () => {
+    redisStore.clear();
+    const loginRes = await request(app).post('/api/auth/login').send(CREDS);
+    accessToken  = loginRes.body.data.accessToken;
+    refreshToken = loginRes.body.data.refreshToken;
+  });
+
+  it('200 — returns success', async () => {
+    const res = await request(app)
+      .post('/api/auth/logout-all')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send();
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('All sessions revoked');
+  });
+
+  it('401 — rejected without Authorization header', async () => {
+    const res = await request(app).post('/api/auth/logout-all').send();
+    expect(res.status).toBe(401);
+  });
+
+  it('all refresh tokens are invalidated after logout-all', async () => {
+    await request(app)
+      .post('/api/auth/logout-all')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send();
 
     const res = await request(app)
       .post('/api/auth/refresh')

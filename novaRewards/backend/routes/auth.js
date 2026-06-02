@@ -1,11 +1,12 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { query } = require('../db/index');
-const { signAccessToken, signRefreshToken } = require('../services/tokenService');
+const { signAccessToken, signRefreshToken, storeRefreshJti } = require('../services/tokenService');
 const { validateRegisterDto } = require('../dtos/registerDto');
 const { validateLoginDto } = require('../dtos/loginDto');
 const { checkIpBlock, recordFailedLogin } = require('../middleware/abuseDetection');
 const { logAudit } = require('../db/auditLogRepository');
+const { authenticateUser } = require('../middleware/authenticateUser');
 
 const SALT_ROUNDS = 12;
 
@@ -182,7 +183,8 @@ router.post('/login', checkIpBlock, async (req, res, next) => {
     }).catch((err) => console.error('[audit] login:', err.message));
 
     const accessToken  = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
+    const { token: refreshToken, jti } = signRefreshToken(user);
+    await storeRefreshJti(jti, user.wallet_address);
 
     return res.json({
       success: true,
@@ -262,8 +264,10 @@ router.post('/refresh', async (req, res, next) => {
  *   post:
  *     tags: [Auth]
  *     summary: Revoke access token and refresh token (add to blocklist)
+ *     security:
+ *       - bearerAuth: []
  */
-router.post('/logout', async (req, res, next) => {
+router.post('/logout', authenticateUser, async (req, res, next) => {
   try {
     const { revokeToken, verifyToken, consumeRefreshJti } = require('../services/tokenService');
 
@@ -289,6 +293,37 @@ router.post('/logout', async (req, res, next) => {
     }
 
     return res.json({ success: true, message: 'Logged out' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /auth/logout-all:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Revoke all refresh tokens for the authenticated user
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/logout-all', authenticateUser, async (req, res, next) => {
+  try {
+    const { revokeToken, verifyToken, revokeAllUserRefreshJtis } = require('../services/tokenService');
+
+    // Revoke the current access token
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = verifyToken(authHeader.substring(7));
+        if (decoded.jti) await revokeToken(decoded.jti, decoded.exp);
+      } catch { /* already expired */ }
+    }
+
+    // Revoke all refresh tokens for this user
+    await revokeAllUserRefreshJtis(req.user.wallet_address);
+
+    return res.json({ success: true, message: 'All sessions revoked' });
   } catch (err) {
     next(err);
   }

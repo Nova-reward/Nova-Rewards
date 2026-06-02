@@ -81,11 +81,35 @@ async function isRevoked(jti) {
 
 /**
  * Stores a refresh token's jti in Redis so it can be rotated/revoked.
+ * Also adds the jti to the user's set of active refresh JTIs for logout-all support.
  * @param {string} jti
  * @param {string} walletAddress
  */
 async function storeRefreshJti(jti, walletAddress) {
   await redis.setEx(`refresh:${jti}`, REFRESH_TTL_SECONDS, walletAddress);
+  // Track active JTIs per user for logout-all
+  await redis.sAdd(`user_refresh_jtis:${walletAddress}`, jti);
+  await redis.expire(`user_refresh_jtis:${walletAddress}`, REFRESH_TTL_SECONDS);
+}
+
+/**
+ * Revokes all active refresh tokens for a user by consuming every tracked JTI.
+ * @param {string} walletAddress
+ */
+async function revokeAllUserRefreshJtis(walletAddress) {
+  const setKey = `user_refresh_jtis:${walletAddress}`;
+  const jtis = await redis.sMembers(setKey);
+  if (jtis.length > 0) {
+    await Promise.all(
+      jtis.map(async (jti) => {
+        // Get expiry from the refresh key to set blocklist TTL
+        const ttl = await redis.ttl(`refresh:${jti}`);
+        if (ttl > 0) await redis.setEx(`blocklist:${jti}`, ttl, '1');
+        await redis.del(`refresh:${jti}`);
+      })
+    );
+    await redis.del(setKey);
+  }
 }
 
 /**
@@ -109,4 +133,5 @@ module.exports = {
   isRevoked,
   storeRefreshJti,
   consumeRefreshJti,
+  revokeAllUserRefreshJtis,
 };
