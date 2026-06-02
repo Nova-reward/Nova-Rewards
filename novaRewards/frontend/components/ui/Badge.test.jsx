@@ -11,22 +11,22 @@ describe('Badge', () => {
 
   it('applies default variant class', () => {
     render(<Badge>Default</Badge>);
-    expect(screen.getByText('Default')).toHaveClass('bg-blue-600');
+    expect(screen.getByText('Default')).toHaveClass('bg-primary-600');
   });
 
   it('applies destructive variant class', () => {
     render(<Badge variant="destructive">Error</Badge>);
-    expect(screen.getByText('Error')).toHaveClass('bg-red-500');
+    expect(screen.getByText('Error')).toHaveClass('bg-error-500');
   });
 
   it('applies secondary variant class', () => {
     render(<Badge variant="secondary">Info</Badge>);
-    expect(screen.getByText('Info')).toHaveClass('bg-gray-100');
+    expect(screen.getByText('Info')).toHaveClass('bg-neutral-100');
   });
 
   it('applies outline variant class', () => {
     render(<Badge variant="outline">Outline</Badge>);
-    expect(screen.getByText('Outline')).toHaveClass('text-gray-950');
+    expect(screen.getByText('Outline')).toHaveClass('border-neutral-300');
   });
 
   it('merges custom className', () => {

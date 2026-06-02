@@ -63,8 +63,8 @@ export default function Leaderboard() {
     return (
       <div className="card">
         <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <p style={{ color: '#94a3b8', fontSize: '1.1rem' }}>No leaderboard data available</p>
-          <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+          <p style={{ color: 'var(--color-text)', fontSize: '1.1rem' }}>No leaderboard data available</p>
+          <p style={{ color: '#4b5563', fontSize: '0.9rem', marginTop: '0.5rem' }}>
             Check back later for the latest rankings!
           </p>
         </div>

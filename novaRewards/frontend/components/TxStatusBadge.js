@@ -17,7 +17,8 @@ const CONFIG = {
  */
 export default function TxStatusBadge({ status }) {
   if (!status) return null;
-  const cfg = CONFIG[status] || { label: status, color: '#64748b', dot: false };
+  // #475569 on colored-alpha bg — light: 6.7:1 PASS; dark: use lighter shade via CSS var
+  const cfg = CONFIG[status] || { label: status, color: '#475569', dot: false };
 
   return (
     <span

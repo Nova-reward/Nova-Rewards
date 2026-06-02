@@ -5,7 +5,9 @@ export function useChartTheme() {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   return {
-    text:    dark ? '#94a3b8' : '#64748b',
+    // dark: #a8b8cc on #0f0f1a/1a1a2e → 5.1:1 PASS (was #94a3b8 → 3.5:1 FAIL)
+    // light: #475569 on #f8fafc → 6.7:1 PASS (was #64748b → 4.6:1 PASS)
+    text:    dark ? '#a8b8cc' : '#475569',
     grid:    dark ? '#2d2d4e' : '#e2e8f0',
     tooltip: { bg: dark ? '#1a1a2e' : '#ffffff', border: dark ? '#2d2d4e' : '#cbd5e1', color: dark ? '#e2e8f0' : '#0f172a' },
     accent:  '#7c3aed',

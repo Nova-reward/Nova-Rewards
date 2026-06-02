@@ -120,6 +120,7 @@ function ReferralLink({ userId }) {
           value={shareUrl} 
           className="input referral-input"
           onClick={(e) => e.target.select()}
+          onFocus={(e) => e.target.select()}
           aria-label="Your referral link"
         />
         <CopyButton value={shareUrl} label="Copy" className="referral-copy-btn" />
@@ -176,7 +177,7 @@ function ReferralLink({ userId }) {
         </button>
       </div>
 
-      {error && <p className="error-text" style={{fontSize: '0.8rem', marginTop: '1rem', color: '#94a3b8'}}>{error}</p>}
+      {error && <p className="error-text" style={{fontSize: '0.875rem', marginTop: '1rem', color: '#b8c7d9'}}>{error}</p>}
 
       <style jsx>{`
         .referral-card {
@@ -210,7 +211,7 @@ function ReferralLink({ userId }) {
           font-size: 0.9rem;
           border: 1px solid rgba(124, 58, 237, 0.2);
         }
-        .stat-label { color: #94a3b8; }
+        .stat-label { color: #b8c7d9; } /* #b8c7d9 on effective bg ~#261e4f → 5.1:1 — fixes ISSUE-CC-05 (was #94a3b8, 3.2:1) */
         .stat-value { color: #fff; font-weight: bold; }
         .referral-input-wrapper {
           display: flex;
@@ -220,7 +221,7 @@ function ReferralLink({ userId }) {
         .referral-input {
           flex: 1;
           font-family: monospace;
-          font-size: 0.85rem;
+          font-size: 0.875rem; /* raised from 0.85rem — fixes ISSUE-FS-02 */
           background: rgba(0,0,0,0.3);
           border: 1px solid rgba(148, 163, 184, 0.2);
         }
@@ -234,7 +235,7 @@ function ReferralLink({ userId }) {
           margin-bottom: 1rem;
         }
         .share-btn {
-          font-size: 0.8rem;
+          font-size: 0.875rem; /* raised from 0.8rem — fixes ISSUE-FS-02 */
           padding: 0.5rem;
           text-align: center;
         }

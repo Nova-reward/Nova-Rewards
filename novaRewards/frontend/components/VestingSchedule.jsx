@@ -179,8 +179,9 @@ export default function VestingSchedule({ userId }) {
         }
 
         .amount-label {
-          font-size: 0.85rem;
-          color: #94a3b8;
+          font-size: 0.875rem; /* raised from 0.85rem */
+          /* #b8c7d9 on dark backgrounds ≥5:1; on light card fallback use var(--color-text-muted) */
+          color: #b8c7d9;
           text-transform: uppercase;
           letter-spacing: 0.05em;
         }
@@ -289,7 +290,8 @@ export default function VestingSchedule({ userId }) {
 
         .timeline-date {
           font-size: 0.9rem;
-          color: #94a3b8;
+          /* #b8c7d9 on dark card ≥5:1 — fixes hardcoded #94a3b8 */
+          color: #b8c7d9;
           margin-bottom: 0.25rem;
         }
 

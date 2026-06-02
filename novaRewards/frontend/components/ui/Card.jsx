@@ -1,7 +1,8 @@
 import React from 'react';
 
 const variantStyles = {
-  default: 'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm',
+  default:
+    'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm',
   interactive:
     'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm ' +
     'cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary-300 dark:hover:border-primary-600 ' +
@@ -20,7 +21,7 @@ const variantStyles = {
 export function Card({ variant = 'default', className = '', ...props }) {
   return (
     <div
-      className={`rounded-xl p-0 ${variantStyles[variant]} ${className}`}
+      className={`rounded-xl p-0 ${variantStyles[variant] ?? variantStyles.default} ${className}`}
       {...props}
     />
   );
@@ -34,7 +35,7 @@ export function CardHeader({ className = '', ...props }) {
 
 export function CardTitle({ className = '', ...props }) {
   return (
-    <h3 className={`text-lg font-semibold leading-tight text-neutral-900 dark:text-neutral-50 ${className}`} {...props} />
+    <h3 className={`type-h6 text-neutral-900 dark:text-neutral-50 ${className}`} {...props} />
   );
 }
 

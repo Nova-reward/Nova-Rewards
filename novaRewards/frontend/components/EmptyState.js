@@ -91,17 +91,18 @@ export default function EmptyState({
         {illustration ?? illustrations[icon] ?? illustrations.inbox}
       </div>
 
-      <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text)', marginBottom: '0.5rem' }}>
+      <h3 className="type-h6" style={{ color: 'var(--text)', marginBottom: '0.5rem' }}>
         {title}
       </h3>
 
-      <p style={{ fontSize: '0.875rem', color: 'var(--muted)', maxWidth: '28rem', marginBottom: actionLabel ? '1.5rem' : 0 }}>
+      <p className="type-body-sm" style={{ color: 'var(--color-neutral-600)', maxWidth: '28rem', marginBottom: actionLabel ? '1.5rem' : 0 }}>
         {description}
       </p>
 
       {actionLabel && onAction && (
         <button
           onClick={onAction}
+          className="type-label"
           style={{
             background: 'var(--accent)',
             color: '#fff',
@@ -109,7 +110,6 @@ export default function EmptyState({
             borderRadius: '8px',
             padding: '0.5rem 1.5rem',
             fontWeight: 600,
-            fontSize: '0.875rem',
             cursor: 'pointer',
           }}
           aria-label={actionLabel}

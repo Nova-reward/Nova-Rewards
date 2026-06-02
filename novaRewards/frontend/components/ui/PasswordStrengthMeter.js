@@ -7,7 +7,14 @@
 import { passwordStrengthScore } from '../../lib/validation';
 
 const LABELS = ['Very weak', 'Weak', 'Fair', 'Good', 'Strong'];
-const COLOURS = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-lime-500', 'bg-green-500'];
+// Colours map to semantic tokens: error → warning → warning → success gradient
+const COLOURS = [
+  'bg-error-500',    /* 0 — Very weak */
+  'bg-warning-500',  /* 1 — Weak      */
+  'bg-warning-400',  /* 2 — Fair      */
+  'bg-success-500',  /* 3 — Good      */
+  'bg-success-600',  /* 4 — Strong    */
+];
 
 export default function PasswordStrengthMeter({ password }) {
   if (!password) return null;
@@ -21,12 +28,12 @@ export default function PasswordStrengthMeter({ password }) {
             key={i}
             className={[
               'h-1 flex-1 rounded-full transition-colors duration-300',
-              i < score ? COLOURS[score] : 'bg-gray-200',
+              i < score ? COLOURS[score] : 'bg-neutral-200 dark:bg-neutral-700',
             ].join(' ')}
           />
         ))}
       </div>
-      <p className="mt-0.5 text-xs text-gray-500">{LABELS[score]}</p>
+      <p className="mt-0.5 type-caption text-neutral-500 dark:text-neutral-400">{LABELS[score]}</p>
     </div>
   );
 }

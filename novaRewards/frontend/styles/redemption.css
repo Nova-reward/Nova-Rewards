@@ -259,8 +259,8 @@
 
 /* ── Status badges ────────────────────────────────────────────── */
 .badge-yellow {
-  background: #fef9c3;
-  color: #854d0e;
+  background: var(--color-warning-100);
+  color: var(--color-warning-700);
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -268,8 +268,8 @@
 }
 
 .badge-red {
-  background: rgba(220, 38, 38, 0.1);
-  color: var(--error);
+  background: var(--color-error-50);
+  color: var(--color-error);
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -277,8 +277,8 @@
 }
 
 [data-theme="dark"] .badge-yellow {
-  background: #422006;
-  color: #fde68a;
+  background: var(--color-warning-700);
+  color: var(--color-warning-100);
 }
 
 /* ── Pagination ───────────────────────────────────────────────── */
