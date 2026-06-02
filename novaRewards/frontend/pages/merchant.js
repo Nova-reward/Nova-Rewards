@@ -184,7 +184,7 @@ export default function MerchantDashboard() {
                   Refreshing totals…
                 </p>
               )}
-              <div style={{ display: "flex", gap: "2rem" }}>
+              <div className="merchant-totals" style={{ display: "flex", gap: "2rem" }}>
                 <div>
                   <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
                     Total Distributed
@@ -247,37 +247,39 @@ export default function MerchantDashboard() {
                   No campaigns yet. Create one above.
                 </p>
               ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Rate</th>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {campaigns.map((c) => {
-                      const expired = new Date(c.end_date) < new Date();
-                      return (
-                        <tr key={c.id}>
-                          <td>{c.name}</td>
-                          <td>{c.reward_rate} NOVA/unit</td>
-                          <td>{c.start_date?.slice(0, 10)}</td>
-                          <td>{c.end_date?.slice(0, 10)}</td>
-                          <td>
-                            <span
-                              className={`badge ${c.is_active && !expired ? "badge-green" : "badge-gray"}`}
-                            >
-                              {c.is_active && !expired ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Rate</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campaigns.map((c) => {
+                        const expired = new Date(c.end_date) < new Date();
+                        return (
+                          <tr key={c.id}>
+                            <td data-label="Name">{c.name}</td>
+                            <td data-label="Rate">{c.reward_rate} NOVA/unit</td>
+                            <td data-label="Start">{c.start_date?.slice(0, 10)}</td>
+                            <td data-label="End">{c.end_date?.slice(0, 10)}</td>
+                            <td data-label="Status">
+                              <span
+                                className={`badge ${c.is_active && !expired ? "badge-green" : "badge-gray"}`}
+                              >
+                                {c.is_active && !expired ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </>

@@ -56,7 +56,6 @@ function DashboardContent() {
           <button
             className="btn btn-secondary"
             onClick={disconnect}
-            style={{ padding: "0.4rem 1rem" }}
           >
             Disconnect
           </button>
@@ -74,7 +73,7 @@ function DashboardContent() {
                 <p style={{ color: "#94a3b8", marginBottom: "0.4rem" }}>
                   NOVA Balance
                 </p>
-                <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }}>
+                <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }} className="balance-amount">
                   {parseFloat(balance).toFixed(2)}
                 </p>
                 <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>NOVA</p>
@@ -115,9 +114,10 @@ function DashboardContent() {
                           const { type, counterparty, amount, date } = formatTx(tx);
                           return (
                             <tr key={tx.id || i}>
-                              <td>{type}</td>
-                              <td>{parseFloat(amount).toFixed(4)} NOVA</td>
+                              <td data-label="Type">{type}</td>
+                              <td data-label="Amount">{parseFloat(amount).toFixed(4)} NOVA</td>
                               <td
+                                data-label="Counterparty"
                                 style={{
                                   fontFamily: "monospace",
                                   fontSize: "0.85rem",
@@ -125,7 +125,7 @@ function DashboardContent() {
                               >
                                 {counterparty}
                               </td>
-                              <td>{date}</td>
+                              <td data-label="Date">{date}</td>
                             </tr>
                           );
                         })}

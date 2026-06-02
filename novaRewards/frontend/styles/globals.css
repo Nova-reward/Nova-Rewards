@@ -71,7 +71,11 @@ a:hover {
 }
 
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
   padding: 0.6rem 1.4rem;
   border-radius: 8px;
   border: none;
@@ -202,6 +206,7 @@ td {
   overflow-x: auto;
 }
 
+/* ── Mobile ── */
 @media (max-width: 767px) {
   .container {
     padding: 1.25rem 0.75rem;
@@ -220,12 +225,82 @@ td {
     gap: 0.75rem;
   }
 
+  /* Ensure every nav link/button in nav-links is a reachable tap target */
+  .nav-links a,
+  .nav-links button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 1rem;
+  }
+
   .dashboard-summary-grid {
     grid-template-columns: 1fr;
   }
 
-  table {
-    min-width: 560px;
+  /* Balance figure scales down on narrow screens */
+  .balance-amount {
+    font-size: 2rem !important;
+  }
+
+  /* ── Totals flex → column on mobile ── */
+  .merchant-totals {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* ── Card-based table layout on mobile ── */
+  .table-scroll {
+    overflow-x: visible;
+  }
+
+  table,
+  thead,
+  tbody,
+  th,
+  td,
+  tr {
+    display: block;
+  }
+
+  thead tr {
+    /* visually hidden but still readable by screen readers */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  tr {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  td {
+    border: none;
+    border-bottom: 1px solid var(--surface-2);
+    padding: 0.4rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  td:last-child {
+    border-bottom: none;
+  }
+
+  td[data-label]::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
   }
 }
 /* Modal styles */
