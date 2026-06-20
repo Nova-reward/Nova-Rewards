@@ -299,7 +299,138 @@ router.delete('/rewards/:id', async (req, res, next) => {
  * /admin/audit-logs:
  *   get:
  *     tags: [Admin]
- *     summary: Retrieve audit logs
+ *     summary: Retrieve audit logs (paginated)
+ *     description: Query the immutable audit trail for compliance and incident investigation. Records include who did what, when, from where, and the HTTP context.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: entityType
+ *         schema: { type: string, example: campaign }
+ *         description: Filter by resource type (campaign, user, reward, etc.)
+ *       - in: query
+ *         name: entityId
+ *         schema: { type: integer, example: 42 }
+ *         description: Filter by specific resource ID
+ *       - in: query
+ *         name: performedBy
+ *         schema: { type: integer, example: 5 }
+ *         description: Filter by user ID of the actor
+ *       - in: query
+ *         name: actorType
+ *         schema: { type: string, enum: [user, admin, merchant, system], example: admin }
+ *         description: Filter by actor type
+ *       - in: query
+ *         name: action
+ *         schema: { type: string, example: create_campaign }
+ *         description: Filter by action name
+ *       - in: query
+ *         name: ipAddress
+ *         schema: { type: string, example: "192.0.2.1" }
+ *         description: Filter by client IP address
+ *       - in: query
+ *         name: httpMethod
+ *         schema: { type: string, enum: [GET, POST, PUT, PATCH, DELETE] }
+ *         description: Filter by HTTP method
+ *       - in: query
+ *         name: endpoint
+ *         schema: { type: string, example: /api/campaigns }
+ *         description: Filter by endpoint path (substring match)
+ *       - in: query
+ *         name: statusCode
+ *         schema: { type: integer, example: 201 }
+ *         description: Filter by HTTP status code
+ *       - in: query
+ *         name: startDate
+ *         schema: { type: string, format: date-time, example: "2025-01-01T00:00:00Z" }
+ *         description: Filter logs from this date onwards
+ *       - in: query
+ *         name: endDate
+ *         schema: { type: string, format: date-time, example: "2025-12-31T23:59:59Z" }
+ *         description: Filter logs up to this date
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1, minimum: 1, example: 1 }
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, minimum: 1, maximum: 100, example: 20 }
+ *         description: Number of records per page
+ *     responses:
+ *       200:
+ *         description: Paginated audit logs retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: integer }
+ *                           entity_type: { type: string }
+ *                           entity_id: { type: integer, nullable: true }
+ *                           action: { type: string }
+ *                           performed_by: { type: integer, nullable: true }
+ *                           actor_type: { type: string, enum: [user, admin, merchant, system] }
+ *                           merchant_id: { type: integer, nullable: true }
+ *                           ip_address: { type: string, nullable: true }
+ *                           user_agent: { type: string, nullable: true }
+ *                           http_method: { type: string, nullable: true }
+ *                           endpoint: { type: string, nullable: true }
+ *                           status_code: { type: integer, nullable: true }
+ *                           duration_ms: { type: integer, nullable: true }
+ *                           details: { type: object, nullable: true }
+ *                           source: { type: string, nullable: true }
+ *                           before_state: { type: object, nullable: true }
+ *                           after_state: { type: object, nullable: true }
+ *                           created_at: { type: string, format: date-time }
+ *                     total: { type: integer, example: 1250 }
+ *                     page: { type: integer, example: 1 }
+ *                     limit: { type: integer, example: 20 }
+ *       401:
+ *         description: Unauthenticated
+ *       403:
+ *         description: Admin role required
+ */
+router.get('/audit-logs', async (req, res, next) => {
+  try {
+    const filters = {
+      entityType: req.query.entityType,
+      entityId: req.query.entityId ? parseInt(req.query.entityId) : null,
+      performedBy: req.query.performedBy ? parseInt(req.query.performedBy) : null,
+      actorType: req.query.actorType,
+      action: req.query.action,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+      ipAddress: req.query.ipAddress,
+      httpMethod: req.query.httpMethod,
+      endpoint: req.query.endpoint,
+      statusCode: req.query.statusCode ? parseInt(req.query.statusCode) : null,
+      page: Math.max(1, parseInt(req.query.page) || 1),
+      limit: Math.min(100, parseInt(req.query.limit) || 20)
+    };
+    
+    const logs = await AuditService.getLogs(filters);
+    res.json({ success: true, data: logs });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /admin/audit-logs/export:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Export audit logs as CSV
+ *     description: Export filtered audit logs in CSV format for compliance reporting. Same filters as GET /admin/audit-logs apply.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -310,8 +441,11 @@ router.delete('/rewards/:id', async (req, res, next) => {
  *         name: entityId
  *         schema: { type: integer }
  *       - in: query
- *         name: actor
+ *         name: performedBy
  *         schema: { type: integer }
+ *       - in: query
+ *         name: actorType
+ *         schema: { type: string }
  *       - in: query
  *         name: action
  *         schema: { type: string }
@@ -322,32 +456,49 @@ router.delete('/rewards/:id', async (req, res, next) => {
  *         name: endDate
  *         schema: { type: string, format: date-time }
  *       - in: query
- *         name: page
- *         schema: { type: integer, default: 1 }
+ *         name: ipAddress
+ *         schema: { type: string }
  *       - in: query
- *         name: limit
- *         schema: { type: integer, default: 20 }
+ *         name: httpMethod
+ *         schema: { type: string }
+ *       - in: query
+ *         name: endpoint
+ *         schema: { type: string }
+ *       - in: query
+ *         name: statusCode
+ *         schema: { type: integer }
  *     responses:
  *       200:
- *         description: Paginated audit logs.
+ *         description: CSV file
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
  *       401:
- *         description: Unauthenticated.
+ *         description: Unauthenticated
+ *       403:
+ *         description: Admin role required
  */
-router.get('/audit-logs', async (req, res, next) => {
+router.get('/audit-logs/export', async (req, res, next) => {
   try {
     const filters = {
       entityType: req.query.entityType,
       entityId: req.query.entityId ? parseInt(req.query.entityId) : null,
-      actor: req.query.actor ? parseInt(req.query.actor) : null,
+      performedBy: req.query.performedBy ? parseInt(req.query.performedBy) : null,
+      actorType: req.query.actorType,
       action: req.query.action,
       startDate: req.query.startDate,
       endDate: req.query.endDate,
-      page: Math.max(1, parseInt(req.query.page) || 1),
-      limit: Math.min(100, parseInt(req.query.limit) || 20)
+      ipAddress: req.query.ipAddress,
+      httpMethod: req.query.httpMethod,
+      endpoint: req.query.endpoint,
+      statusCode: req.query.statusCode ? parseInt(req.query.statusCode) : null,
     };
-    
-    const logs = await AuditService.getLogs(filters);
-    res.json({ success: true, data: logs });
+
+    const csv = await AuditService.exportCSV(filters);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-logs-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
   } catch (err) {
     next(err);
   }

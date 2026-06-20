@@ -1,14 +1,48 @@
 const { query } = require('./index');
 
-async function logAudit({ entityType, entityId = null, action, performedBy = null, details = null, source = null, beforeState = null, afterState = null }) {
-     const result = await query(
-          `INSERT INTO audit_logs
-       (entity_type, entity_id, action, performed_by, details, source, before_state, after_state)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+async function logAudit({ 
+  entityType, 
+  entityId = null, 
+  action, 
+  performedBy = null, 
+  actorType = 'system',
+  merchantId = null,
+  details = null, 
+  source = null, 
+  beforeState = null, 
+  afterState = null,
+  ipAddress = null,
+  userAgent = null,
+  httpMethod = null,
+  endpoint = null,
+  statusCode = null,
+  durationMs = null
+}) {
+  const result = await query(
+    `INSERT INTO audit_logs
+     (entity_type, entity_id, action, performed_by, actor_type, merchant_id, details, source, before_state, after_state, ip_address, user_agent, http_method, endpoint, status_code, duration_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING *`,
-          [entityType, entityId, action, performedBy, details ? JSON.stringify(details) : null, source, beforeState ? JSON.stringify(beforeState) : null, afterState ? JSON.stringify(afterState) : null]
-     );
-     return result.rows[0];
+    [
+      entityType, 
+      entityId, 
+      action, 
+      performedBy, 
+      actorType,
+      merchantId,
+      details ? JSON.stringify(details) : null, 
+      source, 
+      beforeState ? JSON.stringify(beforeState) : null, 
+      afterState ? JSON.stringify(afterState) : null,
+      ipAddress,
+      userAgent,
+      httpMethod,
+      endpoint,
+      statusCode,
+      durationMs
+    ]
+  );
+  return result.rows[0];
 }
 
 
