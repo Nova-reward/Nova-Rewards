@@ -40,6 +40,14 @@ class AuditService {
      static async getLogs(filters) {
           return await auditLogRepository.getAuditLogs(filters);
      }
+
+     /**
+      * Export audit logs as CSV
+      * @param {Object} filters - Same filters as getLogs
+      */
+     static async exportCSV(filters) {
+          return await auditLogRepository.exportAuditLogsCSV(filters);
+     }
 }
 
 module.exports = AuditService;
