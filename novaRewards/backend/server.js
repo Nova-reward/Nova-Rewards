@@ -135,6 +135,7 @@ app.use("/api/drops", require("./routes/drops"));
 app.use("/api/search", require("./routes/search"));
 app.use("/api/webhooks", require("./routes/webhooks"));
 app.use("/api/merchants/:id/api-keys", require("./routes/merchantApiKeys"));
+app.use("/api/governance", require("./routes/governance"));
 
 // Swagger/OpenAPI docs
 const swaggerUi = require("swagger-ui-express");
