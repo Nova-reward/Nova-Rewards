@@ -1,5 +1,74 @@
 # Error Code Reference
 
+## API Error Codes
+
+All API error responses follow this consistent envelope:
+
+```json
+{ "error": "<human-readable message>", "code": "<machine-readable code>", "statusCode": <http status> }
+```
+
+### HTTP 400 — Client / Validation Errors
+
+| Code | Meaning |
+|------|---------|
+| `validation_error` | One or more request fields failed validation. `fields` key contains per-field details. |
+| `invalid_json` | Request body is not valid JSON. |
+| `insufficient_balance` | Merchant's NOVA token balance is less than the requested `tokenAmount`. |
+
+### HTTP 401 — Authentication
+
+| Code | Meaning |
+|------|---------|
+| `unauthorized` | Missing, expired, or invalid authentication credential. |
+
+### HTTP 403 — Authorization
+
+| Code | Meaning |
+|------|---------|
+| `forbidden` | Authenticated caller lacks permission for this resource. |
+
+### HTTP 404 — Not Found
+
+| Code | Meaning |
+|------|---------|
+| `not_found` | The requested resource or route does not exist. |
+
+### HTTP 409 — Conflict
+
+| Code | Meaning |
+|------|---------|
+| `chain_not_ready` | Campaign is not yet confirmed on-chain; operation cannot proceed. |
+| `conflict` | A conflicting resource already exists (e.g. duplicate redemption). |
+
+### HTTP 429 — Rate Limit
+
+| Code | Meaning |
+|------|---------|
+| `rate_limit_exceeded` | Too many requests. Retry after the `Retry-After` header value. |
+
+### HTTP 500 — Internal Server Error
+
+| Code | Meaning |
+|------|---------|
+| `internal_error` | An unexpected server-side error occurred. |
+
+### HTTP 502 — Bad Gateway
+
+| Code | Meaning |
+|------|---------|
+| `chain_error` | On-chain (Soroban) operation failed. Message contains the RPC error detail. |
+
+### HTTP 503 — Service Unavailable
+
+| Code | Meaning |
+|------|---------|
+| `service_unavailable` | A downstream dependency (PostgreSQL, Redis, or Stellar Horizon) is unreachable. Retry with exponential back-off. |
+
+---
+
+
+
 All Nova Rewards Soroban contracts use `panic!` with a string message as the error mechanism.
 Soroban surfaces these as `InvokeHostFunctionTrapped` with the panic message in the diagnostic events.
 

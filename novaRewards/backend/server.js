@@ -21,6 +21,7 @@ const {
   registry,
 } = require("./middleware/metricsMiddleware");
 const { tracingMiddleware } = require("./middleware/tracingMiddleware");
+const { globalErrorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
@@ -58,17 +59,7 @@ app.use(tracingMiddleware);
 app.use(metricsMiddleware);
 app.use(require('./middleware/auditMiddleware').auditMiddleware);
 
-// Handle JSON parse errors (malformed/empty body with Content-Type: application/json)
-app.use((err, req, res, next) => {
-  if (err.type === "entity.parse.failed") {
-    return res.status(400).json({
-      success: false,
-      error: "validation_error",
-      message: "Invalid JSON in request body",
-    });
-  }
-  next(err);
-});
+// JSON parse errors are handled by globalErrorHandler below
 
 // Rate limiting — fixed-window global baseline
 app.use(globalLimiter);
@@ -143,15 +134,11 @@ if (process.env.NODE_ENV !== "production") {
   app.get("/api/docs/openapi.json", (req, res) => res.json(swaggerSpec));
 }
 
-// Global error handler — returns consistent error envelope
-app.use((err, req, res, _next) => {
-  logger.error(err.message || 'Unhandled error', { stack: err.stack, code: err.code, status: err.status });
-  res.status(err.status || 500).json({
-    success: false,
-    error: err.code || "internal_error",
-    message: err.message || "An unexpected error occurred",
-  });
-});
+// 404 catch-all (must be after all routes)
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(globalErrorHandler);
 
 const PORT = process.env.PORT || 3001;
 
