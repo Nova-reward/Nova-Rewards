@@ -8,6 +8,7 @@ require("./db/index");
 
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const { connectRedis } = require("./lib/redis");
 const {
   startLeaderboardCacheWarmer,
@@ -20,7 +21,6 @@ const {
   registry,
 } = require("./middleware/metricsMiddleware");
 const { tracingMiddleware } = require("./middleware/tracingMiddleware");
-const { pinoMiddleware, getLogger } = require('./lib/logger');
 
 const app = express();
 
@@ -55,8 +55,6 @@ app.use(
 );
 app.use(express.json());
 app.use(tracingMiddleware);
-// Attach pino HTTP logger after correlationId is established
-app.use(pinoMiddleware());
 app.use(metricsMiddleware);
 app.use(require('./middleware/auditMiddleware').auditMiddleware);
 

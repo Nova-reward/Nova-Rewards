@@ -15,6 +15,7 @@ const {
   pauseCampaign,
 } = require('../services/sorobanService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { getNOVABalance } = require('../../blockchain/stellarService');
 const { getRedisClient } = require('../cache/redisClient');
 const { metrics } = require('../middleware/metricsMiddleware');
 const {
@@ -64,23 +65,36 @@ async function cacheDel(key) {
 // ---------------------------------------------------------------------------
 router.post('/', authenticateMerchant, validateCreateCampaign, async (req, res, next) => {
   try {
-    const { name, rewardRate, startDate, endDate } = req.body;
-    const merchantId = req.merchant.id;
+    const { name, tokenAmount, rewardPerAction, startDate, endDate } = req.body;
+    const merchant = req.merchant;
 
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      return res.status(400).json({ success: false, error: 'validation_error', message: 'name is required' });
+    // Balance check: merchant's NOVA balance must cover the tokenAmount
+    let balance;
+    try {
+      balance = await getNOVABalance(merchant.wallet_address);
+    } catch {
+      balance = '0';
     }
-
-    const { valid, errors } = validateCampaign({ rewardRate, startDate, endDate });
-    if (!valid) {
-      return res.status(400).json({ success: false, error: 'validation_error', message: errors.join('; ') });
+    if (parseFloat(balance) < Number(tokenAmount)) {
+      return res.status(400).json({
+        success: false,
+        error: 'insufficient_balance',
+        message: 'Merchant balance is less than tokenAmount',
+      });
     }
 
     // 1. Persist to DB first (on_chain_status = 'pending')
-    const campaign = await createCampaign({ merchantId, name: name.trim(), rewardRate, startDate, endDate });
+    const campaign = await createCampaign({
+      merchantId: merchant.id,
+      name: name.trim(),
+      tokenAmount,
+      rewardPerAction,
+      startDate,
+      endDate,
+    });
 
     // Invalidate merchant campaign list cache on creation
-    await cacheDel(`campaigns:merchant:${merchantId}`);
+    await cacheDel(`campaigns:merchant:${merchant.id}`);
 
     // 2. Submit to Soroban; roll back (mark failed) on error
     let confirmed;
