@@ -10,9 +10,7 @@ jobs:
   build-and-deploy-preview:
     runs-on: ubuntu-latest
     # Skip drafts and runs where Heroku is not configured
-    if: >
-      github.event.pull_request.draft == false &&
-      secrets.HEROKU_API_KEY != ''
+    if: ${{ github.event.pull_request.draft == false && secrets.HEROKU_API_KEY != '' }}
 
     steps:
       - name: Checkout code
@@ -128,9 +126,7 @@ jobs:
 
   cleanup-preview:
     runs-on: ubuntu-latest
-    if: >
-      github.event.action == 'closed' &&
-      secrets.HEROKU_API_KEY != ''
+    if: ${{ github.event.action == 'closed' && secrets.HEROKU_API_KEY != '' }}
 
     steps:
       - name: Destroy preview app

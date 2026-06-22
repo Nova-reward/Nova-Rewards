@@ -119,4 +119,4 @@ async function getLedgerEntries(...keys) {
   return result;
 }
 
-module.exports = { simulateTransaction, getContractData, getLedgerEntries };
+module.exports = { simulateTransaction, getContractData, getLedgerEntries, withFailover };
