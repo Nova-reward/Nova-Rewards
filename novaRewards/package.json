@@ -26,6 +26,9 @@
     "migrate": "node database/migrate.js",
     "migrate:rollback": "node database/migrate.js --rollback",
     "migrate:status": "node database/migrate.js --status",
+    "db:migrate": "npm run migrate",
+    "db:rollback": "npm run migrate:rollback",
+    "db:status": "npm run migrate:status",
     "reset-testnet": "node scripts/reset-testnet.js"
   },
   "dependencies": {
