@@ -14,8 +14,10 @@ const options = {
       license: { name: 'MIT' },
     },
     servers: [
-      { url: 'http://localhost:3001/api', description: 'Local development' },
-      { url: 'https://api.novarewards.io/api', description: 'Production' },
+      { url: 'http://localhost:3001/api/v1', description: 'Local development (current v1)' },
+      { url: 'https://api.novarewards.io/api/v1', description: 'Production (current v1)' },
+      { url: 'http://localhost:3001/api', description: 'Local development legacy alias for v1' },
+      { url: 'https://api.novarewards.io/api', description: 'Production legacy alias for v1' },
     ],
     components: {
       securitySchemes: {

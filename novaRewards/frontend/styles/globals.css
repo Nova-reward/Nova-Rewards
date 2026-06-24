@@ -303,7 +303,6 @@ td {
 
 /* ── Mobile ── */
 @media (max-width: 767px) {
-@media (max-width: 768px) {
   .container {
     padding: 1.25rem 0.75rem;
   }
@@ -397,6 +396,7 @@ td {
     font-size: 0.75rem;
     flex-shrink: 0;
     margin-right: 0.5rem;
+    }
   .header {
     padding: 0.75rem 1rem;
   }

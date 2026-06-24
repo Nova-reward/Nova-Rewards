@@ -4,10 +4,14 @@ info:
   version: 1.0.0
   description: API documentation for NovaRewards backend
 servers:
+  - url: http://localhost:3001/api/v1
+    description: Local development server (current v1)
+  - url: https://api.novarewards.com/api/v1
+    description: Production server (current v1)
   - url: http://localhost:3001/api
-    description: Local development server
+    description: Local development legacy alias for v1
   - url: https://api.novarewards.com/api
-    description: Production server
+    description: Production legacy alias for v1
 components:
   securitySchemes:
     bearerAuth:

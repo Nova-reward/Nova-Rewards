@@ -22,6 +22,12 @@ const {
 } = require("./middleware/metricsMiddleware");
 const { tracingMiddleware } = require("./middleware/tracingMiddleware");
 const { globalErrorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const {
+  legacyApi,
+  migrationGuideHandler,
+  versionedApi,
+  versionsHandler,
+} = require('./middleware/apiVersioning');
 
 // Import health check module
 const healthCheck = require('./health/healthCheck');
@@ -70,6 +76,8 @@ app.use(require('./middleware/auditMiddleware').auditMiddleware);
 app.use(globalLimiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/forgot-password", authLimiter);
+app.use("/api/v1/auth/login", authLimiter);
+app.use("/api/v1/auth/forgot-password", authLimiter);
 
 // Health / readiness checks — /health, /health/detailed, /ready
 app.use('/health', require('./routes/health'));
@@ -114,50 +122,64 @@ app.get("/metrics", async (req, res) => {
   }
 });
 
-// Routes (wired in as they are implemented)
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/merchants', require('./routes/merchants'));
-app.use('/api/campaigns', require('./routes/campaigns'));
-app.use('/api/campaigns', require('./routes/campaignAnalytics'));
-app.use('/api/rewards', require('./routes/rewards'));
-app.use('/api/redemptions', require('./routes/redemptions'));
-app.use('/api/transactions', require('./routes/transactions'));
-app.use('/api/trustline', require('./routes/trustline'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/users', require('./routes/onboarding'));
-app.use('/api/contract-events', require('./routes/contractEvents'));
-app.use('/api/admin/email-logs', require('./routes/emailLogs'));
-app.use('/api/leaderboard', require('./routes/leaderboard'));
-app.use('/api/admin', require('./routes/admin'));
-app.use('/api/drops', require('./routes/drops'));
-app.use('/api/analytics', require('./routes/analytics'));
-app.use('/api/notifications', require('./routes/notifications'));
-app.use("/api/auth", require("./routes/auth"));
-app.use("/api/auth", require("./routes/stellarAuth"));
-app.use("/api/merchants", require("./routes/merchants"));
-app.use("/api/campaigns", require("./routes/campaigns"));
-app.use("/api/rewards", require("./routes/rewards"));
-app.use("/api/redemptions", require("./routes/redemptions"));
-app.use("/api/transactions", require("./routes/transactions"));
-app.use("/api/transactions", require("./routes/stellarTransaction"));
-app.use("/api/fee-estimate", require("./routes/feeEstimate"));
-app.use("/api/trustline", require("./routes/trustline"));
-app.use("/api/users", require("./routes/users"));
-app.use("/api/wallet", require("./routes/wallet"));
-app.use("/api/contract-events", require("./routes/contractEvents"));
-app.use("/api/admin/email-logs", require("./routes/emailLogs"));
-app.use("/api/leaderboard", require("./routes/leaderboard"));
-app.use("/api/admin", require("./routes/admin"));
+function buildApiRouter() {
+  const router = express.Router();
 
-// Bull Board UI (requires admin auth)
-const { serverAdapter } = require('./jobs/queues');
-const { authenticateUser, requireAdmin } = require('./middleware/authenticateUser');
-app.use('/api/admin/queues', authenticateUser, requireAdmin, serverAdapter.getRouter());
-app.use("/api/drops", require("./routes/drops"));
-app.use("/api/search", require("./routes/search"));
-app.use("/api/webhooks", require("./routes/webhooks"));
-app.use("/api/merchants/:id/api-keys", require("./routes/merchantApiKeys"));
-app.use("/api/governance", require("./routes/governance"));
+  // Routes (wired in as they are implemented)
+  router.use('/auth', require('./routes/auth'));
+  router.use('/merchants', require('./routes/merchants'));
+  router.use('/campaigns', require('./routes/campaigns'));
+  router.use('/campaigns', require('./routes/campaignAnalytics'));
+  router.use('/rewards', require('./routes/rewards'));
+  router.use('/redemptions', require('./routes/redemptions'));
+  router.use('/transactions', require('./routes/transactions'));
+  router.use('/trustline', require('./routes/trustline'));
+  router.use('/users', require('./routes/users'));
+  router.use('/users', require('./routes/onboarding'));
+  router.use('/contract-events', require('./routes/contractEvents'));
+  router.use('/admin/email-logs', require('./routes/emailLogs'));
+  router.use('/leaderboard', require('./routes/leaderboard'));
+  router.use('/admin', require('./routes/admin'));
+  router.use('/drops', require('./routes/drops'));
+  router.use('/analytics', require('./routes/analytics'));
+  router.use('/notifications', require('./routes/notifications'));
+  router.use("/auth", require("./routes/auth"));
+  router.use("/auth", require("./routes/stellarAuth"));
+  router.use("/merchants", require("./routes/merchants"));
+  router.use("/campaigns", require("./routes/campaigns"));
+  router.use("/rewards", require("./routes/rewards"));
+  router.use("/redemptions", require("./routes/redemptions"));
+  router.use("/transactions", require("./routes/transactions"));
+  router.use("/transactions", require("./routes/stellarTransaction"));
+  router.use("/fee-estimate", require("./routes/feeEstimate"));
+  router.use("/trustline", require("./routes/trustline"));
+  router.use("/users", require("./routes/users"));
+  router.use("/wallet", require("./routes/wallet"));
+  router.use("/contract-events", require("./routes/contractEvents"));
+  router.use("/admin/email-logs", require("./routes/emailLogs"));
+  router.use("/leaderboard", require("./routes/leaderboard"));
+  router.use("/admin", require("./routes/admin"));
+
+  // Bull Board UI (requires admin auth)
+  // We will mount it using the serverAdapter from jobs/queues.js
+  const { serverAdapter } = require('./jobs/queues');
+  const { authenticateUser, requireAdmin } = require('./middleware/authenticateUser');
+  router.use('/admin/queues', authenticateUser, requireAdmin, serverAdapter.getRouter());
+  router.use("/drops", require("./routes/drops"));
+  router.use("/search", require("./routes/search"));
+  router.use("/webhooks", require("./routes/webhooks"));
+  router.use("/merchants/:id/api-keys", require("./routes/merchantApiKeys"));
+  router.use("/governance", require("./routes/governance"));
+
+  return router;
+}
+
+app.get('/api/versions', legacyApi, versionsHandler);
+app.get('/api/v1/versions', versionedApi('v1'), versionsHandler);
+app.get('/api/versioning', legacyApi, migrationGuideHandler);
+app.get('/api/v1/versioning', versionedApi('v1'), migrationGuideHandler);
+app.use('/api/v1', versionedApi('v1'), buildApiRouter());
+app.use(/^\/api(?!\/v\d+(?:\/|$))/, legacyApi, buildApiRouter());
 
 // Swagger/OpenAPI docs
 const swaggerUi = require("swagger-ui-express");
@@ -165,6 +187,8 @@ const swaggerSpec = require("./swagger");
 if (process.env.NODE_ENV !== "production") {
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   app.get("/api/docs/openapi.json", (req, res) => res.json(swaggerSpec));
+  app.use("/api/v1/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.get("/api/v1/docs/openapi.json", (req, res) => res.json(swaggerSpec));
 }
 
 // 404 catch-all (must be after all routes)

@@ -1,12 +1,30 @@
 # Nova Rewards API Reference
 
-**Base URL:** `http://localhost:3001/api` (dev) · `https://api.novarewards.io/api` (prod)
+**Base URL:** `http://localhost:3001/api/v1` (dev) · `https://api.novarewards.io/api/v1` (prod)
 
-**OpenAPI spec:** [`openapi.json`](./openapi.json) — import into Postman or view at `/api/docs` when the server is running.
+**OpenAPI spec:** [`openapi.json`](./openapi.json) — import into Postman or view at `/api/v1/docs` when the server is running.
+
+**Legacy compatibility:** unversioned `/api/*` routes still resolve to v1 for existing clients, but they now return `Deprecation`, `Sunset`, `X-API-Version`, and `X-API-Migration-Guide` headers. New clients should use `/api/v1/*`.
 
 ---
 
 ## Authentication
+
+## API versioning
+
+NovaRewards uses URL-based API versioning. The current version is `v1`.
+
+| Route | Status | Notes |
+|---|---|---|
+| `/api/v1/*` | Current | Use this for all new integrations. |
+| `/api/*` | Legacy alias for v1 | Backward compatible, deprecated, sunset target `2027-01-01`. |
+| `/api/versions` | Discovery | Returns supported versions, current version, and migration policy. |
+
+Versioned responses include `X-API-Version: v1`. Legacy unversioned responses also include `Deprecation: true`, `Sunset: 2027-01-01`, `X-API-Deprecated: true`, and `X-API-Migration-Guide: /api/versioning`.
+
+Migration from the legacy path is mechanical: prefix existing `/api` URLs with `/api/v1`. For example, `POST /api/auth/login` becomes `POST /api/v1/auth/login`; request bodies, authentication headers, and response schemas are unchanged.
+
+---
 
 ### JWT Bearer (user endpoints)
 
