@@ -3,15 +3,17 @@
 //! Tests for concurrent staking, cooldown enforcement, and reward claiming.
 //! Covers acceptance criteria for issue #551.
 
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient, SECONDS_PER_YEAR};
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient, SECONDS_PER_YEAR};
 use soroban_sdk::testutils::{Address as _, Events, Ledger as _};
 use soroban_sdk::{Address, Env};
 
 fn deploy(env: &Env) -> NovaRewardsContractClient {
     let admin = Address::generate(env);
+    let nova_token = Address::generate(env);
+    let event_config = EventConfig { schema_version: 1 };
     let id = env.register_contract(None, NovaRewardsContract);
     let client = NovaRewardsContractClient::new(env, &id);
-    client.initialize(&admin);
+    client.initialize(&admin, &nova_token, &event_config);
     client
 }
 

@@ -7,13 +7,15 @@ use soroban_sdk::{
     Address, BytesN, Env, IntoVal, Symbol,
 };
 
-use nova_rewards::NovaRewardsContractClient;
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient};
 
 fn deploy(env: &Env) -> (NovaRewardsContractClient, Address) {
     let admin = Address::generate(env);
+    let nova_token = Address::generate(env);
+    let event_config = EventConfig { schema_version: 1 };
     let contract_id = env.register_contract(None, NovaRewardsContract);
     let client = NovaRewardsContractClient::new(env, &contract_id);
-    client.initialize(&admin);
+    client.initialize(&admin, &nova_token, &event_config);
     (client, admin)
 }
 
@@ -145,12 +147,14 @@ fn test_sequential_upgrades_each_need_migrate() {
 }
 
 #[test]
-#[should_panic(expected = "AlreadyInitialized")]
+#[should_panic(expected = "already initialized")]
 fn test_reinitialize_is_blocked() {
     let env = Env::default();
     env.mock_all_auths();
 
     let (client, admin) = deploy(&env);
+    let nova_token = Address::generate(&env);
+    let event_config = EventConfig { schema_version: 1 };
     // second call must revert with AlreadyInitialized
-    client.initialize(&admin);
+    client.initialize(&admin, &nova_token, &event_config);
 }

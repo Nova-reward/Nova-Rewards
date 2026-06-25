@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use soroban_sdk::{testutils::Address as _, Address, Env};
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient};
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient};
 
 #[test]
 fn test_state_consistency_invariants() {
@@ -9,9 +9,11 @@ fn test_state_consistency_invariants() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
+    let nova_token = Address::generate(&env);
+    let event_config = EventConfig { schema_version: 1 };
     let rewards_id = env.register_contract(None, NovaRewardsContract);
     let client = NovaRewardsContractClient::new(&env, &rewards_id);
-    client.initialize(&admin);
+    client.initialize(&admin, &nova_token, &event_config);
 
     let mut users = vec![];
     let mut total_minted_system = 0_i128;
