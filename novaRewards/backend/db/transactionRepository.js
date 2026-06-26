@@ -495,6 +495,74 @@ async function getTransactionReport(filters = {}) {
 }
 
 /**
+ * Cursor-paginated transaction history scoped to an authenticated user's wallet.
+ * Issue #866 — GET /api/transactions
+ *
+ * Cursor is a base64-encoded JSON string: { createdAt, id }
+ *
+ * @param {string} walletAddress
+ * @param {{ limit?: number, cursor?: string, direction?: 'asc'|'desc' }} opts
+ * @returns {Promise<{ data: object[], nextCursor: string|null, hasMore: boolean }>}
+ */
+async function getUserTransactionsCursor(walletAddress, { limit = 25, cursor, direction = 'desc' } = {}) {
+  const safeLimit = Math.min(Math.max(1, parseInt(limit, 10) || 25), 100);
+  const isAsc = direction === 'asc';
+  const params = [walletAddress];
+  let cursorClause = '';
+
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf8'));
+      const { createdAt, id } = decoded;
+      if (createdAt && id) {
+        params.push(createdAt, parseInt(id, 10));
+        cursorClause = isAsc
+          ? `AND (t.created_at, t.id) > ($${params.length - 1}::timestamptz, $${params.length})`
+          : `AND (t.created_at, t.id) < ($${params.length - 1}::timestamptz, $${params.length})`;
+      }
+    } catch (_) {
+      // invalid cursor — start from beginning
+    }
+  }
+
+  const orderDir = isAsc ? 'ASC' : 'DESC';
+
+  const result = await query(
+    `SELECT t.id,
+            t.tx_hash,
+            t.tx_type,
+            t.amount,
+            t.from_wallet,
+            t.to_wallet,
+            t.status,
+            t.created_at,
+            t.updated_at,
+            c.name AS campaign_name,
+            c.id   AS campaign_id
+     FROM transactions t
+     LEFT JOIN campaigns c ON t.campaign_id = c.id
+     WHERE (t.from_wallet = $1 OR t.to_wallet = $1)
+       ${cursorClause}
+     ORDER BY t.created_at ${orderDir}, t.id ${orderDir}
+     LIMIT $${params.length + 1}`,
+    [...params, safeLimit + 1]
+  );
+
+  const rows = result.rows;
+  const hasMore = rows.length > safeLimit;
+  const data = hasMore ? rows.slice(0, safeLimit) : rows;
+
+  const nextCursor = hasMore
+    ? Buffer.from(JSON.stringify({
+        createdAt: data[data.length - 1].created_at,
+        id: data[data.length - 1].id,
+      })).toString('base64')
+    : null;
+
+  return { data, nextCursor, hasMore };
+}
+
+/**
  * Cursor-based rewards history for a user.
  * Cursor is the base64-encoded `created_at::id` of the last seen row.
  *
@@ -555,6 +623,7 @@ module.exports = {
   getTransactionsByUser,
   getTransactionHistory,
   getRewardsHistoryCursor,
+  getUserTransactionsCursor,
   updateTransaction,
   processRefund,
   reconcileTransactions,
