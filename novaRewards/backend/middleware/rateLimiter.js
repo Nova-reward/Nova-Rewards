@@ -21,9 +21,12 @@ const { client: redisClient } = require('../lib/redis');
 const { slidingRateLimiter } = require('./slidingRateLimiter');
 const {
   RATE_LIMIT_WINDOW_MS,
+  RL_AUTH_WINDOW_MS,
   RATE_LIMIT_RETRY_AFTER_SECS,
   RL_GLOBAL_MAX,
   RL_AUTH_MAX,
+  RL_LOGIN_MAX,
+  RL_REFRESH_MAX,
   RL_USER_MAX,
   RL_SEARCH_MAX,
   RL_WEBHOOK_MAX,
@@ -154,6 +157,28 @@ const slidingAdmin = slidingRateLimiter({
   keyBy:    'user',
 });
 
+// ---------------------------------------------------------------------------
+// Auth-specific sliding-window limiters (15-minute window) — Issue #861
+// ---------------------------------------------------------------------------
+
+/** Login endpoint: 10 attempts per 15 minutes per IP. */
+const loginLimiter = slidingRateLimiter({
+  prefix:   'sw:login',
+  windowMs: RL_AUTH_WINDOW_MS,
+  max:      parseInt(process.env.RL_LOGIN_MAX) || RL_LOGIN_MAX,
+  keyBy:    'ip',
+  message:  `Too many login attempts. Retry after ${Math.ceil(RL_AUTH_WINDOW_MS / 1000)} seconds.`,
+});
+
+/** Token refresh endpoint: 30 attempts per 15 minutes per IP. */
+const refreshLimiter = slidingRateLimiter({
+  prefix:   'sw:refresh',
+  windowMs: RL_AUTH_WINDOW_MS,
+  max:      parseInt(process.env.RL_REFRESH_MAX) || RL_REFRESH_MAX,
+  keyBy:    'ip',
+  message:  `Too many token refresh attempts. Retry after ${Math.ceil(RL_AUTH_WINDOW_MS / 1000)} seconds.`,
+});
+
 module.exports = {
   // fixed-window (legacy)
   globalLimiter,
@@ -167,4 +192,7 @@ module.exports = {
   webhookApiKeyLimiter,
   slidingRewards,
   slidingAdmin,
+  // auth-specific (15-minute window)
+  loginLimiter,
+  refreshLimiter,
 };

@@ -15,7 +15,7 @@ const {
 } = require("./jobs/leaderboardCacheWarmer");
 const { startDailyLoginBonusJob } = require("./jobs/dailyLoginBonus");
 const { startWebhookRetryJob } = require("./jobs/webhookRetry");
-const { globalLimiter, authLimiter } = require("./middleware/rateLimiter");
+const { globalLimiter, authLimiter, loginLimiter, refreshLimiter } = require("./middleware/rateLimiter");
 const {
   metricsMiddleware,
   registry,
@@ -72,11 +72,15 @@ app.use(require('./middleware/auditMiddleware').auditMiddleware);
 
 // JSON parse errors are handled by globalErrorHandler below
 
-// Rate limiting — fixed-window global baseline
+// Rate limiting — fixed-window global baseline (100 req/min per IP)
 app.use(globalLimiter);
-app.use("/api/auth/login", authLimiter);
+
+// Auth-specific sliding-window limiters (15-minute window, Redis-backed)
+app.use("/api/auth/login",           loginLimiter);   // 10 req/15min per IP
+app.use("/api/v1/auth/login",        loginLimiter);
+app.use("/api/auth/refresh",         refreshLimiter); // 30 req/15min per IP
+app.use("/api/v1/auth/refresh",      refreshLimiter);
 app.use("/api/auth/forgot-password", authLimiter);
-app.use("/api/v1/auth/login", authLimiter);
 app.use("/api/v1/auth/forgot-password", authLimiter);
 
 // Health / readiness checks — /health, /health/detailed, /ready

@@ -30,6 +30,9 @@ const MS_PER_DAY = 24 * MS_PER_HOUR;
 /** Standard sliding-window size used by most rate limiters (60 seconds). */
 const RATE_LIMIT_WINDOW_MS = MS_PER_MINUTE;
 
+/** Longer sliding-window for authentication endpoints (15 minutes). */
+const RL_AUTH_WINDOW_MS = 15 * MS_PER_MINUTE;
+
 // ---------------------------------------------------------------------------
 // Rate-limit max requests (requests per window)
 // ---------------------------------------------------------------------------
@@ -39,6 +42,12 @@ const RL_GLOBAL_MAX = 100;
 
 /** Auth endpoint cap per window (login, forgot-password). */
 const RL_AUTH_MAX = 5;
+
+/** Login endpoint cap per 15-minute window per IP. */
+const RL_LOGIN_MAX = 10;
+
+/** Token refresh endpoint cap per 15-minute window per IP. */
+const RL_REFRESH_MAX = 30;
 
 /** Authenticated-user cap per window. */
 const RL_USER_MAX = 200;
@@ -95,8 +104,11 @@ module.exports = {
   MS_PER_DAY,
   // rate limits
   RATE_LIMIT_WINDOW_MS,
+  RL_AUTH_WINDOW_MS,
   RL_GLOBAL_MAX,
   RL_AUTH_MAX,
+  RL_LOGIN_MAX,
+  RL_REFRESH_MAX,
   RL_USER_MAX,
   RL_SEARCH_MAX,
   RL_WEBHOOK_MAX,
