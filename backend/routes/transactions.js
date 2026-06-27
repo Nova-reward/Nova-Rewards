@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
 const StellarSdk = require('@stellar/stellar-sdk');
+const { PrismaClient } = require('@prisma/client');
+const {
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+  MIN_PAGE_SIZE,
+} = require('../../novaRewards/backend/config/constants');
+
+const prisma = new PrismaClient();
 
 // PostgreSQL connection pool
 const pool = new Pool({
@@ -25,12 +33,12 @@ router.get('/transactions/:walletAddress', async (req, res) => {
         const { walletAddress } = req.params;
         
         // Parse pagination parameters with defaults and validation
-        let limit = parseInt(req.query.limit) || 20;
+        let limit = parseInt(req.query.limit) || DEFAULT_PAGE_SIZE;
         const offset = parseInt(req.query.offset) || 0;
-        
-        // Validate limit (between 1 and 100)
-        if (limit < 1) limit = 1;
-        if (limit > 100) limit = 100;
+
+        // Validate limit (between MIN_PAGE_SIZE and MAX_PAGE_SIZE)
+        if (limit < MIN_PAGE_SIZE) limit = MIN_PAGE_SIZE;
+        if (limit > MAX_PAGE_SIZE) limit = MAX_PAGE_SIZE;
         
         // Validate offset (can't be negative)
         if (offset < 0) {
@@ -140,6 +148,172 @@ router.get('/transactions/:walletAddress', async (req, res) => {
             message: 'Failed to fetch transactions',
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
+    }
+});
+
+/**
+ * POST /api/transactions/record
+ * Record a transaction - verifies on Horizon before saving locally
+ */
+router.post('/transactions/record', async (req, res) => {
+    try {
+        const { transactionHash, walletAddress, amount, operationType, memo } = req.body;
+
+        // Validate required fields
+        if (!transactionHash || !walletAddress || !amount || !operationType) {
+            return res.status(400).json({ 
+                error: 'Missing required fields',
+                required: ['transactionHash', 'walletAddress', 'amount', 'operationType']
+            });
+        }
+
+        // Validate wallet address format
+        if (!StellarSdk.StrKey.isValidEd25519PublicKey(walletAddress)) {
+            return res.status(400).json({ 
+                error: 'Invalid wallet address format' 
+            });
+        }
+
+        // Step 1: Verify transaction exists on Horizon
+        let horizonTransaction = null;
+        try {
+            horizonTransaction = await server.transactions().transaction(transactionHash).call();
+        } catch (horizonError) {
+            // Transaction not found on Horizon
+            return res.status(400).json({
+                error: 'Transaction not found on Stellar network',
+                message: 'The transaction hash does not exist on Horizon. Please verify the hash and try again.',
+                transactionHash: transactionHash
+            });
+        }
+
+        // Step 2: Verify the transaction involves the wallet address
+        const isSourceAccount = horizonTransaction.source_account === walletAddress;
+        const isInvolved = horizonTransaction.operations?.some(op => 
+            op.source_account === walletAddress || 
+            (op.account === walletAddress) ||
+            (op.from === walletAddress) ||
+            (op.to === walletAddress)
+        );
+
+        if (!isSourceAccount && !isInvolved) {
+            return res.status(400).json({
+                error: 'Transaction not related to wallet',
+                message: 'The transaction hash does not involve the provided wallet address.',
+                transactionHash: transactionHash,
+                walletAddress: walletAddress
+            });
+        }
+
+        // Step 3: Check if transaction already exists in local database
+        const existingCheck = await pool.query(
+            'SELECT id FROM transactions WHERE transaction_hash = $1',
+            [transactionHash]
+        );
+
+        if (existingCheck.rows.length > 0) {
+            return res.status(409).json({
+                error: 'Transaction already recorded',
+                message: 'This transaction has already been recorded in the database.',
+                transactionHash: transactionHash
+            });
+        }
+
+        // Step 4: Record the transaction in PostgreSQL
+        const result = await pool.query(
+            `INSERT INTO transactions 
+             (transaction_hash, wallet_address, amount, operation_type, memo, ledger, created_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7) 
+             RETURNING *`,
+            [
+                transactionHash,
+                walletAddress,
+                amount,
+                operationType,
+                memo || null,
+                horizonTransaction.ledger,
+                horizonTransaction.created_at
+            ]
+        );
+
+        // Step 5: Return success response
+        res.status(201).json({
+            success: true,
+            message: 'Transaction verified and recorded successfully',
+            transaction: {
+                id: result.rows[0].id,
+                hash: result.rows[0].transaction_hash,
+                walletAddress: result.rows[0].wallet_address,
+                amount: result.rows[0].amount,
+                operationType: result.rows[0].operation_type,
+                memo: result.rows[0].memo,
+                ledger: result.rows[0].ledger,
+                createdAt: result.rows[0].created_at
+            },
+            horizonVerification: {
+                verified: true,
+                sourceAccount: horizonTransaction.source_account,
+                successful: horizonTransaction.successful,
+                ledger: horizonTransaction.ledger
+            }
+        });
+
+    } catch (error) {
+        console.error('Error recording transaction:', error);
+        res.status(500).json({ 
+            error: 'Server error', 
+            message: 'Failed to record transaction',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+/**
+ * GET /api/users/:userId/transactions
+ * Get reward transactions for a user with pagination and filters
+ */
+router.get('/users/:userId/transactions', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { limit = DEFAULT_PAGE_SIZE, offset = 0, type, dateFrom, dateTo, campaignId } = req.query;
+
+        const where = { userId };
+        if (type) where.type = type;
+        if (campaignId) where.campaignId = campaignId;
+        if (dateFrom || dateTo) {
+            where.createdAt = {};
+            if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+            if (dateTo) where.createdAt.lte = new Date(dateTo);
+        }
+
+        // Get issuances
+        const issuances = await prisma.rewardIssuance.findMany({
+            where,
+            include: { campaign: true },
+            orderBy: { createdAt: 'desc' },
+            take: parseInt(limit),
+            skip: parseInt(offset),
+        });
+
+        // Get redemptions
+        const redemptions = await prisma.redemption.findMany({
+            where,
+            include: { campaign: true },
+            orderBy: { createdAt: 'desc' },
+            take: parseInt(limit),
+            skip: parseInt(offset),
+        });
+
+        // Combine and sort
+        const transactions = [
+            ...issuances.map(i => ({ ...i, type: 'issuance' })),
+            ...redemptions.map(r => ({ ...r, type: 'redemption' })),
+        ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, parseInt(limit));
+
+        res.json(transactions);
+    } catch (error) {
+        console.error('Error fetching user transactions:', error);
+        res.status(500).json({ error: 'Failed to fetch transactions' });
     }
 });
 

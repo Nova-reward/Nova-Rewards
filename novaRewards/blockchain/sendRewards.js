@@ -6,6 +6,7 @@ const {
   Memo,
   Networks,
   BASE_FEE,
+  StrKey,
 } = require('stellar-sdk');
 const { server, NOVA } = require('./stellarService');
 const { verifyTrustline } = require('./trustline');
@@ -27,6 +28,15 @@ const NETWORK_PASSPHRASE =
  * @throws {Error} with error.code set to 'no_trustline' or 'insufficient_balance'
  */
 async function distributeRewards({ toWallet, amount }) {
+  // 0. Validate recipient address before any network calls
+  if (!toWallet || !StrKey.isValidEd25519PublicKey(toWallet)) {
+    const err = new Error(
+      `Invalid Stellar address: "${toWallet}". Must be a valid Ed25519 public key.`
+    );
+    err.code = 'invalid_address';
+    throw err;
+  }
+
   // 1. Verify recipient has a NOVA trustline before attempting payment
   const { exists } = await verifyTrustline(toWallet);
   if (!exists) {
@@ -47,8 +57,8 @@ async function distributeRewards({ toWallet, amount }) {
   const novaBalance = distributionAccount.balances.find(
     (b) =>
       b.asset_type !== 'native' &&
-      b.asset_code === 'NOVA' &&
-      b.asset_issuer === process.env.ISSUER_PUBLIC
+      b.asset_code === NOVA.code &&
+      b.asset_issuer === NOVA.issuer
   );
   const available = novaBalance ? parseFloat(novaBalance.balance) : 0;
   if (available < parseFloat(amount)) {

@@ -1,0 +1,298 @@
+/**
+ * Nova Rewards Design Tokens
+ * CSS custom properties for use outside Tailwind (plain CSS, inline styles, etc.)
+ * Mirrors the values in tailwind.config.ts.
+ *
+ * Usage:
+ *   color: var(--color-primary-600);
+ *   font-size: var(--text-h1);
+ *   margin: var(--space-4);
+ */
+
+:root {
+  /* ─── Primary (violet) ─────────────────────────────────────── */
+  --color-primary-50:  #f5f3ff;
+  --color-primary-100: #ede9fe;
+  --color-primary-200: #ddd6fe;
+  --color-primary-300: #c4b5fd;
+  --color-primary-400: #a78bfa;
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #7c3aed;
+  --color-primary-700: #6d28d9;
+  --color-primary-800: #5b21b6;
+  --color-primary-900: #4c1d95;
+  --color-primary-950: #2e1065;
+
+  /* ─── Secondary (indigo) ───────────────────────────────────── */
+  --color-secondary-50:  #eef2ff;
+  --color-secondary-100: #e0e7ff;
+  --color-secondary-200: #c7d2fe;
+  --color-secondary-300: #a5b4fc;
+  --color-secondary-400: #818cf8;
+  --color-secondary-500: #6366f1;
+  --color-secondary-600: #4f46e5;
+  --color-secondary-700: #4338ca;
+  --color-secondary-800: #3730a3;
+  --color-secondary-900: #312e81;
+  --color-secondary-950: #1e1b4b;
+
+  /* ─── Neutral ──────────────────────────────────────────────── */
+  --color-neutral-50:  #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #020617;
+
+  /* ─── Success ──────────────────────────────────────────────── */
+  --color-success-50:  #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-500: #22c55e;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+
+  /* ─── Warning ──────────────────────────────────────────────── */
+  --color-warning-50:  #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+
+  /* ─── Error ────────────────────────────────────────────────── */
+  --color-error-50:  #fef2f2;
+  --color-error-100: #fee2e2;
+  --color-error-500: #ef4444;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
+
+  /* ─── Info ─────────────────────────────────────────────────── */
+  --color-info-50:  #eff6ff;
+  --color-info-100: #dbeafe;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+  --color-info-700: #1d4ed8;
+
+  /* ─── Font families ────────────────────────────────────────── */
+  --font-sans:  'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Merriweather', ui-serif, Georgia, serif;
+  --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* ─── Type scale — raw size tokens ────────────────────────── */
+  --text-xs:   0.75rem;   /* 12px */
+  --text-sm:   0.875rem;  /* 14px */
+  --text-base: 1rem;      /* 16px */
+  --text-lg:   1.125rem;  /* 18px */
+  --text-xl:   1.25rem;   /* 20px */
+  --text-2xl:  1.5rem;    /* 24px */
+  --text-3xl:  1.875rem;  /* 30px */
+  --text-4xl:  2.25rem;   /* 36px */
+  --text-5xl:  3rem;      /* 48px */
+
+  /* ─── Type scale — semantic roles ─────────────────────────── */
+  /* h1: page-level hero heading */
+  --text-h1:          var(--text-4xl);   /* 36px */
+  --leading-h1:       1.1;
+  --tracking-h1:      -0.02em;
+  --weight-h1:        700;
+
+  /* h2: section heading */
+  --text-h2:          var(--text-3xl);   /* 30px */
+  --leading-h2:       1.2;
+  --tracking-h2:      -0.015em;
+  --weight-h2:        700;
+
+  /* h3: subsection / card heading */
+  --text-h3:          var(--text-2xl);   /* 24px */
+  --leading-h3:       1.25;
+  --tracking-h3:      -0.01em;
+  --weight-h3:        600;
+
+  /* h4: group label / panel heading */
+  --text-h4:          var(--text-xl);    /* 20px */
+  --leading-h4:       1.3;
+  --tracking-h4:      -0.005em;
+  --weight-h4:        600;
+
+  /* h5: minor heading */
+  --text-h5:          var(--text-lg);    /* 18px */
+  --leading-h5:       1.4;
+  --tracking-h5:      0em;
+  --weight-h5:        600;
+
+  /* h6: smallest heading */
+  --text-h6:          var(--text-base);  /* 16px */
+  --leading-h6:       1.5;
+  --tracking-h6:      0em;
+  --weight-h6:        600;
+
+  /* body-lg: lead paragraph */
+  --text-body-lg:     var(--text-lg);    /* 18px */
+  --leading-body-lg:  1.7;
+  --tracking-body-lg: 0em;
+  --weight-body-lg:   400;
+
+  /* body: primary body copy */
+  --text-body:        var(--text-base);  /* 16px */
+  --leading-body:     1.6;
+  --tracking-body:    0em;
+  --weight-body:      400;
+
+  /* body-sm: secondary / dense body */
+  --text-body-sm:     var(--text-sm);    /* 14px */
+  --leading-body-sm:  1.5;
+  --tracking-body-sm: 0em;
+  --weight-body-sm:   400;
+
+  /* caption: image captions, timestamps */
+  --text-caption:     var(--text-xs);    /* 12px */
+  --leading-caption:  1.4;
+  --tracking-caption: 0.01em;
+  --weight-caption:   400;
+
+  /* label: form labels, badge text */
+  --text-label:       var(--text-sm);    /* 14px */
+  --leading-label:    1.25;
+  --tracking-label:   0.01em;
+  --weight-label:     500;
+
+  /* ─── Font weights ─────────────────────────────────────────── */
+  --font-light:    300;
+  --font-normal:   400;
+  --font-medium:   500;
+  --font-semibold: 600;
+  --font-bold:     700;
+
+  /* ─── Line heights ─────────────────────────────────────────── */
+  --leading-tight:   1.25;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.75;
+
+  /* ─── Letter spacing ───────────────────────────────────────── */
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0em;
+  --tracking-wide:   0.01em;
+  --tracking-wider:  0.05em;
+  --tracking-widest: 0.08em;
+
+  /* ─── Spacing (4px base unit) ──────────────────────────────── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+  --space-40: 160px;
+  --space-48: 192px;
+  --space-64: 256px;
+
+  /* ─── Semantic color aliases — light mode ──────────────────── */
+  --color-bg:          var(--color-neutral-50);
+  --color-surface:     #ffffff;
+  --color-surface-2:   var(--color-neutral-100);
+  --color-border:      var(--color-neutral-200);
+  --color-text:        var(--color-neutral-900);
+  --color-text-muted:  var(--color-neutral-500);
+  --color-accent:      var(--color-primary-600);
+
+  /* Semantic feedback aliases */
+  --color-success:     var(--color-success-600);
+  --color-warning:     var(--color-warning-500);
+  --color-error:       var(--color-error-600);
+  --color-info:        var(--color-info-600);
+
+  /* Badge aliases */
+  --color-badge-success-bg:   var(--color-success-100);
+  --color-badge-success-text: var(--color-success-700);
+  --color-badge-warning-bg:   var(--color-warning-100);
+  --color-badge-warning-text: var(--color-warning-700);
+  --color-badge-error-bg:     var(--color-error-100);
+  --color-badge-error-text:   var(--color-error-700);
+  --color-badge-neutral-bg:   var(--color-neutral-200);
+  /* #3d4f63 on #e2e8f0 → 5.0:1 — fixes ISSUE-CC-06 (was neutral-600 #475569, 4.3:1) */
+  --color-badge-neutral-text: #3d4f63;
+}
+
+/* ─── Dark mode overrides ──────────────────────────────────────── */
+.dark {
+  /* Surface & background */
+  --color-bg:         #0f0f1a;
+  --color-surface:    #1a1a2e;
+  --color-surface-2:  #0f0f1a;
+  --color-border:     #2d2d4e;
+
+  /* Text */
+  --color-text:       var(--color-neutral-100);
+  /* #a8b8cc on #0f0f1a → 5.1:1 — fixes ISSUE-CC-03 (was neutral-400 #94a3b8, 3.5:1) */
+  --color-text-muted: #a8b8cc;
+
+  /* Accent — lighter shade for dark backgrounds */
+  --color-accent:     var(--color-primary-400);
+
+  /* Semantic feedback — lighter shades for dark backgrounds */
+  --color-success:    var(--color-success-500);
+  --color-warning:    var(--color-warning-500);
+  --color-error:      var(--color-error-500);
+  --color-info:       var(--color-info-500);
+
+  /* Primary palette dark overrides */
+  --color-primary-50:  #2e1065;
+  --color-primary-100: #4c1d95;
+  --color-primary-200: #5b21b6;
+  --color-primary-300: #6d28d9;
+  --color-primary-400: #7c3aed;
+  --color-primary-500: #8b5cf6;
+  --color-primary-600: #a78bfa;
+  --color-primary-700: #c4b5fd;
+  --color-primary-800: #ddd6fe;
+  --color-primary-900: #ede9fe;
+  --color-primary-950: #f5f3ff;
+
+  /* Secondary palette dark overrides */
+  --color-secondary-50:  #1e1b4b;
+  --color-secondary-100: #312e81;
+  --color-secondary-200: #3730a3;
+  --color-secondary-300: #4338ca;
+  --color-secondary-400: #4f46e5;
+  --color-secondary-500: #6366f1;
+  --color-secondary-600: #818cf8;
+  --color-secondary-700: #a5b4fc;
+  --color-secondary-800: #c7d2fe;
+  --color-secondary-900: #e0e7ff;
+  --color-secondary-950: #eef2ff;
+
+  /* Neutral palette dark overrides */
+  --color-neutral-50:  #020617;
+  --color-neutral-100: #0f172a;
+  --color-neutral-200: #1e293b;
+  --color-neutral-300: #334155;
+  --color-neutral-400: #475569;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #94a3b8;
+  --color-neutral-700: #cbd5e1;
+  --color-neutral-800: #e2e8f0;
+  --color-neutral-900: #f1f5f9;
+  --color-neutral-950: #f8fafc;
+
+  /* Badge aliases dark */
+  --color-badge-success-bg:   #064e3b;
+  --color-badge-success-text: var(--color-success-500);
+  --color-badge-warning-bg:   #451a03;
+  --color-badge-warning-text: #fde68a;
+  --color-badge-error-bg:     #450a0a;
+  --color-badge-error-text:   var(--color-error-500);
+  --color-badge-neutral-bg:   #1e293b;
+  /* #94a3b8 on #1e293b → 4.6:1 — replaces neutral-400 dark (#475569 on #1e293b → 1.6:1 FAIL) */
+  --color-badge-neutral-text: #94a3b8;
+}

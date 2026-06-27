@@ -1,0 +1,18 @@
+{
+  "name": "@nova-rewards/contracts-sdk",
+  "version": "1.0.0",
+  "description": "TypeScript bindings for Nova Rewards Soroban smart contracts.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "peerDependencies": {
+    "@stellar/stellar-sdk": ">=12.0.0"
+  }
+}

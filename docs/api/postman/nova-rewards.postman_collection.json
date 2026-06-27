@@ -1,0 +1,163 @@
+{
+  "info": {
+    "name": "Nova Rewards API",
+    "description": "Postman collection for the Nova Rewards merchant API. Import this file and set the `baseUrl` and `apiKey` collection variables before running requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "nova-rewards-merchant-v1"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://sandbox.nova-rewards.io", "type": "string" },
+    { "key": "apiKey",  "value": "nova_test_sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "type": "string" }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key",   "value": "x-api-key",    "type": "string" },
+      { "key": "value", "value": "{{apiKey}}",    "type": "string" },
+      { "key": "in",    "value": "header",        "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Merchant",
+      "item": [
+        {
+          "name": "Register Merchant",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/merchants/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Coffee\",\n  \"wallet_address\": \"GDQGIY5T5QULPD7V54LJODKC5CMKPNGTWVEMYBQH4LV6STKI6IGO543K\",\n  \"business_category\": \"food_and_beverage\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Rotate API Key",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/merchants/rotate-key",
+            "header": [{ "key": "Content-Type", "value": "application/json" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Campaigns",
+      "item": [
+        {
+          "name": "Create Campaign",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/campaigns",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Summer Loyalty Boost\",\n  \"reward_rate\": 0.05,\n  \"start_date\": \"2026-06-01\",\n  \"end_date\": \"2026-08-31\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Campaign",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/campaigns/{{campaignId}}"
+          }
+        },
+        {
+          "name": "List Campaigns",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/campaigns",
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Campaign",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/campaigns/{{campaignId}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Register Webhook",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/webhooks",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://yourapp.com/webhooks/nova\",\n  \"events\": [\"reward.issued\", \"campaign.expired\"],\n  \"secret\": \"your_webhook_secret\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rewards",
+      "item": [
+        {
+          "name": "Trigger Reward",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/rewards/issue",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": 42,\n  \"campaign_id\": 7,\n  \"purchase_amount\": 50.00\n}"
+            }
+          }
+        },
+        {
+          "name": "List Merchant Rewards",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/rewards",
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Campaign Rewards",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/campaigns/{{campaignId}}/rewards"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "auth": { "type": "noauth" }
+          }
+        }
+      ]
+    }
+  ]
+}

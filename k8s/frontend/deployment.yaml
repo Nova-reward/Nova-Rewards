@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nova-rewards-frontend
+  namespace: nova-rewards
+  annotations:
+    # Automated rollback: kubectl rollout undo deployment/nova-rewards-frontend -n nova-rewards
+    # If new pods fail readiness within 5 minutes the deployment stalls; run the above to revert.
+    deployment.kubernetes.io/revision: "1"
+    nova-rewards/rollback-window: "5m"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nova-rewards-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: nova-rewards-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: nova-rewards-frontend:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: nova-rewards-config
+            - secretRef:
+                name: nova-rewards-secrets
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            failureThreshold: 12
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi

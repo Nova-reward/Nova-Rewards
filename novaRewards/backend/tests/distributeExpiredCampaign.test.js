@@ -17,6 +17,7 @@ jest.mock('../db/index', () => ({ query: jest.fn() }));
 
 // Mock campaignRepository — getActiveCampaign returns null for expired campaigns
 jest.mock('../db/campaignRepository', () => ({
+  getCampaignById: jest.fn(),
   getActiveCampaign: jest.fn(),
 }));
 
@@ -43,7 +44,7 @@ jest.mock('../../blockchain/stellarService', () => ({
 }));
 
 const express = require('express');
-const { getActiveCampaign } = require('../db/campaignRepository');
+const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { query } = require('../db/index');
 
@@ -85,10 +86,16 @@ describe('POST /api/rewards/distribute — expired campaign (Property 7)', () =>
         pastDateArb,
         fc.integer({ min: 1, max: 999 }), // campaignId
         async (endDate, campaignId) => {
-          // getActiveCampaign returns null — campaign is expired / inactive
+          // Campaign exists, but active lookup fails — expired/inactive.
+          getCampaignById.mockResolvedValue({
+            id: campaignId,
+            merchant_id: MERCHANT.id,
+            end_date: endDate,
+            is_active: false,
+          });
           getActiveCampaign.mockResolvedValue(null);
 
-          const customerWallet = Keypair.random().publicKey();
+          const walletAddress = Keypair.random().publicKey();
 
           const http = require('http');
           const server = http.createServer(app);
@@ -99,7 +106,7 @@ describe('POST /api/rewards/distribute — expired campaign (Property 7)', () =>
           let body;
 
           await new Promise((resolve, reject) => {
-            const payload = JSON.stringify({ customerWallet, amount: 10, campaignId });
+            const payload = JSON.stringify({ walletAddress: walletAddress, amount: 10, campaignId });
             const req = http.request(
               {
                 hostname: '127.0.0.1',
