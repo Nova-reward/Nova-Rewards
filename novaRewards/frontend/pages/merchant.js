@@ -1,7 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/router";
 import CampaignForm from "../components/CampaignForm";
 import IssueRewardForm from "../components/IssueRewardForm";
 import api from "../lib/api";
+
+function getCampaignStatus(c) {
+  const now = new Date();
+  const start = new Date(c.start_date);
+  const end = new Date(c.end_date);
+  if (now < start) return "upcoming";
+  if (now > end || !c.is_active) return "ended";
+  return "active";
+}
+
+const STATUS_LABELS = { active: "Active", ended: "Ended", upcoming: "Upcoming" };
+const STATUS_BADGES = { active: "badge-green", ended: "badge-gray", upcoming: "badge-blue" };
+const FILTER_OPTIONS = ["all", "active", "ended", "upcoming"];
 
 /**
  * Merchant dashboard — registration, campaigns, reward issuance, totals.
@@ -26,6 +40,14 @@ export default function MerchantDashboard() {
     totalRedeemed: 0,
   });
   const [totalsLoading, setTotalsLoading] = useState(false);
+
+  // Search / filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const router = useRouter();
+  const urlSyncReady = useRef(false);
 
   const getMerchantTotals = useCallback(async (mid) => {
     setTotalsLoading(true);
@@ -59,6 +81,32 @@ export default function MerchantDashboard() {
   useEffect(() => {
     if (merchant?.id) loadDashboard(merchant.id);
   }, [merchant, loadDashboard]);
+
+  // Initialise filters from URL once router is ready
+  useEffect(() => {
+    if (!router.isReady) return;
+    urlSyncReady.current = true;
+    setSearchQuery(router.query.q || "");
+    setDebouncedSearch(router.query.q || "");
+    setStatusFilter(router.query.status || "all");
+  }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounce search input by 300 ms
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
+
+  // Reflect active filters in URL query string
+  useEffect(() => {
+    if (!router.isReady || !urlSyncReady.current) return;
+    const query = {};
+    if (debouncedSearch) query.q = debouncedSearch;
+    if (statusFilter !== "all") query.status = statusFilter;
+    router.replace({ pathname: router.pathname, query }, undefined, {
+      shallow: true,
+    });
+  }, [debouncedSearch, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleRegister(e) {
     e.preventDefault();
@@ -242,42 +290,115 @@ export default function MerchantDashboard() {
             {/* Campaign list — Requirements 10.1 */}
             <div className="card">
               <h2 style={{ marginBottom: "1rem" }}>Campaigns</h2>
+
               {campaigns.length === 0 ? (
                 <p style={{ color: "#94a3b8" }}>
                   No campaigns yet. Create one above.
                 </p>
               ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Rate</th>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {campaigns.map((c) => {
-                      const expired = new Date(c.end_date) < new Date();
+                <>
+                  {/* Search and status filter controls */}
+                  <div style={{ marginBottom: "1.25rem" }}>
+                    <label
+                      htmlFor="campaign-search"
+                      className="label"
+                      style={{ marginBottom: "0.4rem" }}
+                    >
+                      Search
+                    </label>
+                    <input
+                      id="campaign-search"
+                      type="search"
+                      className="input"
+                      style={{ marginBottom: "0.75rem" }}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search by name…"
+                      aria-label="Search campaigns by name"
+                    />
+                    <div
+                      role="group"
+                      aria-label="Filter by status"
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {FILTER_OPTIONS.map((s) => (
+                        <button
+                          key={s}
+                          className={`btn ${statusFilter === s ? "btn-primary" : "btn-secondary"}`}
+                          style={{ padding: "0.4rem 1rem", fontSize: "0.85rem" }}
+                          onClick={() => setStatusFilter(s)}
+                          aria-pressed={statusFilter === s}
+                        >
+                          {s === "all" ? "All" : STATUS_LABELS[s]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const filtered = campaigns.filter((c) => {
+                      if (
+                        debouncedSearch &&
+                        !c.name
+                          .toLowerCase()
+                          .includes(debouncedSearch.toLowerCase())
+                      )
+                        return false;
+                      if (
+                        statusFilter !== "all" &&
+                        getCampaignStatus(c) !== statusFilter
+                      )
+                        return false;
+                      return true;
+                    });
+
+                    if (filtered.length === 0) {
                       return (
-                        <tr key={c.id}>
-                          <td>{c.name}</td>
-                          <td>{c.reward_rate} NOVA/unit</td>
-                          <td>{c.start_date?.slice(0, 10)}</td>
-                          <td>{c.end_date?.slice(0, 10)}</td>
-                          <td>
-                            <span
-                              className={`badge ${c.is_active && !expired ? "badge-green" : "badge-gray"}`}
-                            >
-                              {c.is_active && !expired ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                        </tr>
+                        <p style={{ color: "#94a3b8" }}>
+                          No campaigns match your filters.
+                        </p>
                       );
-                    })}
-                  </tbody>
-                </table>
+                    }
+
+                    return (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Rate</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((c) => {
+                            const status = getCampaignStatus(c);
+                            return (
+                              <tr key={c.id}>
+                                <td>{c.name}</td>
+                                <td>{c.reward_rate} NOVA/unit</td>
+                                <td>{c.start_date?.slice(0, 10)}</td>
+                                <td>{c.end_date?.slice(0, 10)}</td>
+                                <td>
+                                  <span
+                                    className={`badge ${STATUS_BADGES[status]}`}
+                                  >
+                                    {STATUS_LABELS[status]}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    );
+                  })()}
+                </>
               )}
             </div>
           </>

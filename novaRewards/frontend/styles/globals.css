@@ -20,6 +20,8 @@
   --badge-green-text: #15803d;
   --badge-gray-bg: #e2e8f0;
   --badge-gray-text: #475569;
+  --badge-blue-bg: #dbeafe;
+  --badge-blue-text: #1d4ed8;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,6 +39,8 @@
     --badge-green-text: #34d399;
     --badge-gray-bg: #1e293b;
     --badge-gray-text: #94a3b8;
+    --badge-blue-bg: #1e3a5f;
+    --badge-blue-text: #60a5fa;
   }
 }
 
@@ -168,6 +172,10 @@ a:hover {
 .badge-gray {
   background: var(--badge-gray-bg);
   color: var(--badge-gray-text);
+}
+.badge-blue {
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-text);
 }
 
 table {
