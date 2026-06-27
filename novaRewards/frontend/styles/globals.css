@@ -20,6 +20,8 @@
   --badge-green-text: #15803d;
   --badge-gray-bg: #e2e8f0;
   --badge-gray-text: #475569;
+  --badge-blue-bg: #dbeafe;
+  --badge-blue-text: #1d4ed8;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -152,6 +154,25 @@ a:hover {
   display: flex;
   gap: 1.5rem;
   align-items: center;
+}
+
+/* Pill padding on all nav links so active background renders correctly */
+.nav-links a {
+  padding: 0.3rem 0.75rem;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+/* Active state: #7c3aed bg + white text → 5.7:1 contrast (WCAG 3:1 ✓) */
+.nav-links a.nav-active {
+  background: var(--accent);
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.nav-links a:hover:not(.nav-active) {
+  background: var(--surface-2);
+  text-decoration: none;
 }
 
 .badge {
