@@ -1,0 +1,14 @@
+- name: frontend
+  color: "0075ca"
+- name: backend
+  color: "e4e669"
+- name: smart-contract
+  color: "d93f0b"
+- name: testing
+  color: "0e8a16"
+- name: devops
+  color: "5319e7"
+- name: docs
+  color: "c5def5"
+- name: ui-ux
+  color: "f9d0c4"

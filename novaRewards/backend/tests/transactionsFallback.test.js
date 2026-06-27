@@ -37,7 +37,7 @@ jest.mock('../db/transactionRepository', () => ({
 }));
 
 const express = require('express');
-const http = require('http');
+const request = require('supertest');
 const { Keypair } = require('stellar-sdk');
 const { server } = require('../../blockchain/stellarService');
 const { query } = require('../db/index');
@@ -46,24 +46,18 @@ function buildApp() {
   const app = express();
   app.use(express.json());
   app.use('/api/transactions', require('../routes/transactions'));
+  app.use((err, _req, res, _next) => {
+    res.status(err.status || 500).json({
+      success: false,
+      error: err.code || 'internal_error',
+      message: err.message,
+    });
+  });
   return app;
 }
 
-function get(srv, path) {
-  return new Promise((resolve, reject) => {
-    http.get(
-      { hostname: '127.0.0.1', port: srv.address().port, path },
-      (res) => {
-        let raw = '';
-        res.on('data', (chunk) => { raw += chunk; });
-        res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(raw) }));
-      }
-    ).on('error', reject);
-  });
-}
-
 describe('GET /api/transactions/:walletAddress — Horizon fallback', () => {
-  let srv;
+  let app;
   const walletAddress = Keypair.random().publicKey();
 
   const mockTxRows = [
@@ -71,12 +65,8 @@ describe('GET /api/transactions/:walletAddress — Horizon fallback', () => {
     { id: 2, tx_hash: 'def456', tx_type: 'redemption',   amount: '5',  from_wallet: walletAddress },
   ];
 
-  beforeAll((done) => {
-    srv = http.createServer(buildApp()).listen(0, done);
-  });
-
-  afterAll((done) => {
-    srv.close(done);
+  beforeAll(() => {
+    app = buildApp();
   });
 
   beforeEach(() => {
@@ -99,7 +89,7 @@ describe('GET /api/transactions/:walletAddress — Horizon fallback', () => {
   });
 
   test('falls back to PostgreSQL and returns source: database when Horizon throws', async () => {
-    const { status, body } = await get(srv, `/api/transactions/${walletAddress}`);
+    const { status, body } = await request(app).get(`/api/transactions/${walletAddress}`);
 
     expect(status).toBe(200);
     expect(body.success).toBe(true);
@@ -109,21 +99,21 @@ describe('GET /api/transactions/:walletAddress — Horizon fallback', () => {
   });
 
   test('queries PostgreSQL with the correct wallet address on fallback', async () => {
-    await get(srv, `/api/transactions/${walletAddress}`);
+    await request(app).get(`/api/transactions/${walletAddress}`);
 
     expect(query).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[0][1]).toContain(walletAddress);
   });
 
   test('returns the exact rows from PostgreSQL in data array', async () => {
-    const { body } = await get(srv, `/api/transactions/${walletAddress}`);
+    const { body } = await request(app).get(`/api/transactions/${walletAddress}`);
 
     expect(body.data[0].tx_hash).toBe('abc123');
     expect(body.data[1].tx_hash).toBe('def456');
   });
 
   test('returns 400 for an invalid wallet address without hitting Horizon or DB', async () => {
-    const { status, body } = await get(srv, '/api/transactions/not-a-valid-key');
+    const { status, body } = await request(app).get('/api/transactions/not-a-valid-key');
 
     expect(status).toBe(400);
     expect(body.success).toBe(false);

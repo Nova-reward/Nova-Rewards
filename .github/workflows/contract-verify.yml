@@ -1,0 +1,227 @@
+name: Contract Deployment Verification
+
+# Runs post-deployment verification against testnet and mainnet.
+# Triggered automatically after a successful contract deployment,
+# or manually via workflow_dispatch for ad-hoc checks.
+#
+# Failures block promotion: the job exits non-zero and the workflow
+# is marked failed, preventing downstream promotion steps from running.
+
+on:
+  # Trigger after the deploy workflow completes on the relevant branches
+  workflow_run:
+    workflows: ["Deploy"]
+    types: [completed]
+    branches: [main, develop]
+
+  # Allow manual runs for ad-hoc verification
+  workflow_dispatch:
+    inputs:
+      network:
+        description: "Network to verify (testnet or mainnet)"
+        required: true
+        default: testnet
+        type: choice
+        options:
+          - testnet
+          - mainnet
+
+jobs:
+  # ── Determine which network(s) to verify ─────────────────────────────────
+  setup:
+    name: Determine Target Network
+    runs-on: ubuntu-latest
+    outputs:
+      run_testnet: ${{ steps.decide.outputs.run_testnet }}
+      run_mainnet: ${{ steps.decide.outputs.run_mainnet }}
+    steps:
+      - name: Decide networks
+        id: decide
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            NETWORK="${{ github.event.inputs.network }}"
+            echo "run_testnet=$([[ $NETWORK == testnet ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            echo "run_mainnet=$([[ $NETWORK == mainnet ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            # develop → testnet, main → mainnet
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+            echo "run_testnet=$([[ $BRANCH == develop ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            echo "run_mainnet=$([[ $BRANCH == main ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_testnet=false" >> "$GITHUB_OUTPUT"
+            echo "run_mainnet=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Testnet verification ──────────────────────────────────────────────────
+  verify-testnet:
+    name: Verify Testnet Contracts
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run_testnet == 'true'
+    environment:
+      name: staging
+    env:
+      NETWORK: testnet
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Stellar CLI
+        run: |
+          cargo install --locked stellar-cli --features opt --quiet 2>/dev/null || \
+          cargo install stellar-cli --quiet
+
+      - name: Write deployment manifest
+        env:
+          NOVA_TOKEN_CONTRACT_ID:    ${{ secrets.TESTNET_NOVA_TOKEN_CONTRACT_ID }}
+          REWARD_POOL_CONTRACT_ID:   ${{ secrets.TESTNET_REWARD_POOL_CONTRACT_ID }}
+          VESTING_CONTRACT_ID:       ${{ secrets.TESTNET_VESTING_CONTRACT_ID }}
+          REFERRAL_CONTRACT_ID:      ${{ secrets.TESTNET_REFERRAL_CONTRACT_ID }}
+          DISTRIBUTION_CONTRACT_ID:  ${{ secrets.TESTNET_DISTRIBUTION_CONTRACT_ID }}
+          ADMIN_ROLES_CONTRACT_ID:   ${{ secrets.TESTNET_ADMIN_ROLES_CONTRACT_ID }}
+          NOVA_REWARDS_CONTRACT_ID:  ${{ secrets.TESTNET_NOVA_REWARDS_CONTRACT_ID }}
+          GOVERNANCE_CONTRACT_ID:    ${{ secrets.TESTNET_GOVERNANCE_CONTRACT_ID }}
+        run: |
+          mkdir -p deployments
+          python3 - <<'EOF'
+          import json, os
+          keys = [
+            "nova_token_contract_id",
+            "reward_pool_contract_id",
+            "vesting_contract_id",
+            "referral_contract_id",
+            "distribution_contract_id",
+            "admin_roles_contract_id",
+            "nova_rewards_contract_id",
+            "governance_contract_id",
+          ]
+          env_map = {
+            "nova_token_contract_id":   "NOVA_TOKEN_CONTRACT_ID",
+            "reward_pool_contract_id":  "REWARD_POOL_CONTRACT_ID",
+            "vesting_contract_id":      "VESTING_CONTRACT_ID",
+            "referral_contract_id":     "REFERRAL_CONTRACT_ID",
+            "distribution_contract_id": "DISTRIBUTION_CONTRACT_ID",
+            "admin_roles_contract_id":  "ADMIN_ROLES_CONTRACT_ID",
+            "nova_rewards_contract_id": "NOVA_REWARDS_CONTRACT_ID",
+            "governance_contract_id":   "GOVERNANCE_CONTRACT_ID",
+          }
+          manifest = {k: os.environ.get(env_map[k], "") for k in keys}
+          with open("deployments/testnet.json", "w") as f:
+            json.dump(manifest, f, indent=2)
+          EOF
+
+      - name: Write .env.testnet
+        env:
+          DEPLOYER_SECRET:    ${{ secrets.TESTNET_DEPLOYER_SECRET }}
+          ADMIN_ADDRESS:      ${{ secrets.TESTNET_ADMIN_ADDRESS }}
+          ADMIN_SIGNERS:      ${{ secrets.TESTNET_ADMIN_SIGNERS }}
+          ADMIN_THRESHOLD:    ${{ secrets.TESTNET_ADMIN_THRESHOLD }}
+        run: |
+          cat > .env.testnet <<EOF
+          NETWORK=testnet
+          RPC_URL=https://soroban-testnet.stellar.org
+          NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
+          DEPLOYER_SECRET=${DEPLOYER_SECRET}
+          ADMIN_ADDRESS=${ADMIN_ADDRESS}
+          ADMIN_SIGNERS=${ADMIN_SIGNERS:-${ADMIN_ADDRESS}}
+          ADMIN_THRESHOLD=${ADMIN_THRESHOLD:-1}
+          EOF
+
+      - name: Run verification
+        run: bash scripts/verify-deployment.sh
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testnet-verification-${{ github.run_id }}
+          path: deployments/testnet.json
+          retention-days: 30
+
+  # ── Mainnet verification ──────────────────────────────────────────────────
+  verify-mainnet:
+    name: Verify Mainnet Contracts
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run_mainnet == 'true'
+    environment:
+      name: production
+    env:
+      NETWORK: mainnet
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Stellar CLI
+        run: |
+          cargo install --locked stellar-cli --features opt --quiet 2>/dev/null || \
+          cargo install stellar-cli --quiet
+
+      - name: Write deployment manifest
+        env:
+          NOVA_TOKEN_CONTRACT_ID:    ${{ secrets.MAINNET_NOVA_TOKEN_CONTRACT_ID }}
+          REWARD_POOL_CONTRACT_ID:   ${{ secrets.MAINNET_REWARD_POOL_CONTRACT_ID }}
+          VESTING_CONTRACT_ID:       ${{ secrets.MAINNET_VESTING_CONTRACT_ID }}
+          REFERRAL_CONTRACT_ID:      ${{ secrets.MAINNET_REFERRAL_CONTRACT_ID }}
+          DISTRIBUTION_CONTRACT_ID:  ${{ secrets.MAINNET_DISTRIBUTION_CONTRACT_ID }}
+          ADMIN_ROLES_CONTRACT_ID:   ${{ secrets.MAINNET_ADMIN_ROLES_CONTRACT_ID }}
+          NOVA_REWARDS_CONTRACT_ID:  ${{ secrets.MAINNET_NOVA_REWARDS_CONTRACT_ID }}
+          GOVERNANCE_CONTRACT_ID:    ${{ secrets.MAINNET_GOVERNANCE_CONTRACT_ID }}
+        run: |
+          mkdir -p deployments
+          python3 - <<'EOF'
+          import json, os
+          keys = [
+            "nova_token_contract_id",
+            "reward_pool_contract_id",
+            "vesting_contract_id",
+            "referral_contract_id",
+            "distribution_contract_id",
+            "admin_roles_contract_id",
+            "nova_rewards_contract_id",
+            "governance_contract_id",
+          ]
+          env_map = {
+            "nova_token_contract_id":   "NOVA_TOKEN_CONTRACT_ID",
+            "reward_pool_contract_id":  "REWARD_POOL_CONTRACT_ID",
+            "vesting_contract_id":      "VESTING_CONTRACT_ID",
+            "referral_contract_id":     "REFERRAL_CONTRACT_ID",
+            "distribution_contract_id": "DISTRIBUTION_CONTRACT_ID",
+            "admin_roles_contract_id":  "ADMIN_ROLES_CONTRACT_ID",
+            "nova_rewards_contract_id": "NOVA_REWARDS_CONTRACT_ID",
+            "governance_contract_id":   "GOVERNANCE_CONTRACT_ID",
+          }
+          manifest = {k: os.environ.get(env_map[k], "") for k in keys}
+          with open("deployments/mainnet.json", "w") as f:
+            json.dump(manifest, f, indent=2)
+          EOF
+
+      - name: Write .env.mainnet
+        env:
+          DEPLOYER_SECRET:    ${{ secrets.MAINNET_DEPLOYER_SECRET }}
+          ADMIN_ADDRESS:      ${{ secrets.MAINNET_ADMIN_ADDRESS }}
+          ADMIN_SIGNERS:      ${{ secrets.MAINNET_ADMIN_SIGNERS }}
+          ADMIN_THRESHOLD:    ${{ secrets.MAINNET_ADMIN_THRESHOLD }}
+        run: |
+          cat > .env.mainnet <<EOF
+          NETWORK=mainnet
+          RPC_URL=https://soroban-rpc.stellar.org
+          NETWORK_PASSPHRASE="Public Global Stellar Network ; September 2015"
+          DEPLOYER_SECRET=${DEPLOYER_SECRET}
+          ADMIN_ADDRESS=${ADMIN_ADDRESS}
+          ADMIN_SIGNERS=${ADMIN_SIGNERS:-${ADMIN_ADDRESS}}
+          ADMIN_THRESHOLD=${ADMIN_THRESHOLD:-2}
+          EOF
+
+      - name: Run verification
+        run: bash scripts/verify-deployment.sh
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainnet-verification-${{ github.run_id }}
+          path: deployments/mainnet.json
+          retention-days: 90

@@ -1,0 +1,1 @@
+{"title":"Body","body":{"content":{"application/json":{"schema":{"type":"object","properties":{"name":{"type":"string","example":"15% Off Voucher"},"cost":{"type":"integer","example":600},"stock":{"type":"integer","example":80},"isActive":{"type":"boolean","example":false}}}}}}}

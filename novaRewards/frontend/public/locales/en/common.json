@@ -1,0 +1,28 @@
+{
+  "nav": {
+    "brand": "⭐ NovaRewards",
+    "merchantPortal": "Merchant Portal",
+    "disconnect": "Disconnect"
+  },
+  "home": {
+    "title": "Own Your Rewards",
+    "description": "NovaRewards puts loyalty tokens on the Stellar blockchain — earn, transfer, and redeem NOVA tokens across any participating merchant.",
+    "connectWallet": "Connect Freighter Wallet",
+    "connecting": "Connecting…",
+    "installFreighter": "Install Freighter Wallet",
+    "freighterRequired": "Freighter Wallet is required to use NovaRewards."
+  },
+  "wallet": {
+    "error": "Wallet connection failed"
+  },
+  "date": {
+    "transactionDate": "Transaction Date"
+  },
+  "currency": {
+    "novaTokens": "NOVA Tokens"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error"
+  }
+}

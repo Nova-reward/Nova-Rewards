@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+members = [
+    "nova_token",
+    "reward_pool",
+    "admin_roles",
+    "vesting",
+    "referral",
+    "campaign",
+    "nova-rewards",
+    "redemption",
+    "escrow",
+    "contract_state",
+    "distribution",
+    "governance",
+    "integration_tests",
+]
+default-members = [
+    "nova_token",
+    "reward_pool",
+    "admin_roles",
+    "vesting",
+    "referral",
+    "nova-rewards",
+    "redemption",
+    "escrow",
+    "contract_state",
+    "distribution",
+    "governance",
+    "campaign",
+    "integration_tests",
+]
+
+[workspace.package]
+edition = "2021"
+publish = false
+
+[workspace.dependencies]
+soroban-sdk = "26.0.1"
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
+
+[workspace.metadata.tarpaulin]
+exclude = ["nova-rewards"]
+out = ["Html", "Lcov"]
+output-dir = "coverage"
+timeout = "120"

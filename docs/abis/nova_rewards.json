@@ -1,0 +1,188 @@
+{
+  "contract": "nova_rewards",
+  "version": "1.0.0",
+  "description": "Core Nova Rewards contract: staking, swaps, recovery, and emergency controls.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the contract. Can only be called once.",
+      "params": [
+        { "name": "admin", "type": "Address" },
+        { "name": "recovery_admin", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "stake",
+      "description": "Stakes NOVA tokens for yield generation.",
+      "params": [
+        { "name": "user", "type": "Address" },
+        { "name": "amount", "type": "i128", "description": "Amount to stake (must be > 0)." }
+      ],
+      "returns": null,
+      "errors": ["already staked", "insufficient balance", "amount must be positive", "paused"]
+    },
+    {
+      "name": "unstake",
+      "description": "Unstakes all tokens and claims accrued yield.",
+      "params": [
+        { "name": "user", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["no active stake", "paused"]
+    },
+    {
+      "name": "get_stake",
+      "description": "Returns the stake record for a user.",
+      "params": [
+        { "name": "user", "type": "Address" }
+      ],
+      "returns": { "type": "StakeRecord", "description": "Stake record with amount and timestamp." },
+      "errors": []
+    },
+    {
+      "name": "calculate_yield",
+      "description": "Calculates the accrued yield for a user without unstaking.",
+      "params": [
+        { "name": "user", "type": "Address" }
+      ],
+      "returns": { "type": "i128", "description": "Accrued yield in NOVA tokens." },
+      "errors": []
+    },
+    {
+      "name": "set_annual_rate",
+      "description": "Sets the annual staking yield rate in basis points. Admin only.",
+      "params": [
+        { "name": "rate_bps", "type": "u32", "description": "Annual rate in basis points (e.g. 500 = 5%)." }
+      ],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "get_annual_rate",
+      "description": "Returns the current annual staking rate in basis points.",
+      "params": [],
+      "returns": { "type": "u32" },
+      "errors": []
+    },
+    {
+      "name": "swap_for_xlm",
+      "description": "Burns NOVA tokens and swaps for XLM via a DEX router.",
+      "params": [
+        { "name": "user", "type": "Address" },
+        { "name": "nova_amount", "type": "i128" },
+        { "name": "min_xlm_out", "type": "i128", "description": "Minimum XLM to receive (slippage guard)." }
+      ],
+      "returns": { "type": "i128", "description": "XLM received." },
+      "errors": ["insufficient balance", "slippage exceeded", "paused"]
+    },
+    {
+      "name": "pause",
+      "description": "Pauses the contract. Admin only.",
+      "params": [],
+      "returns": null,
+      "errors": ["unauthorized", "already paused"]
+    },
+    {
+      "name": "resume",
+      "description": "Resumes the contract. Admin only.",
+      "params": [],
+      "returns": null,
+      "errors": ["unauthorized", "not paused"]
+    },
+    {
+      "name": "is_paused",
+      "description": "Returns whether the contract is paused.",
+      "params": [],
+      "returns": { "type": "bool" },
+      "errors": []
+    },
+    {
+      "name": "upgrade",
+      "description": "Upgrades the contract WASM. Admin only.",
+      "params": [
+        { "name": "new_wasm_hash", "type": "BytesN<32>" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "migrate",
+      "description": "Runs post-upgrade migration. Admin only. Can only be called once per upgrade.",
+      "params": [],
+      "returns": null,
+      "errors": ["unauthorized", "already migrated"]
+    },
+    {
+      "name": "snapshot_account",
+      "description": "Snapshots an account's state for recovery. Recovery admin only.",
+      "params": [
+        { "name": "account", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "restore_account",
+      "description": "Restores an account from a snapshot. Recovery admin only.",
+      "params": [
+        { "name": "account", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "no snapshot"]
+    },
+    {
+      "name": "recover_transaction",
+      "description": "Records a recovery transaction. Recovery admin only.",
+      "params": [
+        { "name": "operation_id", "type": "BytesN<32>" },
+        { "name": "kind", "type": "RecoveryKind" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "recover_funds",
+      "description": "Moves funds as part of a recovery operation. Recovery admin only.",
+      "params": [
+        { "name": "from", "type": "Address" },
+        { "name": "to", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized"]
+    }
+  ],
+  "types": {
+    "StakeRecord": {
+      "fields": [
+        { "name": "amount", "type": "i128" },
+        { "name": "staked_at", "type": "u64" }
+      ]
+    },
+    "RecoveryKind": {
+      "variants": ["FundsRecovery", "TransactionRecovery", "AccountRestore"]
+    }
+  },
+  "events": [
+    { "name": "staked",       "fields": [{ "name": "user", "type": "Address" }, { "name": "amount", "type": "i128" }] },
+    { "name": "unstaked",     "fields": [{ "name": "user", "type": "Address" }, { "name": "amount", "type": "i128" }, { "name": "yield", "type": "i128" }] },
+    { "name": "rate_set",     "fields": [{ "name": "rate_bps", "type": "u32" }] },
+    { "name": "swap",         "fields": [{ "name": "user", "type": "Address" }, { "name": "nova_in", "type": "i128" }, { "name": "xlm_out", "type": "i128" }] },
+    { "name": "paused",       "fields": [] },
+    { "name": "resumed",      "fields": [] },
+    { "name": "upgraded",     "fields": [{ "name": "new_wasm_hash", "type": "BytesN<32>" }] }
+  ],
+  "errors": [
+    { "code": 1,  "name": "AlreadyInitialized", "message": "already initialized" },
+    { "code": 2,  "name": "Unauthorized",        "message": "unauthorized" },
+    { "code": 3,  "name": "AlreadyStaked",       "message": "already staked" },
+    { "code": 4,  "name": "NoActiveStake",       "message": "no active stake" },
+    { "code": 5,  "name": "InsufficientBalance", "message": "insufficient balance" },
+    { "code": 6,  "name": "SlippageExceeded",    "message": "slippage exceeded" },
+    { "code": 7,  "name": "Paused",              "message": "contract is paused" },
+    { "code": 8,  "name": "AlreadyMigrated",     "message": "already migrated" }
+  ]
+}
