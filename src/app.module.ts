@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { AuthModule } from './auth/auth.module';
 import { MerchantsModule } from './merchants/merchants.module';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { MerchantsModule } from './merchants/merchants.module';
     AuthModule,
     MerchantsModule,
     CampaignsModule,
+    RedisModule, // Add RedisModule to imports
   ],
 })
 export class AppModule {}
