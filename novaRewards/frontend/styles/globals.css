@@ -25,6 +25,8 @@
   --badge-green-text: var(--color-badge-success-text);
   --badge-gray-bg:    var(--color-badge-neutral-bg);
   --badge-gray-text:  var(--color-badge-neutral-text);
+  --badge-blue-bg:    var(--color-info-100);
+  --badge-blue-text:  var(--color-info-700);
 
   /* Animation tokens (from docs/design/animation-tokens.css) */
   --animation-button-press-duration: 80ms;
@@ -259,6 +261,10 @@ a:hover {
 .badge-gray {
   background: var(--badge-gray-bg);
   color: var(--badge-gray-text);
+}
+.badge-blue {
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-text);
 }
 
 table {
