@@ -2,7 +2,7 @@
 
 use soroban_sdk::{testutils::Address as _, testutils::Events as _, Address, BytesN, Env, Symbol};
 
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient, RecoveryKind};
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient, RecoveryKind};
 
 pub fn check_event_emitted(env: &Env, event_name: &str) -> bool {
     env.events()
@@ -19,9 +19,11 @@ pub fn check_event_emitted(env: &Env, event_name: &str) -> bool {
 
 fn deploy(env: &Env) -> (NovaRewardsContractClient, Address) {
     let admin = Address::generate(env);
+    let nova_token = Address::generate(env);
+    let event_config = EventConfig { schema_version: 1 };
     let contract_id = env.register_contract(None, NovaRewardsContract);
     let client = NovaRewardsContractClient::new(env, &contract_id);
-    client.initialize(&admin);
+    client.initialize(&admin, &nova_token, &event_config);
     (client, admin)
 }
 

@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const { query } = require('../db/index');
 
 /**
@@ -18,7 +19,7 @@ class AnalyticsService {
       );
       return result.rows[0];
     } catch (err) {
-      console.error('[Analytics] Failed to track event:', err);
+      logger.error('[Analytics] Failed to track event:', err);
       return null;
     }
   }

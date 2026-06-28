@@ -1,4 +1,5 @@
 'use strict';
+const logger = require('./lib/logger');
 
 const { client: redis } = require('../lib/redis');
 const { sendSecurityAlert } = require('../services/securityAlertService');
@@ -31,7 +32,7 @@ async function block(key, ttlSeconds, type, reason, meta) {
     await redis.set(`${BLOCK_PREFIX}${key}`, '1', { EX: ttlSeconds });
     await sendSecurityAlert({ type, identifier: key, reason, ttlSeconds, meta });
   } catch (err) {
-    console.error('[abuseDetection] block error:', err.message);
+    logger.error('[abuseDetection] block error:', err.message);
   }
 }
 
@@ -136,7 +137,7 @@ async function recordRewardClaim(wallet, campaignId) {
       );
     }
   } catch (err) {
-    console.error('[abuseDetection] recordRewardClaim error:', err.message);
+    logger.error('[abuseDetection] recordRewardClaim error:', err.message);
   }
 }
 

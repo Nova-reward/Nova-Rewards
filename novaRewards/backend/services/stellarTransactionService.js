@@ -474,7 +474,7 @@ async function storeTransactionResult(result, options = {}) {
     });
   } catch (dbErr) {
     // Log but don't fail the response — the tx was already submitted on-chain
-    console.error('[stellarTransactionService] Failed to store transaction result:', dbErr.message);
+    logger.error('[stellarTransactionService] Failed to store transaction result:', dbErr.message);
   }
 }
 

@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const express = require('express');
 const router = express.Router();
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
@@ -192,7 +193,7 @@ router.post('/distribute', slidingRewards, authenticateMerchant, checkRewardFarm
       });
     }
     
-    console.error('Error distributing rewards:', err);
+    logger.error('Error distributing rewards:', err);
     res.status(500).json({
       success: false,
       error: 'internal_server_error',

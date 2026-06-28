@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * Sliding Window Rate Limiter
  *
@@ -122,7 +123,7 @@ function slidingRateLimiter({ prefix, windowMs, max, keyBy = 'ip', message }) {
       next();
     } catch (err) {
       // Redis error — fail open to avoid blocking legitimate traffic
-      console.error('[slidingRateLimiter] Redis error, failing open:', err.message);
+      logger.error('[slidingRateLimiter] Redis error, failing open:', err.message);
       next();
     }
   };

@@ -90,7 +90,7 @@ app.get('/health/detailed', async (req, res) => {
     const statusCode = health.status === 'ok' ? 200 : 503;
     res.status(statusCode).json(health);
   } catch (error) {
-    console.error('[Health] Error running checks:', error);
+    logger.error('[Health] Error running checks:', error);
     res.status(503).json({
       status: 'degraded',
       error: error.message,
@@ -170,6 +170,7 @@ function buildApiRouter() {
   router.use("/webhooks", require("./routes/webhooks"));
   router.use("/merchants/:id/api-keys", require("./routes/merchantApiKeys"));
   router.use("/governance", require("./routes/governance"));
+  router.use("/jobs", require("./routes/jobs"));
 
   return router;
 }
@@ -210,10 +211,12 @@ if (require.main === module) {
     require("./jobs/webhookHandler");
     // Initialize Reward Issuance Worker
     require("./jobs/rewardIssuanceWorker");
+    // Initialize Reward Distribution Worker (bulk campaign distribution)
+    require("./jobs/rewardDistributionWorker");
     logger.info(`NovaRewards backend running on port ${PORT}`);
-    console.log(`✅ Health check: http://localhost:${PORT}/health`);
-    console.log(`✅ Detailed health: http://localhost:${PORT}/health/detailed`);
-    console.log(`✅ Pool status: http://localhost:${PORT}/pool-status`);
+    logger.info(`✅ Health check: http://localhost:${PORT}/health`);
+    logger.info(`✅ Detailed health: http://localhost:${PORT}/health/detailed`);
+    logger.info(`✅ Pool status: http://localhost:${PORT}/pool-status`);
   });
 }
 

@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const { EventEmitter } = require('events');
 
 /**
@@ -13,7 +14,7 @@ const appEvents = new EventEmitter();
 
 // Prevent Node from crashing on unhandled emitter errors
 appEvents.on('error', (err) => {
-  console.error('[appEvents] unhandled error:', err);
+  logger.error('[appEvents] unhandled error:', err);
 });
 
 module.exports = appEvents;

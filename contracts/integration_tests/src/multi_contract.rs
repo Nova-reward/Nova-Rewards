@@ -3,7 +3,7 @@
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 // Import generated clients
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient};
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient};
 use nova_token::{NovaToken, NovaTokenClient};
 
 struct TestHarness<'a> {
@@ -28,7 +28,9 @@ impl<'a> TestHarness<'a> {
         // Deploy Rewards
         let rewards_id = env.register_contract(None, NovaRewardsContract);
         let rewards = NovaRewardsContractClient::new(&env, &rewards_id);
-        rewards.initialize(&admin);
+        let nova_token = Address::generate(&env);
+        let event_config = EventConfig { schema_version: 1 };
+        rewards.initialize(&admin, &nova_token, &event_config);
 
         Self {
             env,

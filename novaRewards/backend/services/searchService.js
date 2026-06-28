@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * Search Service — Elasticsearch integration
  *
@@ -120,7 +121,7 @@ async function ensureIndices() {
     const exists = await client.indices.exists({ index });
     if (!exists) {
       await client.indices.create({ index, ...body });
-      console.log(`[Search] Created index: ${index}`);
+      logger.info(`[Search] Created index: ${index}`);
     }
   }
 }
@@ -368,9 +369,9 @@ async function bulkIndex(entityType, rows) {
   const { errors, items } = await client.bulk({ operations, refresh: false });
   if (errors) {
     const failed = items.filter((i) => i.index?.error);
-    console.error(`[Search] Bulk index errors (${failed.length}):`, failed.map((i) => i.index.error));
+    logger.error(`[Search] Bulk index errors (${failed.length}):`, failed.map((i) => i.index.error));
   }
-  console.log(`[Search] Bulk indexed ${rows.length} ${entityType}`);
+  logger.info(`[Search] Bulk indexed ${rows.length} ${entityType}`);
 }
 
 module.exports = {

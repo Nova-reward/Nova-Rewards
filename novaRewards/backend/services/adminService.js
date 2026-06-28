@@ -1,4 +1,5 @@
 'use strict';
+const logger = require('./lib/logger');
 
 const assertAdminCaller = require('../middleware/assertAdminCaller');
 const adminRepository = require('../db/adminRepository');
@@ -127,7 +128,7 @@ async function updateUserRoleService(callerRole, targetUserId, newRole, adminId)
     },
     timestamp: new Date().toISOString(),
   }).catch((err) =>
-    console.error('[updateUserRoleService] SecurityAlertService failed:', err)
+    logger.error('[updateUserRoleService] SecurityAlertService failed:', err)
   );
 
   return updatedUser;

@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * Audit Middleware
  *
@@ -204,7 +205,7 @@ function auditMiddleware(req, res, next) {
         });
       } catch (err) {
         // Audit logging must never crash the app
-        console.error('[audit] Failed to write audit log:', err.message);
+        logger.error('[audit] Failed to write audit log:', err.message);
       }
     });
   });

@@ -1,4 +1,5 @@
 'use strict';
+const logger = require('./lib/logger');
 
 const { SorobanRpc, xdr } = require('stellar-sdk');
 const { getConfig } = require('./configService');
@@ -36,7 +37,7 @@ async function withFailover(fn) {
       return await fn(buildServer(url));
     } catch (err) {
       lastErr = err;
-      console.warn(`[SorobanRpcService] RPC ${url} failed: ${err.message}. Trying next…`);
+      logger.warn(`[SorobanRpcService] RPC ${url} failed: ${err.message}. Trying next…`);
     }
   }
   throw lastErr;

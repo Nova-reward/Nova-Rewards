@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const router = require('express').Router();
 const { query } = require('../db/index');
 const { getUserByWallet, getUserById, createUser } = require('../db/userRepository');
@@ -177,7 +178,7 @@ router.post('/', async (req, res, next) => {
     const user = await createUser({ walletAddress, referredBy });
 
     sendWelcome({ to: walletAddress, userName: walletAddress, referralCode: walletAddress })
-      .catch(err => console.error('Failed to send welcome email:', err));
+      .catch(err => logger.error('Failed to send welcome email:', err));
 
     res.status(201).json({ success: true, data: user });
   } catch (err) {
@@ -322,7 +323,7 @@ router.get('/:id/token-balance', async (req, res, next) => {
       try {
         await redisClient.setEx(cacheKey, 30, tokenBalance);
       } catch (cacheErr) {
-        console.warn('Redis cache set failed', cacheErr);
+        logger.warn('Redis cache set failed', cacheErr);
       }
     }
 

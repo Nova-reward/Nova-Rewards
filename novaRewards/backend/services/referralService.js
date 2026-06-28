@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const {
   getUserById,
   markReferralBonusClaimed,
@@ -73,7 +74,7 @@ async function processReferralBonus(referrerId, referredUserId) {
       bonus,
     };
   } catch (error) {
-    console.error('Error processing referral bonus:', error);
+    logger.error('Error processing referral bonus:', error);
     return {
       success: false,
       message: 'Failed to process referral bonus',
@@ -118,7 +119,7 @@ async function processUnresolvedReferrals(hoursAgo = 24) {
       processed++;
     } else {
       failed++;
-      console.error(`Failed to process referral for user ${referral.id}:`, result.message);
+      logger.error(`Failed to process referral for user ${referral.id}:`, result.message);
     }
   }
 

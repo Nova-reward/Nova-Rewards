@@ -5,6 +5,7 @@
 
 const { Worker, Queue } = require('bullmq');
 const { processRewardIssuance } = require('../services/rewardIssuanceService');
+const logger = require('../lib/logger');
 
 const connection = {
   host: process.env.REDIS_HOST || 'localhost',
@@ -27,17 +28,17 @@ worker.on('failed', async (job, err) => {
   if (!job) return;
   const maxAttempts = job.opts?.attempts ?? 3;
   if (job.attemptsMade >= maxAttempts) {
-    console.error(`[RewardWorker] Job ${job.id} permanently failed after ${job.attemptsMade} attempts:`, err.message);
+    logger.error('[RewardWorker] job permanently failed', { jobId: job.id, attempts: job.attemptsMade, error: err.message });
     await rewardDLQ.add('dead-letter', { ...job.data, failedReason: err.message });
   }
 });
 
 worker.on('completed', (job) => {
-  console.log(`[RewardWorker] Job ${job.id} completed`);
+  logger.info('[RewardWorker] job completed', { jobId: job.id });
 });
 
 worker.on('error', (err) => {
-  console.error('[RewardWorker] Worker error:', err.message);
+  logger.error('[RewardWorker] worker error', { error: err.message });
 });
 
 module.exports = { worker, rewardDLQ };

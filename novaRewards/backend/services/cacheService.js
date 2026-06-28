@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const { client } = require('../lib/redis');
 
 /**
@@ -18,7 +19,7 @@ class CacheService {
       const value = await this.client.get(key);
       return value ? JSON.parse(value) : null;
     } catch (err) {
-      console.error(`[Cache] Error getting key=${key}`, err);
+      logger.error(`[Cache] Error getting key=${key}`, err);
       return null;
     }
   }
@@ -31,7 +32,7 @@ class CacheService {
       await this.client.setEx(key, ttl, JSON.stringify(value));
       return true;
     } catch (err) {
-      console.error(`[Cache] Error setting key=${key}`, err);
+      logger.error(`[Cache] Error setting key=${key}`, err);
       return false;
     }
   }
@@ -44,7 +45,7 @@ class CacheService {
       await this.client.del(key);
       return true;
     } catch (err) {
-      console.error(`[Cache] Error deleting key=${key}`, err);
+      logger.error(`[Cache] Error deleting key=${key}`, err);
       return false;
     }
   }
@@ -58,11 +59,11 @@ class CacheService {
       const keys = await this.client.keys(pattern);
       if (keys.length > 0) {
         await this.client.del(keys);
-        console.info(`[Cache] Invalidated ${keys.length} keys matching ${pattern}`);
+        logger.info(`[Cache] Invalidated ${keys.length} keys matching ${pattern}`);
       }
       return true;
     } catch (err) {
-      console.error(`[Cache] Error invalidating pattern=${pattern}`, err);
+      logger.error(`[Cache] Error invalidating pattern=${pattern}`, err);
       return false;
     }
   }

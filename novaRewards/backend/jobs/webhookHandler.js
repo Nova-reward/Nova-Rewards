@@ -1,6 +1,7 @@
 const { Worker } = require('bullmq');
 const { recordPointTransaction } = require('../db/pointTransactionRepository');
 const AuditService = require('../services/auditService');
+const logger = require('../lib/logger');
 
 const redisConfig = {
   host: process.env.REDIS_HOST || 'localhost',
@@ -26,7 +27,7 @@ const webhookWorker = new Worker('webhook-delivery', async (job) => {
         amountToAward = 200;
         break;
       default:
-        console.warn(`[webhookHandler] Unrecognized action type: ${action}`);
+        logger.warn('[webhookHandler] unrecognized action type', { action });
         return { handled: false, reason: 'unrecognized_action' };
     }
 
@@ -50,10 +51,10 @@ const webhookWorker = new Worker('webhook-delivery', async (job) => {
         details: { externalAction: action, originalDetails: details, timestamp }
       });
 
-      console.log(`[webhookHandler] Successfully processed action: ${action} for user ${userId}. Awarded ${amountToAward} points.`);
+      logger.info('[webhookHandler] action processed', { action, userId, awardedPoints: amountToAward });
       return { handled: true, transactionId: tx.id };
     } catch (error) {
-      console.error(`[webhookHandler] Failed to process action ${action} for user ${userId}:`, error.message);
+      logger.error('[webhookHandler] failed to process action', { action, userId, error: error.message });
       throw error;
     }
   }
@@ -63,7 +64,7 @@ const webhookWorker = new Worker('webhook-delivery', async (job) => {
 }, { connection: redisConfig });
 
 webhookWorker.on('failed', (job, err) => {
-  console.error(`[webhookHandler] Job ${job.id} failed:`, err.message);
+  logger.error('[webhookHandler] job failed', { jobId: job.id, error: err.message });
 });
 
 module.exports = webhookWorker;

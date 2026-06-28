@@ -1,13 +1,15 @@
 #![cfg(test)]
 
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient};
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient};
 use soroban_sdk::{Address, BytesN, Env, Symbol, Val, Vec};
 
 pub fn deploy(env: &Env) -> (NovaRewardsContractClient, Address) {
     let admin = Address::generate(env);
+    let nova_token = Address::generate(env);
+    let event_config = EventConfig { schema_version: 1 };
     let id = env.register_contract(None, NovaRewardsContract);
     let client = NovaRewardsContractClient::new(env, &id);
-    client.initialize(&admin);
+    client.initialize(&admin, &nova_token, &event_config);
     (client, admin)
 }
 

@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const express = require('express');
 const router = express.Router();
 const transactionRepository = require('../db/transactionRepository');
@@ -8,7 +9,7 @@ router.post('/', async (req, res) => {
     const transaction = await transactionRepository.recordTransaction(req.body);
     res.status(201).json(transaction);
   } catch (error) {
-    console.error('Error recording transaction:', error);
+    logger.error('Error recording transaction:', error);
     res.status(500).json({ error: 'Failed to record transaction' });
   }
 });
@@ -19,7 +20,7 @@ router.get('/merchant/:merchantId', async (req, res) => {
     const transactions = await transactionRepository.getTransactionsByMerchant(req.params.merchantId);
     res.json(transactions);
   } catch (error) {
-    console.error('Error fetching transactions:', error);
+    logger.error('Error fetching transactions:', error);
     res.status(500).json({ error: 'Failed to fetch transactions' });
   }
 });

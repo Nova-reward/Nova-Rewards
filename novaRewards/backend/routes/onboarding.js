@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const router = require('express').Router();
 const { query } = require('../db/index');
 const { authenticateUser } = require('../middleware/authenticateUser');
@@ -43,7 +44,7 @@ router.post('/onboarding/complete', authenticateUser, async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('onboarding/complete error:', err);
+    logger.error('onboarding/complete error:', err);
     return res.status(500).json({ success: false, error: 'server_error', message: 'Failed to record onboarding completion' });
   }
 });

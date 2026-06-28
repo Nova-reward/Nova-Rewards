@@ -25,6 +25,8 @@
   --badge-green-text: var(--color-badge-success-text);
   --badge-gray-bg:    var(--color-badge-neutral-bg);
   --badge-gray-text:  var(--color-badge-neutral-text);
+  --badge-blue-bg:    var(--color-info-100);
+  --badge-blue-text:  var(--color-info-700);
 
   /* Animation tokens (from docs/design/animation-tokens.css) */
   --animation-button-press-duration: 80ms;
@@ -245,6 +247,25 @@ a:hover {
   align-items: center;
 }
 
+/* Pill padding on all nav links so active background renders correctly */
+.nav-links a {
+  padding: 0.3rem 0.75rem;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+/* Active state: #7c3aed bg + white text → 5.7:1 contrast (WCAG 3:1 ✓) */
+.nav-links a.nav-active {
+  background: var(--accent);
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.nav-links a:hover:not(.nav-active) {
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
 .badge {
   display: inline-block;
   padding: 0.2rem 0.6rem;
@@ -259,6 +280,10 @@ a:hover {
 .badge-gray {
   background: var(--badge-gray-bg);
   color: var(--badge-gray-text);
+}
+.badge-blue {
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-text);
 }
 
 table {

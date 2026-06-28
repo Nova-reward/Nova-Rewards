@@ -45,10 +45,14 @@ export interface StakeRecord {
   staked_at: u64;
 }
 
+export interface EventConfig {
+  schema_version: u32;
+}
+
 export type RecoveryKind = 'FundsRecovery' | 'TransactionRecovery' | 'AccountRestore';
 
 export interface NovaRewardsClient {
-  initialize(admin: Address, recovery_admin: Address): Promise<void>;
+  initialize(admin: Address, nova_token: Address, event_config: EventConfig): Promise<void>;
   stake(user: Address, amount: i128): Promise<void>;
   unstake(user: Address): Promise<void>;
   get_stake(user: Address): Promise<StakeRecord>;
@@ -65,6 +69,8 @@ export interface NovaRewardsClient {
   restore_account(account: Address): Promise<void>;
   recover_transaction(operation_id: BytesN32, kind: RecoveryKind, amount: i128): Promise<void>;
   recover_funds(from: Address, to: Address, amount: i128): Promise<void>;
+  get_nova_token(): Promise<Address>;
+  get_event_config(): Promise<EventConfig>;
 }
 
 // ── campaign ──────────────────────────────────────────────────────────────────

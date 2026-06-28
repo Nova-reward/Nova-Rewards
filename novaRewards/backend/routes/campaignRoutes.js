@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const express = require('express');
 const router = express.Router();
 const campaignRepository = require('../db/campaignRepository');
@@ -12,7 +13,7 @@ router.post('/', async (req, res) => {
     const campaign = await campaignRepository.createCampaign(req.body);
     res.status(201).json(campaign);
   } catch (error) {
-    console.error('Error creating campaign:', error);
+    logger.error('Error creating campaign:', error);
     res.status(500).json({ error: 'Failed to create campaign' });
   }
 });
@@ -23,7 +24,7 @@ router.get('/merchant/:merchantId', async (req, res) => {
     const campaigns = await campaignRepository.getCampaignsByMerchant(req.params.merchantId);
     res.json(campaigns);
   } catch (error) {
-    console.error('Error fetching campaigns:', error);
+    logger.error('Error fetching campaigns:', error);
     res.status(500).json({ error: 'Failed to fetch campaigns' });
   }
 });

@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const { query } = require('../db/index');
 const { verifyToken, isRevoked } = require('../services/tokenService');
 const AuditService = require('../services/auditService');
@@ -62,7 +63,7 @@ async function authenticateUser(req, res, next) {
     req.user = result.rows[0];
     next();
   } catch (err) {
-    console.error('Authentication error:', err);
+    logger.error('Authentication error:', err);
     return res.status(401).json({
       success: false,
       error: 'unauthorized',
@@ -95,11 +96,11 @@ async function requireAdmin(req, res, next) {
       try {
         await AuditService.log(event);
       } catch (auditErr) {
-        console.error('[requireAdmin] AuditService failed:', auditErr);
+        logger.error('[requireAdmin] AuditService failed:', auditErr);
       }
       // Fire-and-forget alert (non-blocking)
       SecurityAlertService.send({ ...event, timestamp: new Date().toISOString() })
-        .catch(err => console.error('[requireAdmin] SecurityAlertService failed:', err));
+        .catch(err => logger.error('[requireAdmin] SecurityAlertService failed:', err));
     }
     return res.status(403).json({
       success: false,

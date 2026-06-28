@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const auditLogRepository = require('../db/auditLogRepository');
 
 class AuditService {
@@ -28,7 +29,7 @@ class AuditService {
           } catch (error) {
                // We don't want audit logging failure to crash the main transaction usually, 
                // but we should log it aggressively.
-               console.error('AuditLogService Error:', error);
+               logger.error('AuditLogService Error:', error);
                throw error;
           }
      }

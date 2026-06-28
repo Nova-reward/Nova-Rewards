@@ -1,3 +1,4 @@
+const logger = require('../lib/logger');
 const { pool, getPoolStatus } = require('../db');
 
 /**
@@ -35,7 +36,7 @@ class HealthCheck {
         poolStatus: status
       };
     } catch (error) {
-      console.error('[Health] Database check failed:', error.message);
+      logger.error('[Health] Database check failed:', error.message);
       return { 
         status: 'down', 
         error: error.message 
@@ -64,7 +65,7 @@ class HealthCheck {
         message: `Stellar returned status: ${response.status}` 
       };
     } catch (error) {
-      console.error('[Health] Stellar check failed:', error.message);
+      logger.error('[Health] Stellar check failed:', error.message);
       return { 
         status: 'degraded', 
         error: error.message 

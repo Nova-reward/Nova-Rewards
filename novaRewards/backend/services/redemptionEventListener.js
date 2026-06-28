@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const appEvents = require('./eventEmitter');
 const { sendRedemptionConfirmation } = require('./emailService');
 const notificationService = require('./notificationService');
@@ -23,7 +24,7 @@ function registerRedemptionEventListener() {
         redemptionId: redemption.id,
       });
     } catch (err) {
-      console.error('[redemptionEventListener] notification failed:', err.message);
+      logger.error('[redemptionEventListener] notification failed:', err.message);
     }
 
     // Legacy direct email (kept for backward compatibility)
@@ -37,7 +38,7 @@ function registerRedemptionEventListener() {
           redemptionId: redemption.id,
         });
       } catch (err) {
-        console.error('[redemptionEventListener] email send failed:', err.message);
+        logger.error('[redemptionEventListener] email send failed:', err.message);
       }
     }
   });

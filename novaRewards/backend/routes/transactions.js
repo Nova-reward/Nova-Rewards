@@ -1,6 +1,8 @@
+const logger = require('../lib/logger');
 const router = require('express').Router();
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
-const { getMerchantTotals } = require('../db/transactionRepository');
+const { authenticateUser } = require('../middleware/authenticateUser');
+const { getMerchantTotals, getUserTransactionsCursor } = require('../db/transactionRepository');
 const {
   recordTransaction,
   getWalletHistory,
@@ -63,7 +65,7 @@ router.post('/record', async (req, res, next) => {
       const txRecord = await circuitBreakerService.execute(
         'horizon_transaction',
         () => server.transactions().transaction(txHash).call(),
-        () => { console.warn(`[Horizon] Circuit breaker fallback for txHash=${txHash}`); return { ledger_attr: null }; },
+        () => { logger.warn(`[Horizon] Circuit breaker fallback for txHash=${txHash}`); return { ledger_attr: null }; },
         { retries: 3 }
       );
       stellarLedger = txRecord.ledger_attr || txRecord.ledger;
@@ -182,6 +184,64 @@ router.get('/user/history', async (req, res, next) => {
     const result = await getUserHistory(req.query);
     res.json({ success: true, data: result.data, total: result.total, page: result.page, limit: result.limit });
   } catch (err) { next(err); }
+});
+
+/**
+ * @openapi
+ * /transactions:
+ *   get:
+ *     tags: [Transactions]
+ *     summary: Get cursor-paginated transaction history for the authenticated user
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: cursor
+ *         in: query
+ *         schema: { type: string }
+ *         description: Opaque base64 cursor from a previous response
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 25, maximum: 100 }
+ *       - name: direction
+ *         in: query
+ *         schema: { type: string, enum: [asc, desc], default: desc }
+ *     responses:
+ *       200:
+ *         description: Paginated transactions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data: { type: array, items: { $ref: '#/components/schemas/Transaction' } }
+ *                 nextCursor: { type: string, nullable: true }
+ *                 hasMore: { type: boolean }
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/', authenticateUser, async (req, res, next) => {
+  try {
+    const { cursor, direction = 'desc' } = req.query;
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 25), 100);
+
+    if (direction !== 'asc' && direction !== 'desc') {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: "direction must be 'asc' or 'desc'",
+      });
+    }
+
+    const { data, nextCursor, hasMore } = await getUserTransactionsCursor(
+      req.user.wallet_address,
+      { limit, cursor, direction }
+    );
+
+    return res.json({ success: true, data, nextCursor, hasMore });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/:walletAddress', async (req, res, next) => {

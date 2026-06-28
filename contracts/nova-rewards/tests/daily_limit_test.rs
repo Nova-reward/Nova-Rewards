@@ -14,7 +14,7 @@ use soroban_sdk::{
     vec, Address, Env, Symbol,
 };
 
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient, DailyUsage};
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient, DailyUsage};
 
 // ---------------------------------------------------------------------------
 // Mock router contract (copied from swap_test.rs)
@@ -84,7 +84,9 @@ fn setup() -> (Env, Address, NovaRewardsContractClient<'static>, MockRouterClien
 
     // Initialize
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let nova_token = Address::generate(&env);
+    let event_config = EventConfig { schema_version: 1 };
+    client.initialize(&admin, &nova_token, &event_config);
 
     // Set swap config
     let xlm_token = Address::generate(&env);

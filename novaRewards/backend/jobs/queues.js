@@ -36,6 +36,18 @@ const webhookDeliveryQueue = new Queue('webhook-delivery', {
   },
 });
 
+// Campaign-level bulk distribution — one job per distribute request.
+// removeOnComplete/removeOnFailed use count-based retention so GET /api/jobs/:jobId
+// can query results after the job finishes.
+const rewardDistributionQueue = new Queue('reward-distribution', {
+  connection: redisConfig,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { count: 500 },
+    removeOnFailed: { count: 500 },
+  },
+});
+
 // Setup Bull Board
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath('/api/admin/queues');
@@ -45,6 +57,7 @@ createBullBoard({
     new BullMQAdapter(rewardIssuanceQueue),
     new BullMQAdapter(transactionSubmissionQueue),
     new BullMQAdapter(webhookDeliveryQueue),
+    new BullMQAdapter(rewardDistributionQueue),
   ],
   serverAdapter: serverAdapter,
 });
@@ -53,5 +66,6 @@ module.exports = {
   rewardIssuanceQueue,
   transactionSubmissionQueue,
   webhookDeliveryQueue,
+  rewardDistributionQueue,
   serverAdapter,
 };

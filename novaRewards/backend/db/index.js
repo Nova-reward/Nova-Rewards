@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const logger = require('../lib/logger');
 
 // Single shared connection pool for the entire backend
 const pool = new Pool({
@@ -12,26 +13,28 @@ const pool = new Pool({
 
 // Log pool events for monitoring
 pool.on('connect', () => {
-  console.log('[DB Pool] New client connected');
+  logger.debug('[DB Pool] new client connected');
 });
 
 pool.on('error', (err) => {
-  console.error('[DB Pool] Error:', err.message);
-  // Log pool errors - this will trigger alerts
+  logger.error('[DB Pool] error', { error: err.message });
 });
 
 pool.on('acquire', () => {
-  console.log('[DB Pool] Client acquired');
+  logger.debug('[DB Pool] client acquired');
 });
 
 pool.on('remove', () => {
-  console.log('[DB Pool] Client removed');
+  logger.debug('[DB Pool] client removed');
 });
 
-// Log pool status periodically (for debugging)
 setInterval(() => {
-  console.log(`[DB Pool] Status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
-}, 60000); // Every 60 seconds
+  logger.debug('[DB Pool] status', {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+  });
+}, 60000);
 
 /**
  * Executes a parameterized SQL query against the PostgreSQL database.
@@ -46,11 +49,11 @@ async function query(text, params) {
     const result = await pool.query(text, params);
     const duration = Date.now() - start;
     if (duration > 250) {
-      console.warn(`[DB Query] Slow query (${duration}ms): ${text.substring(0, 100)}`);
+      logger.warn('[DB Query] slow query', { durationMs: duration, query: text.substring(0, 100) });
     }
     return result;
   } catch (error) {
-    console.error(`[DB Query] Error: ${error.message}`);
+    logger.error('[DB Query] error', { error: error.message });
     throw error;
   }
 }

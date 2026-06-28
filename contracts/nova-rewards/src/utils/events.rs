@@ -15,7 +15,7 @@
 //!
 //! | Topic 0      | Topic 1      | Data fields                                              | Trigger                      |
 //! |--------------|--------------|----------------------------------------------------------|------------------------------|
-//! | `nova_rwd`   | `init`       | `(v, admin: Address)`                                    | Contract first init          |
+//! | `nova_rwd`   | `init`       | `(v, admin: Address, token: Address, schema_ver: u32)`   | Contract first init          |
 //! | `nova_rwd`   | `bal_set`    | `(v, user: Address, amount: i128)`                       | Admin sets balance           |
 //! | `nova_rwd`   | `staked`     | `(v, staker: Address, amount: i128, ts: u64)`            | User stakes tokens           |
 //! | `nova_rwd`   | `unstaked`   | `(v, staker: Address, principal: i128, yield: i128, ts: u64)` | User unstakes           |
@@ -31,6 +31,7 @@
 //! | `nova_rwd`   | `rec_funds`  | `(v, from: Address, to: Address, amount: i128)`          | Recovery fund transfer       |
 //! | `nova_rwd`   | `upgraded`   | `(v, wasm_hash: BytesN<32>, version: u32)`               | Contract WASM upgraded       |
 
+use crate::EventConfig;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 /// Schema version embedded in every event payload.
@@ -40,10 +41,10 @@ pub const EVENT_SCHEMA_VERSION: u32 = 1;
 // ── Emitters ──────────────────────────────────────────────────────────────────
 
 /// Emitted once when the contract is first initialised.
-pub fn emit_initialized(env: &Env, admin: &Address) {
+pub fn emit_initialized(env: &Env, admin: &Address, nova_token: &Address, event_config: &EventConfig) {
     env.events().publish(
         (symbol_short!("nova_rwd"), symbol_short!("init")),
-        (EVENT_SCHEMA_VERSION, admin.clone()),
+        (EVENT_SCHEMA_VERSION, admin.clone(), nova_token.clone(), event_config.schema_version),
     );
 }
 

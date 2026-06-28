@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { query } = require('../db/index');
@@ -103,7 +104,7 @@ router.post('/register', async (req, res, next) => {
       actorType: 'user',
       details: { email: normalizedEmail },
       source: 'POST /api/auth/register',
-    }).catch((err) => console.error('[audit] register:', err.message));
+    }).catch((err) => logger.error('[audit] register:', err.message));
 
     return res.status(201).json({ success: true, data: newUser });
   } catch (err) {
@@ -191,7 +192,7 @@ router.post('/login', checkIpBlock, async (req, res, next) => {
       actorType: user.role === 'admin' ? 'admin' : 'user',
       details: { email: normalizedEmail },
       source: 'POST /api/auth/login',
-    }).catch((err) => console.error('[audit] login:', err.message));
+    }).catch((err) => logger.error('[audit] login:', err.message));
 
     const accessToken  = signAccessToken(user);
     const { token: refreshToken } = await issueDbRefreshToken(user);

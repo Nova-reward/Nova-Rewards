@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const router = require('express').Router();
 const { authenticateUser } = require('../middleware/authenticateUser');
 const { redeemReward, getRedemptionById, getUserRedemptions } = require('../db/redemptionRepository');
@@ -149,7 +150,7 @@ router.post('/', validateCreateRedemption, async (req, res, next) => {
       ]).then(([user, reward]) => {
         appEvents.emit('redemption.created', { redemption, user, reward });
       }).catch((err) => {
-        console.error('[redemptions] event emit failed:', err.message);
+        logger.error('[redemptions] event emit failed:', err.message);
       });
 
       // Explicit audit log for redemption
@@ -161,7 +162,7 @@ router.post('/', validateCreateRedemption, async (req, res, next) => {
         actorType: req.user.role === 'admin' ? 'admin' : 'user',
         details: { rewardId: rewardIdNum, userId: userIdNum, pointsSpent: redemption.points_spent },
         source: 'POST /api/redemptions',
-      }).catch((err) => console.error('[audit] redeem_reward:', err.message));
+      }).catch((err) => logger.error('[audit] redeem_reward:', err.message));
     }
 
     const statusCode = idempotent ? 200 : 201;

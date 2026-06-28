@@ -72,6 +72,12 @@ pub enum RecoveryKind {
     Fund,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EventConfig {
+    pub schema_version: u32,
+}
+
 // ---------------------------------------------------------------------------
 // Storage keys
 // ---------------------------------------------------------------------------
@@ -114,6 +120,12 @@ pub enum DataKey {
     DailyLimit,
     /// Per-user rolling 24h usage window
     DailyUsage(Address),
+    /// Address of the Nova token contract
+    NovaToken,
+    /// Event configuration
+    EventConfig,
+    /// Cooldown period in seconds between staking and unstaking
+    CooldownPeriod,
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +228,7 @@ fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
     // Extend TTL for persistent storage
     env.storage()
         .persistent()
-        .extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
+        .extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS as u32, DAILY_USAGE_TTL_SECS as u32);
 
     // Check if window has expired (24 hours)
     if now - usage.window_start >= DAILY_LIMIT_WINDOW_SECS {
@@ -224,7 +236,7 @@ fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
         usage.window_start = now;
         env.storage().persistent().set(&usage_key, &usage);
         // Set TTL for persistent storage
-        env.storage().persistent().extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
+        env.storage().persistent().extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS as u32, DAILY_USAGE_TTL_SECS as u32);
     }
 
     // Check limit
@@ -236,7 +248,7 @@ fn check_daily_limit(env: &Env, user: &Address, requested_amount: i128) {
     usage.amount_used += requested_amount;
     env.storage().persistent().set(&usage_key, &usage);
     // Set TTL for persistent storage
-    env.storage().persistent().extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS, DAILY_USAGE_TTL_SECS);
+    env.storage().persistent().extend_ttl(&usage_key, DAILY_USAGE_TTL_SECS as u32, DAILY_USAGE_TTL_SECS as u32);
 }
 
 // ---------------------------------------------------------------------------
@@ -361,25 +373,38 @@ impl NovaRewardsContract {
     // Initialisation
     // -----------------------------------------------------------------------
 
-    /// Initializes the contract and records the admin plus migration version state.
+    /// Initializes the contract and records the admin, Nova token, and event
+    /// configuration. Also sets the recovery admin to the same address as
+    /// admin, initialises the migrated version to 0, and leaves the contract
+    /// unpaused.
     ///
     /// # Parameters
     /// - `admin` – Address authorized for all admin-gated operations.
+    /// - `nova_token` – Address of the Nova token contract.
+    /// - `event_config` – Event configuration including schema version.
     ///
     /// # Panics
     /// - `"already initialized"` if called more than once.
-    pub fn initialize(env: Env, admin: Address) {
+    /// - `"invalid event config"` if `event_config.schema_version` is 0.
+    pub fn initialize(env: Env, admin: Address, nova_token: Address, event_config: EventConfig) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
+
+        if event_config.schema_version == 0 {
+            panic!("invalid event config");
+        }
+
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::RecoveryAdmin, &admin);
+        env.storage().instance().set(&DataKey::NovaToken, &nova_token);
+        env.storage().instance().set(&DataKey::EventConfig, &event_config);
         env.storage().instance().set(&DataKey::MigratedVersion, &0u32);
         env.storage().instance().set(&DataKey::Paused, &false);
 
         // Emit structured initialized event
-        events::emit_initialized(&env, &admin);
+        events::emit_initialized(&env, &admin, &nova_token, &event_config);
     }
 
     // -----------------------------------------------------------------------
@@ -538,6 +563,19 @@ impl NovaRewardsContract {
 
     pub fn get_emergency_procedure(env: Env) -> Option<Symbol> {
         env.storage().instance().get(&DataKey::EmergencyProcedure)
+    }
+
+    /// Returns the configured Nova token contract address.
+    pub fn get_nova_token(env: Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&DataKey::NovaToken)
+            .expect("nova token not set")
+    }
+
+    /// Returns the configured event configuration.
+    pub fn get_event_config(env: Env) -> Option<EventConfig> {
+        env.storage().instance().get(&DataKey::EventConfig)
     }
 
     // -----------------------------------------------------------------------

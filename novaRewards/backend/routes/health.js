@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const express = require('express');
 const router = express.Router();
 const { runHealthChecks } = require('../services/healthCheckService');
@@ -89,7 +90,7 @@ router.get('/detailed', async (req, res) => {
       data: healthData,
     });
   } catch (error) {
-    console.error('Health check failed:', error);
+    logger.error('Health check failed:', error);
     res.status(503).json({
       success: false,
       data: {

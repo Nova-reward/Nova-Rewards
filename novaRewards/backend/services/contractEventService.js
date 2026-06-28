@@ -1,4 +1,5 @@
 'use strict';
+const logger = require('./lib/logger');
 
 /**
  * Horizon SSE event streaming and indexing service.
@@ -53,7 +54,7 @@ async function connectStream(contractId, attempt) {
 
   const url = `${HORIZON_URL}/events?contract_id=${contractId}&cursor=${cursor}&limit=200`;
 
-  console.log(`[horizon-stream] Connecting to ${url} (attempt ${attempt})`);
+  logger.info(`[horizon-stream] Connecting to ${url} (attempt ${attempt})`);
 
   // Use Node's built-in fetch (Node 18+) or fall back to http.get for SSE
   let es;
@@ -76,12 +77,12 @@ async function connectStream(contractId, attempt) {
         await saveStreamCursor(contractId, raw.paging_token);
       }
     } catch (err) {
-      console.error(`[horizon-stream] Error handling event for ${contractId}:`, err.message);
+      logger.error(`[horizon-stream] Error handling event for ${contractId}:`, err.message);
     }
   };
 
   es.onerror = () => {
-    console.warn(`[horizon-stream] Stream error for ${contractId}, scheduling reconnect`);
+    logger.warn(`[horizon-stream] Stream error for ${contractId}, scheduling reconnect`);
     es.close();
     activeStreams.delete(contractId);
     scheduleReconnect(contractId, attempt + 1);
@@ -106,11 +107,11 @@ function createNodeSSE(url, contractId, attempt) {
             await saveStreamCursor(contractId, record.paging_token);
           }
         } catch (err) {
-          console.error(`[horizon-stream] Error handling record for ${contractId}:`, err.message);
+          logger.error(`[horizon-stream] Error handling record for ${contractId}:`, err.message);
         }
       },
       onerror: (err) => {
-        console.warn(`[horizon-stream] SDK stream error for ${contractId}:`, err?.message);
+        logger.warn(`[horizon-stream] SDK stream error for ${contractId}:`, err?.message);
         if (typeof closeHandler === 'function') closeHandler();
         activeStreams.delete(contractId);
         scheduleReconnect(contractId, attempt + 1);
@@ -128,7 +129,7 @@ function createNodeSSE(url, contractId, attempt) {
  */
 function scheduleReconnect(contractId, attempt) {
   const delay = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
-  console.log(`[horizon-stream] Reconnecting ${contractId} in ${delay}ms (attempt ${attempt})`);
+  logger.info(`[horizon-stream] Reconnecting ${contractId} in ${delay}ms (attempt ${attempt})`);
   setTimeout(() => connectStream(contractId, attempt), delay);
 }
 
@@ -244,7 +245,7 @@ async function dispatchEvent(contractId, eventType, raw, eventId) {
     case 'state:upgraded':
       return handleStateEvent(contractId, eventType, raw, eventId);
     default:
-      console.log(`[horizon-stream] No handler for event type: ${eventType}`);
+      logger.info(`[horizon-stream] No handler for event type: ${eventType}`);
   }
 }
 
@@ -291,51 +292,51 @@ function extractEventType(record) {
 }
 
 async function handleMintEvent(contractId, event, eventId) {
-  console.log(`[horizon-stream] mint event — contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] mint event — contract=${contractId} id=${eventId}`);
 }
 
 async function handleClaimEvent(contractId, event, eventId) {
-  console.log(`[horizon-stream] claim event — contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] claim event — contract=${contractId} id=${eventId}`);
 }
 
 async function handleStakeEvent(contractId, event, eventId) {
-  console.log(`[horizon-stream] stake event — contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] stake event — contract=${contractId} id=${eventId}`);
 }
 
 async function handleUnstakeEvent(contractId, event, eventId) {
-  console.log(`[horizon-stream] unstake event — contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] unstake event — contract=${contractId} id=${eventId}`);
 }
 
 async function handleTokenEvent(contractId, eventType, event, eventId) {
-  console.log(`[horizon-stream] token event type=${eventType} contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] token event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 async function handleNovaRewardsEvent(contractId, eventType, event, eventId) {
-  console.log(`[horizon-stream] nova-rewards event type=${eventType} contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] nova-rewards event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 async function handleCampaignEvent(contractId, eventType, event, eventId) {
-  console.log(`[horizon-stream] campaign event type=${eventType} contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] campaign event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 async function handleEscrowEvent(contractId, eventType, event, eventId) {
-  console.log(`[horizon-stream] escrow event type=${eventType} contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] escrow event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 async function handleDistributionEvent(contractId, eventType, event, eventId) {
-  console.log(`[horizon-stream] distribution event type=${eventType} contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] distribution event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 async function handleGovernanceEvent(contractId, eventType, event, eventId) {
-  console.log(`[horizon-stream] governance event type=${eventType} contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] governance event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 async function handleAdminRolesEvent(contractId, eventType, event, eventId) {
-  console.log(`[horizon-stream] admin-roles event type=${eventType} contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] admin-roles event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 async function handleStateEvent(contractId, eventType, event, eventId) {
-  console.log(`[horizon-stream] contract-state event type=${eventType} contract=${contractId} id=${eventId}`);
+  logger.info(`[horizon-stream] contract-state event type=${eventType} contract=${contractId} id=${eventId}`);
 }
 
 /**
@@ -354,7 +355,7 @@ function startRetryLoop() {
         }
       }
     } catch (err) {
-      console.error('[horizon-stream] Retry loop error:', err.message);
+      logger.error('[horizon-stream] Retry loop error:', err.message);
     }
   }, RETRY_LOOP_INTERVAL_MS);
 }
@@ -369,7 +370,7 @@ function stopEventListener() {
     } catch {
       // ignore
     }
-    console.log(`[horizon-stream] Stopped stream for ${contractId}`);
+    logger.info(`[horizon-stream] Stopped stream for ${contractId}`);
   }
   activeStreams.clear();
 }

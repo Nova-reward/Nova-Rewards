@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * Search routes
  *
@@ -81,7 +82,7 @@ router.get('/', authenticateUser, async (req, res, next) => {
       entityType,
       resultCount: total,
       durationMs,
-    }).catch((err) => console.error('[Search] analytics write failed:', err));
+    }).catch((err) => logger.error('[Search] analytics write failed:', err));
 
     res.json({
       success: true,

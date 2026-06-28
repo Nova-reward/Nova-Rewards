@@ -1,6 +1,10 @@
 'use strict';
 
+const { AsyncLocalStorage } = require('async_hooks');
 const { createLogger, format, transports } = require('winston');
+
+// Per-request store: { correlationId: string }
+const asyncLocalStorage = new AsyncLocalStorage();
 
 // Patterns for PII/sensitive data redaction
 const REDACT_PATTERNS = [
@@ -31,8 +35,18 @@ const redactFormat = format((info) => {
   return info;
 });
 
+// Pulls correlationId from AsyncLocalStorage and stamps it on every log entry.
+const correlationFormat = format((info) => {
+  const store = asyncLocalStorage.getStore();
+  if (store?.correlationId && !info.correlationId) {
+    info.correlationId = store.correlationId;
+  }
+  return info;
+});
+
 const baseFormats = [
   format.timestamp(),
+  correlationFormat(),
   redactFormat(),
   format.errors({ stack: true }),
 ];
@@ -60,16 +74,15 @@ if (process.env.CLOUDWATCH_LOG_GROUP) {
         logGroupName: process.env.CLOUDWATCH_LOG_GROUP,
         logStreamName: `backend/${environment}/{hostname}`,
         awsRegion,
-        // Credentials picked up from env / instance profile automatically
         jsonValueFormatter: (v) => redact(JSON.stringify(v)),
-        messageFormatter: ({ level, message, timestamp, ...meta }) => {
+        messageFormatter: ({ level, message, timestamp, correlationId, ...meta }) => {
+          const cid = correlationId ? ` [${correlationId}]` : '';
           const metaStr = Object.keys(meta).length ? ' ' + redact(JSON.stringify(meta)) : '';
-          return `[${timestamp}] ${level.toUpperCase()}: ${message}${metaStr}`;
+          return `[${timestamp}]${cid} ${level.toUpperCase()}: ${message}${metaStr}`;
         },
         retentionInDays: 90,
         uploadRate: 2000,
         errorHandler: (err) => {
-          // Avoid infinite loop — write directly to stderr
           process.stderr.write(`[winston-cloudwatch] ${err.message}\n`);
         },
       })
@@ -88,4 +101,11 @@ const logger = createLogger({
   transports: loggerTransports,
 });
 
+// Returns the singleton logger (used by tracingMiddleware and other callers).
+function getLogger() {
+  return logger;
+}
+
 module.exports = logger;
+module.exports.asyncLocalStorage = asyncLocalStorage;
+module.exports.getLogger = getLogger;

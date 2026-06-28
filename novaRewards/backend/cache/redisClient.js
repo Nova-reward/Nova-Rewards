@@ -1,4 +1,5 @@
 const Redis = require('ioredis');
+const logger = require('../lib/logger');
 
 let client = null;
 
@@ -27,11 +28,11 @@ function getRedisClient() {
   });
 
   client.on('error', (err) => {
-    console.error('[redis] connection error:', err.message);
+    logger.error('[redis] connection error', { error: err.message });
   });
 
   client.on('ready', () => {
-    console.log('[redis] connected to ElastiCache');
+    logger.info('[redis] connected to ElastiCache');
   });
 
   return client;

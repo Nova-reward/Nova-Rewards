@@ -1,4 +1,5 @@
 'use strict';
+const logger = require('./lib/logger');
 
 const { sendEmail } = require('./emailService');
 const { getConfig } = require('./configService');
@@ -29,7 +30,7 @@ async function sendSecurityAlert({ type, identifier, reason, ttlSeconds, meta = 
     await sendEmail({ to: SECURITY_EMAIL, subject, html, emailType: 'security_alert' });
   } catch (err) {
     // Alert failure must never crash the request pipeline
-    console.error('[securityAlert] Failed to send alert:', err.message);
+    logger.error('[securityAlert] Failed to send alert:', err.message);
   }
 }
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
 import EmptyState from '../EmptyState';
 import DataTable from '../DataTable';
@@ -10,6 +12,22 @@ const STATUS_BADGE = {
   inactive: { cls: 'bg-slate-100 text-slate-500 dark:bg-brand-border dark:text-slate-400', label: 'Inactive' },
 };
 
+const FILTER_OPTIONS = [
+  { value: 'all',      label: 'All' },
+  { value: 'active',   label: 'Active' },
+  { value: 'ended',    label: 'Ended' },
+  { value: 'upcoming', label: 'Upcoming' },
+];
+
+function derivedStatus(c) {
+  const now   = new Date();
+  const start = new Date(c.startDate ?? c.start_date);
+  const end   = new Date(c.endDate   ?? c.end_date);
+  if (now < start) return 'upcoming';
+  if (now > end || c.status === 'inactive') return 'ended';
+  return 'active';
+}
+
 function StatusBadge({ status }) {
   const badge = STATUS_BADGE[status] ?? STATUS_BADGE.inactive;
   return (
@@ -19,7 +37,6 @@ function StatusBadge({ status }) {
   );
 }
 
-/** Custom empty state for the campaign list */
 function CampaignEmptyState() {
   return (
     <EmptyState
@@ -35,11 +52,54 @@ function CampaignEmptyState() {
 
 /**
  * CampaignList — displays merchant campaigns in a shared DataTable.
- * Supports sortable columns, pagination, and URL query string sync.
+ * Supports name search (300 ms debounce), status filter (All / Active /
+ * Ended / Upcoming), sortable columns, pagination, and URL query string sync.
  *
  * @param {{ campaigns: object[], loading: boolean, onPause: (id:string)=>void, onResume: (id:string)=>void }} props
  */
 export default function CampaignList({ campaigns, loading, onPause, onResume }) {
+  const router = useRouter();
+  const urlSyncReady = useRef(false);
+
+  const [searchQuery,     setSearchQuery]     = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter,    setStatusFilter]    = useState('all');
+
+  // Seed from URL once router is ready
+  useEffect(() => {
+    if (!router.isReady) return;
+    urlSyncReady.current = true;
+    setSearchQuery(router.query.cl_q       || '');
+    setDebouncedSearch(router.query.cl_q   || '');
+    setStatusFilter(router.query.cl_status || 'all');
+  }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 300 ms debounce on search input
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
+
+  // Reflect active filters in URL (cl_ prefix keeps them separate from DataTable's own params)
+  useEffect(() => {
+    if (!router.isReady || !urlSyncReady.current) return;
+    const next = { ...router.query };
+    if (debouncedSearch) { next.cl_q = debouncedSearch; } else { delete next.cl_q; }
+    if (statusFilter !== 'all') { next.cl_status = statusFilter; } else { delete next.cl_status; }
+    router.replace({ query: next }, undefined, { shallow: true, scroll: false });
+  }, [debouncedSearch, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Client-side filter
+  const filtered = (campaigns ?? []).filter((c) => {
+    if (debouncedSearch && !c.name?.toLowerCase().includes(debouncedSearch.toLowerCase())) {
+      return false;
+    }
+    if (statusFilter !== 'all' && derivedStatus(c) !== statusFilter) {
+      return false;
+    }
+    return true;
+  });
+
   const columns = [
     {
       key: 'name',
@@ -101,15 +161,69 @@ export default function CampaignList({ campaigns, loading, onPause, onResume }) 
   ];
 
   return (
-    <DataTable
-      columns={columns}
-      data={campaigns ?? []}
-      defaultPageSize={10}
-      emptyState={<CampaignEmptyState />}
-      keyField="id"
-      urlSync={true}
-      queryPrefix="cl_"
-      loading={loading}
-    />
+    <div>
+      {/* Search and status filter controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+        <div className="relative flex-1">
+          <label htmlFor="campaign-search" className="sr-only">
+            Search campaigns by name
+          </label>
+          <span
+            className="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none"
+            aria-hidden="true"
+          >
+            🔍
+          </span>
+          <input
+            id="campaign-search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by name…"
+            aria-label="Search campaigns by name"
+            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-brand-border bg-white dark:bg-brand-card text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-purple/50"
+          />
+        </div>
+
+        <div
+          role="group"
+          aria-label="Filter by status"
+          className="flex items-center gap-1 flex-wrap"
+        >
+          {FILTER_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setStatusFilter(value)}
+              aria-pressed={statusFilter === value}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-brand-purple/50 ${
+                statusFilter === value
+                  ? 'bg-brand-purple text-white border-brand-purple'
+                  : 'bg-white dark:bg-brand-card text-slate-600 dark:text-slate-300 border-slate-200 dark:border-brand-border hover:bg-slate-50 dark:hover:bg-brand-border/40'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* No-match message when campaigns exist but filters exclude all */}
+      {campaigns?.length > 0 && filtered.length === 0 && (
+        <p className="text-sm text-slate-400 py-4 text-center">
+          No campaigns match your filters.
+        </p>
+      )}
+
+      <DataTable
+        columns={columns}
+        data={filtered}
+        defaultPageSize={10}
+        emptyState={<CampaignEmptyState />}
+        keyField="id"
+        urlSync={true}
+        queryPrefix="cl_"
+        loading={loading}
+      />
+    </div>
   );
 }
