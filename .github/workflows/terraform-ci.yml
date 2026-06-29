@@ -32,7 +32,7 @@ jobs:
         working-directory: infra
         run: terraform validate
 
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: "v0.50.3"
 
