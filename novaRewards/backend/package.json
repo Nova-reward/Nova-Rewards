@@ -57,7 +57,7 @@
     "@faker-js/faker": "^10.5.0",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.10",
     "fast-check": "^4.8.0",
     "fishery": "^2.2.2",
     "nodemon": "^3.1.14",
