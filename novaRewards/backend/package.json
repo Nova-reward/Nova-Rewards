@@ -37,7 +37,7 @@
     "helmet": "8.2.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
-    "nodemailer": "^8.0.10",
+    "nodemailer": "^9.0.3",
     "opossum": "^10.0.0",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
