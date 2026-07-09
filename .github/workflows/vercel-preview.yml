@@ -25,7 +25,7 @@ jobs:
 
       - name: Post deployment comment
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const commentBody = `## 🚀 Vercel Preview Deployment Ready\n\n✅ Your frontend preview environment is ready for testing!\n\n- **Preview URL**: ${{ steps.vercel-deploy.outputs.preview-url }}\n- **Commit**: \`${{ github.event.pull_request.head.sha }}\`\n\nChanges are deployed automatically on new commits.`;
