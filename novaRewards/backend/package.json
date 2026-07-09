@@ -38,7 +38,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
     "nodemailer": "^8.0.10",
-    "opossum": "^9.0.0",
+    "opossum": "^10.0.0",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
     "prom-client": "^15.1.3",
