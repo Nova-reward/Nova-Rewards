@@ -1,0 +1,240 @@
+name: E2E Tests - Reward Issuance Flow
+
+on:
+  push:
+    branches: [main, develop, feature/e2e-*]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run E2E tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '18'
+  CI: true
+
+jobs:
+  e2e:
+    name: E2E Tests - Full Reward Issuance Flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: nova_rewards_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        working-directory: ./novaRewards/backend
+        run: npm install --frozen-lockfile
+
+      - name: Install frontend dependencies
+        working-directory: ./novaRewards/frontend
+        run: npm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: ./novaRewards/frontend
+        run: npx playwright install --with-deps
+
+      - name: Setup environment variables
+        run: |
+          cat > .env.test << EOF
+          NODE_ENV=test
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nova_rewards_test
+          REDIS_URL=redis://localhost:6379
+          API_BASE_URL=http://localhost:3000/api
+          TESTNET_USER_WALLET=${{ secrets.TESTNET_USER_WALLET || 'GBRPYHIL2CI3WHSCULVRJC3P4ABWOY4XHALUKYAPXL73MRLN42HDA5O' }}
+          TESTNET_ISSUER_PUBLIC=${{ secrets.TESTNET_ISSUER_PUBLIC || 'GDQOE23CFSUMSVQK4Y5R3ZARVIVTD4XVXUUJX3SP27YMGNXC2OGXJVM' }}
+          EOF
+
+      - name: Run database migrations
+        working-directory: ./novaRewards/backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nova_rewards_test
+        run: npm run migrate || true
+
+      - name: Seed test data
+        working-directory: ./novaRewards/backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: nova_rewards_test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: node scripts/seed-test-data.js
+
+      - name: Start backend server
+        working-directory: ./novaRewards/backend
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nova_rewards_test
+          REDIS_URL: redis://localhost:6379
+          PORT: 3001
+        run: |
+          npm run start &
+          sleep 5
+        timeout-minutes: 5
+
+      - name: Start frontend dev server
+        working-directory: ./novaRewards/frontend
+        run: |
+          npm run dev &
+          sleep 10
+        timeout-minutes: 5
+
+      - name: Wait for services
+        run: |
+          until curl -f http://localhost:3000; do
+            echo "Waiting for frontend..."
+            sleep 2
+          done
+          until curl -f http://localhost:3001/health; do
+            echo "Waiting for backend..."
+            sleep 2
+          done
+
+      - name: Run E2E tests - Reward Issuance Flow
+        working-directory: ./novaRewards/frontend
+        env:
+          CI: true
+          BASE_URL: http://localhost:3000
+        run: npx playwright test reward-issuance-flow.spec.js --reporter=html
+
+      - name: Run E2E tests - All Specs
+        working-directory: ./novaRewards/frontend
+        env:
+          CI: true
+          BASE_URL: http://localhost:3000
+        run: npx playwright test --reporter=html
+        continue-on-error: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: ./novaRewards/frontend/playwright-report/
+          retention-days: 30
+
+      - name: Upload test results (JSON)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-json
+          path: ./novaRewards/frontend/test-results/
+          retention-days: 30
+
+      - name: Publish test report
+        if: always()
+        uses: daghnawal/playwright-report-comment@v3
+        with:
+          report-path: ./novaRewards/frontend/playwright-report
+          only-on-failure: false
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const resultsPath = './novaRewards/frontend/test-results/results.json';
+            
+            if (fs.existsSync(resultsPath)) {
+              const results = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
+              const passed = results.stats?.expected || 0;
+              const failed = results.stats?.unexpected || 0;
+              const skipped = results.stats?.skipped || 0;
+              
+              const body = `
+              ## E2E Test Results
+              - ✅ Passed: ${passed}
+              - ❌ Failed: ${failed}
+              - ⏭️ Skipped: ${skipped}
+              
+              [View detailed report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+      - name: Fail if tests failed
+        if: failure()
+        run: exit 1
+
+  e2e-testnet:
+    name: E2E Tests - Stellar Testnet Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Only run on main branch or when explicitly triggered
+    if: github.ref == 'refs/heads/main' || contains(github.event.head_commit.message, '[testnet]')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: ./novaRewards/frontend
+        run: npm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: ./novaRewards/frontend
+        run: npx playwright install --with-deps
+
+      - name: Run E2E tests against testnet
+        working-directory: ./novaRewards/frontend
+        env:
+          CI: true
+          TESTNET_MODE: true
+          BASE_URL: ${{ secrets.TESTNET_BASE_URL || 'https://staging.nova-rewards.com' }}
+          TESTNET_USER_WALLET: ${{ secrets.TESTNET_USER_WALLET }}
+          TESTNET_ISSUER_PUBLIC: ${{ secrets.TESTNET_ISSUER_PUBLIC }}
+        run: npx playwright test reward-issuance-flow.spec.js --reporter=html
+
+      - name: Upload testnet test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testnet-playwright-report
+          path: ./novaRewards/frontend/playwright-report/
+          retention-days: 30
