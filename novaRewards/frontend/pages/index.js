@@ -1,6 +1,7 @@
 import { useWallet } from '../context/WalletContext';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
+import Navbar from '../components/Navbar';
 
 export default function Home() {
   const { publicKey, connect, loading, error, freighterInstalled, disconnect } = useWallet();
@@ -17,21 +18,17 @@ export default function Home() {
 
   return (
     <>
-      <nav className="nav">
-        <span className="nav-brand">⭐ NovaRewards</span>
-        <div className="nav-links">
-          <a href="/merchant">Merchant Portal</a>
-          {publicKey && (
-            <button
-              className="btn btn-secondary"
-              onClick={handleDisconnect}
-              style={{ padding: "0.4rem 1rem" }}
-            >
-              Disconnect
-            </button>
-          )}
-        </div>
-      </nav>
+      <Navbar>
+        {publicKey && (
+          <button
+            className="btn btn-secondary"
+            onClick={handleDisconnect}
+            style={{ padding: "0.4rem 1rem" }}
+          >
+            Disconnect
+          </button>
+        )}
+      </Navbar>
 
       <div className="container" style={{ textAlign: 'center', paddingTop: '5rem' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '1rem' }}>

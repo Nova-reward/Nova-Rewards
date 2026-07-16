@@ -12,7 +12,7 @@ use soroban_sdk::{
     vec, Address, Env, IntoVal, Symbol, Val, Vec,
 };
 
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient};
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient};
 
 // ---------------------------------------------------------------------------
 // Mock router contract
@@ -88,9 +88,11 @@ impl<'a> MockRouterClient2<'a> {
 
 fn setup(env: &Env) -> (NovaRewardsContractClient, Address, MockRouterClient) {
     let admin = Address::generate(env);
+    let nova_token = Address::generate(env);
+    let event_config = EventConfig { schema_version: 1 };
     let id = env.register_contract(None, NovaRewardsContract);
     let client = NovaRewardsContractClient::new(env, &id);
-    client.initialize(&admin);
+    client.initialize(&admin, &nova_token, &event_config);
 
     let router = MockRouterClient::new(env);
     let xlm_token = Address::generate(env); // placeholder SAC address

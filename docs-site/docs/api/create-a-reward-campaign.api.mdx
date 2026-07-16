@@ -1,0 +1,84 @@
+---
+id: create-a-reward-campaign
+title: "Create a reward campaign"
+description: "Create a reward campaign"
+sidebar_label: "Create a reward campaign"
+hide_title: true
+hide_table_of_contents: true
+api: eJztVk1v4zYQ/SvEnFpA/kqattDNu5sCu91tg8TtHgIjGVMTmxuK1JKUE8PQfy+GtBQ5cZN2A/TUHByKGs7Xe/OoLQRcesgv4S2WFaql8TDPwJOsnQobyC+3UJKTKzRhWqlfibfmzTwDR19r8uGNLTaQb+OjclRAHlxNGUhrApnAr7CqtJIYlDWjL94a3vNyRSXyKmwqghzs4gvJAFnP0SUYLClu3aErzjHwgw/owru0JlPE1TyDytmKXFDk2Wk8+ODcB6fMkg/cY1lp3rqoy5Kc+Gg3qMNGvHNqTdDsxXo4b+pyQa5/fjI8afq5HIh1Y12JAXIodsl2sY/GRyeD8Y+D8YQjtkV8g4ufB8cTaOIfZ+4ra3xqwNF4wv8K8tKpilsPeQexkI4wUDGEV+C033BfS0ne9wwX1mpC08+amdFkXMw/8KiKno0ygZb7CBw3WcfMq5eMf2qyV3Piyv0LUlwVr2fFN/tItMhA+SuUgYt4GZYmg6BCdNLSpGPWD+PxUzL9iVoVkSyCnLPuvybTDWrPbIrBn8d13aV6lawjdbzH5QuEuEOtKUyLwpH3QnnRiVO/X6fs83w3fdC27MD8fVLeK7MU1gllYlJievZe3NLm/+Y9NI8VYl+2oloJFGkOhWz5yYmElS0gh8r62AoMK8hhJLvLjO8ytybn41VWOw05rEKo8tFIW4l6ZX3Ij8fjyQgrBY9Df2QTUdCatK1KRqfJ+l58PuJzQ2PXmLLzQ2UPujpztqhlfGh6N+wFw5qQWxA6ctOaS+gay1G4iGjGYEYjyHaLX1op+PB59iTkh88zgZENIthbMsIuAipDhbhxthTXZ79fzMQI67AaabtU5noIPVFtr/suFUwbGSh2viIsYiJJV+F+gJUa3EaDR7TfOWzJLhyF2nEa1ghHS+WDS0LynV/ZOyOskfT9MNKE2X/+8KVx2rKrveIPa/b+NT4Znuxd1X2l7V2/j8XT3NhY/I6ov9k1nieIuRDIgFmVKpwMx8Pxk7rPTy9mseYb60RYkWAXovWx0FbeyhUqI/Qu+UpjYG0fiqnWonI2kAxUCDJFZZUJ3QgJFG8i/IIhfhFV0SFwwJMR1x101yKhKpTxgbD7QEAZei3fK2NGWHK7tJLEE/xg9un9LELIo1mi6b15ZqD3OtgxL9B9GFUaleFQcfy2u1m/BNn/cOVx5s3tdoGe/nC6aXj7a00ufrlmsEancMGQXs6brKUxiwNzN4e3SYYHMw7N5rpO5H8kySwE6cRUSqrCs7bznlQxPjy/uw/n0hZ8xuEd0xbvIAfIwMYWRFmIe1vQaJZ1FF1IPrm3uC8WWKk0gLsFV9W+Mptehv1hTUXwL5d00Hy7TbPfNJ19evW3Jzp1SNYM3Lxpmr8AZxg6IA==
+sidebar_class_name: "post api-method"
+info_path: docs/api/novarewards-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading as="h1" className="openapi__heading">
+  Create a reward campaign
+</Heading>
+
+<MethodEndpoint method="post" path="/campaigns" context="endpoint" />
+
+Create a reward campaign
+
+<Heading id="request" as="h2" className="openapi-tabs__heading">
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails />
+
+<RequestSchema {...require("./create-a-reward-campaign.RequestSchema.json")} />
+
+<StatusCodes {...require("./create-a-reward-campaign.StatusCodes.json")} />
+
+## Example (cURL)
+
+```bash
+curl -X POST http://localhost:3001/api/campaigns \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "name": "Summer Promo",
+    "rewardRate": 1.5,
+    "startDate": "2025-06-01",
+    "endDate": "2025-08-31"
+  }'
+  
+Example (JavaScript)
+const res = await fetch("http://localhost:3001/api/campaigns", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "x-api-key": "YOUR_API_KEY"
+  },
+  body: JSON.stringify({
+    name: "Summer Promo",
+    rewardRate: 1.5,
+    startDate: "2025-06-01",
+    endDate: "2025-08-31"
+  })
+});
+
+console.log(await res.json());
+Example (Python)
+import requests
+
+res = requests.post(
+  "http://localhost:3001/api/campaigns",
+  headers={"x-api-key": "YOUR_API_KEY"},
+  json={
+    "name": "Summer Promo",
+    "rewardRate": 1.5,
+    "startDate": "2025-06-01",
+    "endDate": "2025-08-31"
+  }
+)
+
+print(res.json())
+
+---

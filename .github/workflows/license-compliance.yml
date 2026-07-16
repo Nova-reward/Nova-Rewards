@@ -1,0 +1,55 @@
+name: License Compliance Scan
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  license-scan:
+    name: License Compliance Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-license
+        run: cargo install cargo-license
+
+      - name: Install npm dependencies (Backend)
+        run: npm ci
+        working-directory: novaRewards/backend
+
+      - name: Install npm dependencies (Frontend)
+        run: npm ci
+        working-directory: novaRewards/frontend
+
+      - name: Install npm dependencies (Docs Site)
+        run: npm ci
+        working-directory: docs-site
+
+      - name: Run License Check Script
+        run: bash scripts/license-check.sh
+
+      - name: Commit License Reports
+        if: github.event_name != 'pull_request'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/licenses/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "docs: update license compliance reports" && git push)

@@ -1,0 +1,44 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ .Values.ingress.forceSSLRedirect }}"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/hsts: "{{ .Values.ingress.hsts.enabled }}"
+    nginx.ingress.kubernetes.io/hsts-max-age: "{{ .Values.ingress.hsts.maxAge }}"
+    nginx.ingress.kubernetes.io/hsts-include-subdomains: "{{ .Values.ingress.hsts.includeSubDomains }}"
+    nginx.ingress.kubernetes.io/hsts-preload: "{{ .Values.ingress.hsts.preload }}"
+    cert-manager.io/cluster-issuer: "{{ .Values.ingress.certManager.clusterIssuer }}"
+    acme.cert-manager.io/http01-edit-in-place: "true"
+{{- with .Values.ingress.annotations }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: {{ .Values.ingress.tlsSecret }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ .Release.Name }}-backend
+                port:
+                  number: 80
+          - path: /()(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ .Release.Name }}-frontend
+                port:
+                  number: 80
+{{- end }}

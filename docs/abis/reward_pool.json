@@ -1,0 +1,87 @@
+{
+  "contract": "reward_pool",
+  "version": "1.0.0",
+  "description": "Holds pooled NOVA tokens for reward distribution with deposit/withdraw controls and Merkle-proof claims.",
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the pool with an admin and token address.",
+      "params": [
+        { "name": "admin", "type": "Address" },
+        { "name": "token", "type": "Address" }
+      ],
+      "returns": null,
+      "errors": ["already initialized"]
+    },
+    {
+      "name": "deposit",
+      "description": "Deposits tokens into the pool.",
+      "params": [
+        { "name": "from", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["amount must be positive"]
+    },
+    {
+      "name": "withdraw",
+      "description": "Withdraws tokens from the pool. Admin only.",
+      "params": [
+        { "name": "to", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized", "insufficient balance", "locked"]
+    },
+    {
+      "name": "get_balance",
+      "description": "Returns the current pool balance.",
+      "params": [],
+      "returns": { "type": "i128" },
+      "errors": []
+    },
+    {
+      "name": "set_daily_limit",
+      "description": "Sets the daily withdrawal limit. Admin only.",
+      "params": [
+        { "name": "limit", "type": "i128" }
+      ],
+      "returns": null,
+      "errors": ["unauthorized"]
+    },
+    {
+      "name": "get_merkle_root",
+      "description": "Returns the current Merkle root for claim verification.",
+      "params": [],
+      "returns": { "type": "BytesN<32>" },
+      "errors": []
+    },
+    {
+      "name": "is_claimed",
+      "description": "Returns whether a leaf has been claimed.",
+      "params": [
+        { "name": "leaf", "type": "BytesN<32>" }
+      ],
+      "returns": { "type": "bool" },
+      "errors": []
+    },
+    {
+      "name": "get_locked_until",
+      "description": "Returns the ledger number until which withdrawals are locked.",
+      "params": [],
+      "returns": { "type": "u32" },
+      "errors": []
+    }
+  ],
+  "events": [
+    { "name": "deposited",  "fields": [{ "name": "from", "type": "Address" }, { "name": "amount", "type": "i128" }] },
+    { "name": "withdrawn",  "fields": [{ "name": "to", "type": "Address" }, { "name": "amount", "type": "i128" }] }
+  ],
+  "errors": [
+    { "code": 1, "name": "AlreadyInitialized",  "message": "already initialized" },
+    { "code": 2, "name": "Unauthorized",         "message": "unauthorized" },
+    { "code": 3, "name": "InsufficientBalance",  "message": "insufficient balance" },
+    { "code": 4, "name": "Locked",               "message": "pool is locked" },
+    { "code": 5, "name": "AmountMustBePositive", "message": "amount must be positive" }
+  ]
+}
