@@ -21,6 +21,11 @@ jest.mock('../db/transactionRepository', () => ({
 jest.mock('../../blockchain/sendRewards', () => ({
   distributeRewards: jest.fn(),
 }));
+// verifyTrustline must be stubbed so the trustline gate passes and the route
+// reaches the campaign-expiry check being tested here.
+jest.mock('../../blockchain/trustline', () => ({
+  verifyTrustline: jest.fn().mockResolvedValue({ exists: true }),
+}));
 jest.mock('../../blockchain/stellarService', () => ({
   isValidStellarAddress: jest.fn((addr) => {
     try {
@@ -80,7 +85,7 @@ describe('POST /api/rewards/distribute — expired campaign (Property 7)', () =>
           });
           getActiveCampaign.mockResolvedValue(null);
 
-          const customerWallet = Keypair.random().publicKey();
+          const walletAddress = Keypair.random().publicKey();
           const server = http.createServer(app);
           await new Promise((resolve) => server.listen(0, resolve));
           const port = server.address().port;
@@ -89,7 +94,7 @@ describe('POST /api/rewards/distribute — expired campaign (Property 7)', () =>
           let body;
 
           await new Promise((resolve, reject) => {
-            const payload = JSON.stringify({ customerWallet, amount: 10, campaignId });
+            const payload = JSON.stringify({ walletAddress, amount: 10, campaignId });
             const req = http.request(
               {
                 hostname: '127.0.0.1',

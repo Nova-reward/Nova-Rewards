@@ -1,0 +1,172 @@
+name: E2E Tests
+
+# Trigger on:
+# - Push to main
+# - Pull requests to main
+# - Manual trigger (workflow_dispatch)
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Environment variables shared across all jobs
+env:
+  PLAYWRIGHT_FRONTEND_URL: http://localhost:3000
+  PLAYWRIGHT_BACKEND_URL: http://localhost:3001
+  CI: "true"
+  NODE_VERSION: "20"
+
+jobs:
+  e2e-tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      # PostgreSQL service (used by backend)
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nova
+          POSTGRES_PASSWORD: changeme
+          POSTGRES_DB: nova_rewards
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      # 1. Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js (for both backend and frontend)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # Cache backend dependencies
+          cache: npm
+          cache-dependency-path: novaRewards/backend/package-lock.json
+
+      # 3. Install backend dependencies
+      - name: Install backend dependencies
+        working-directory: novaRewards/backend
+        run: npm install
+
+      # 4. Wait for PostgreSQL to be healthy
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U nova; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+        env:
+          PGPASSWORD: changeme
+
+      # 5. Run database migrations
+      - name: Run database migrations
+        working-directory: novaRewards/backend
+        run: |
+          export DATABASE_URL="postgresql://nova:changeme@localhost:5432/nova_rewards"
+          node ../database/migrate.js
+        env:
+          DATABASE_URL: postgresql://nova:changeme@localhost:5432/nova_rewards
+
+      # 6. Seed test data (create test merchants, campaigns for reproducible tests)
+      - name: Seed test data
+        working-directory: novaRewards/backend
+        run: node ../../backend/scripts/seed-test-data.js
+        env:
+          DATABASE_URL: postgresql://nova:changeme@localhost:5432/nova_rewards
+          NODE_ENV: test
+
+      # 7. Start backend server in background
+      - name: Start backend server
+        working-directory: novaRewards/backend
+        run: |
+          PORT=3001 NODE_ENV=test npm start &
+          # Wait for backend to be ready
+          until curl -s http://localhost:3001/health | grep -q '"status":"ok"'; do
+            echo "Waiting for backend..."
+            sleep 2
+          done
+        env:
+          DATABASE_URL: postgresql://nova:changeme@localhost:5432/nova_rewards
+          JWT_SECRET: test-secret-key-for-ci
+          NODE_ENV: test
+
+      # 8. Install frontend dependencies (if different from backend)
+      - name: Install frontend dependencies
+        working-directory: novaRewards/frontend
+        run: npm install
+
+      # 9. Install Playwright browsers
+      - name: Install Playwright browsers
+        working-directory: novaRewards/frontend
+        run: npx playwright install --with-deps
+
+      # 10. Run Playwright E2E tests
+      - name: Run Playwright E2E tests
+        working-directory: novaRewards/frontend
+        run: npx playwright test --project=desktop-chromium
+        env:
+          PLAYWRIGHT_FRONTEND_URL: http://localhost:3000
+          PLAYWRIGHT_BACKEND_URL: http://localhost:3001
+
+      # 11. Upload test results & artifacts on failure
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: novaRewards/frontend/playwright-report/
+          retention-days: 30
+
+      # 12. Upload test traces for debugging
+      - name: Upload test traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: novaRewards/frontend/test-results/
+          retention-days: 30
+
+      # 13. Publish test report (optional: requires separate action)
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Playwright Test Report
+          path: novaRewards/frontend/test-results/junit.xml
+          reporter: java-junit
+
+      # 14. Comment on PR with test results
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const testResults = 'novaRewards/frontend/test-results/junit.xml';
+            if (fs.existsSync(testResults)) {
+              const content = fs.readFileSync(testResults, 'utf8');
+              // Parse test summary from JUnit XML
+              const match = content.match(/tests="(\d+)" failures="(\d+)" skipped="(\d+)"/);
+              if (match) {
+                const [, total, failures, skipped] = match;
+                const passed = parseInt(total) - parseInt(failures) - parseInt(skipped);
+                const status = failures === '0' ? '✅ PASSED' : '❌ FAILED';
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: `## E2E Test Results ${status}\n\n- **Passed**: ${passed}\n- **Failed**: ${failures}\n- **Skipped**: ${skipped}\n- **Total**: ${total}\n\n[View Full Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+                });
+              }
+            }

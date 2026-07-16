@@ -8,7 +8,9 @@ const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
-const { verifyTrustline } = require('../services/stellar');
+// verifyTrustline lives in blockchain/trustline, not a services/stellar stub.
+// The ../services/stellar path never existed; this was a broken import.
+const { verifyTrustline } = require('../../blockchain/trustline');
 
 /**
  * Rate limiter: max 20 requests per minute per IP on the distribute endpoint.

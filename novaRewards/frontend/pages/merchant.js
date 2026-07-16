@@ -30,9 +30,13 @@ export default function MerchantDashboard() {
   const getMerchantTotals = useCallback(async (mid) => {
     setTotalsLoading(true);
     try {
-      const totalsRes = await api.get(
-        `/api/transactions/merchant-totals/${mid}`,
-      );
+      // GET /api/transactions/merchant-totals uses x-api-key auth and has no
+      // path parameter — the merchant id is resolved from the API key server-side.
+      // The UI must pass the stored apiKey in the header; mid is kept as an arg
+      // for call-site symmetry but is not sent in the URL.
+      const totalsRes = await api.get("/api/transactions/merchant-totals", {
+        headers: { "x-api-key": apiKey },
+      });
       setTotals(
         totalsRes.data.data || { totalDistributed: 0, totalRedeemed: 0 },
       );
@@ -41,7 +45,7 @@ export default function MerchantDashboard() {
     } finally {
       setTotalsLoading(false);
     }
-  }, []);
+  }, [apiKey]);
 
   const loadDashboard = useCallback(
     async (mid) => {

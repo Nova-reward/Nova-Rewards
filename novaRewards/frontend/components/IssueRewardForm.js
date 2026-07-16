@@ -61,14 +61,16 @@ export default function IssueRewardForm({
       const { data } = await api.post(
         "/api/rewards/distribute",
         {
-          customerWallet: trimmedWallet,
+          // Backend expects `walletAddress` — do not rename to customerWallet here.
+          walletAddress: trimmedWallet,
           amount,
           campaignId: Number(campaignId),
         },
         { headers: { "x-api-key": apiKey } },
       );
       setStatus("done");
-      setTxHash(data.data.txHash);
+      // Backend returns { success, txHash, transaction } at the top level (not nested under data).
+      setTxHash(data.txHash);
       setMessage("Rewards issued successfully.");
       setCustomerWallet("");
       setAmount("");
