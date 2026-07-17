@@ -142,6 +142,11 @@ impl VestingContract {
     /// # Panics
     /// - `"total_duration must be > 0"` if `total_duration == 0`.
     /// - `"total_amount must be > 0"` if `total_amount <= 0`.
+    /// - `"start_time + cliff_duration overflows u64"` if the cliff end exceeds `u64::MAX`.
+    /// - `"start_time + total_duration overflows u64"` if the vesting end exceeds `u64::MAX`.
+    /// - `"total_amount * total_duration overflows i128"` if the pro-rata numerator
+    ///   cannot be represented, which would otherwise trap inside
+    ///   [`claim_vested`](VestingContract::claim_vested) and permanently lock the schedule.
     pub fn create_schedule(
         env: Env,
         beneficiary: Address,
@@ -153,6 +158,22 @@ impl VestingContract {
         Self::admin(&env).require_auth();
         assert!(total_duration > 0, "total_duration must be > 0");
         assert!(total_amount > 0, "total_amount must be > 0");
+        // Reject schedules whose vesting math would overflow later. Without these
+        // guards a mis-created schedule traps in vested_amount (overflow-checks are
+        // enabled in release wasm), bricking both claim_vested and revoke and
+        // permanently locking the funds.
+        assert!(
+            start_time.checked_add(cliff_duration).is_some(),
+            "start_time + cliff_duration overflows u64"
+        );
+        assert!(
+            start_time.checked_add(total_duration).is_some(),
+            "start_time + total_duration overflows u64"
+        );
+        assert!(
+            total_amount.checked_mul(total_duration as i128).is_some(),
+            "total_amount * total_duration overflows i128"
+        );
 
         let next_id_key = DataKey::NextId(beneficiary.clone());
         let id: u32 = env.storage().instance().get(&next_id_key).unwrap_or(0);
@@ -190,13 +211,18 @@ impl VestingContract {
         if schedule.revoked {
             return schedule.revoked_amount;
         }
-        if now < schedule.start_time + schedule.cliff_duration {
+        // saturating_add: a cliff end past u64::MAX can never be reached, so
+        // saturating yields the correct "nothing vested" answer instead of trapping.
+        if now < schedule.start_time.saturating_add(schedule.cliff_duration) {
             return 0;
         }
+        // Safe: now >= start_time + cliff_duration >= start_time.
         let elapsed = now - schedule.start_time;
         if elapsed >= schedule.total_duration {
             schedule.total_amount
         } else {
+            // Cannot overflow: create_schedule guarantees
+            // total_amount * total_duration fits in i128 and elapsed < total_duration.
             schedule.total_amount * (elapsed as i128) / (schedule.total_duration as i128)
         }
     }

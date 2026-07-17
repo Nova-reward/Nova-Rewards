@@ -338,6 +338,40 @@ fn revoke_before_cliff_returns_all() {
 }
 
 #[test]
+fn claim_immediately_after_revoke_pays_exact_pro_rata() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    // 10_000 tokens over 1_000s, no cliff
+    let sid = client.create_schedule(&b, &10_000, &0, &0, &1_000);
+    // revoke at t=337 → exactly 3_370 vested pro-rata, 6_630 returned
+    env.ledger().set_timestamp(337);
+    let returned = client.revoke(&b, &sid);
+    assert_eq!(returned, 6_630);
+    // claim in the same ledger, immediately after revocation
+    let claimed = client.claim_vested(&b, &sid);
+    assert_eq!(claimed, 3_370); // exactly the pro-rata vested amount, no more
+    // nothing further is ever claimable, even arbitrarily far in the future
+    env.ledger().set_timestamp(u64::MAX);
+    assert!(client.try_claim_vested(&b, &sid).is_err());
+    // conservation: released + returned == total
+    let s = client.get_schedule(&b, &sid);
+    assert_eq!(s.released + returned, 10_000);
+}
+
+#[test]
+fn claim_after_revoke_before_cliff_yields_nothing() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    // cliff at 500; revoke at t=100 → nothing vested, nothing claimable ever
+    let sid = client.create_schedule(&b, &1_000, &0, &500, &1_000);
+    env.ledger().set_timestamp(100);
+    let returned = client.revoke(&b, &sid);
+    assert_eq!(returned, 1_000);
+    env.ledger().set_timestamp(10_000);
+    assert!(client.try_claim_vested(&b, &sid).is_err());
+}
+
+#[test]
 fn revoke_partial_then_claim_then_no_more() {
     let (env, _admin, client) = setup();
     let b = Address::generate(&env);
@@ -353,4 +387,63 @@ fn revoke_partial_then_claim_then_no_more() {
     // claim remaining vested-but-not-released (600 - 200 = 400)
     let second = client.claim_vested(&b, &sid);
     assert_eq!(second, 400);
+}
+
+// ── u64 timestamp overflow guards ─────────────────────────────────────────────
+
+#[test]
+#[should_panic(expected = "start_time + cliff_duration overflows u64")]
+fn create_schedule_cliff_end_overflow_panics() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    client.create_schedule(&b, &1_000, &u64::MAX, &1, &1_000);
+}
+
+#[test]
+#[should_panic(expected = "start_time + total_duration overflows u64")]
+fn create_schedule_vesting_end_overflow_panics() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    // cliff end (MAX-5 + 0) fits, vesting end (MAX-5 + 10) overflows
+    client.create_schedule(&b, &1_000, &(u64::MAX - 5), &0, &10);
+}
+
+#[test]
+#[should_panic(expected = "total_amount * total_duration overflows i128")]
+fn create_schedule_pro_rata_numerator_overflow_panics() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    client.create_schedule(&b, &i128::MAX, &0, &0, &2);
+}
+
+#[test]
+fn schedule_near_u64_boundary_vests_correctly() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    // vesting window ends exactly at u64::MAX — the largest valid schedule
+    let start = u64::MAX - 1_000;
+    let sid = client.create_schedule(&b, &1_000, &start, &200, &1_000);
+    // before cliff (start + 200): nothing vested
+    env.ledger().set_timestamp(start + 100);
+    assert!(client.try_claim_vested(&b, &sid).is_err());
+    // halfway: 500 vested
+    env.ledger().set_timestamp(start + 500);
+    assert_eq!(client.claim_vested(&b, &sid), 500);
+    // at u64::MAX (full duration elapsed): remainder released
+    env.ledger().set_timestamp(u64::MAX);
+    assert_eq!(client.claim_vested(&b, &sid), 500);
+}
+
+#[test]
+fn revoke_near_u64_boundary_conserves_tokens() {
+    let (env, _admin, client) = setup();
+    let b = Address::generate(&env);
+    let start = u64::MAX - 1_000;
+    let sid = client.create_schedule(&b, &1_000, &start, &0, &1_000);
+    // revoke at 40% through the window
+    env.ledger().set_timestamp(start + 400);
+    let returned = client.revoke(&b, &sid);
+    assert_eq!(returned, 600);
+    env.ledger().set_timestamp(u64::MAX);
+    assert_eq!(client.claim_vested(&b, &sid), 400);
 }
