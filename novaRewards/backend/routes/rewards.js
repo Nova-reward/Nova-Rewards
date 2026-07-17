@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const express = require('express');
 const router = express.Router();
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
