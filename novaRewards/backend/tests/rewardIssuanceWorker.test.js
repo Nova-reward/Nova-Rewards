@@ -1,22 +1,8 @@
-'use strict';
-
-/**
- * Reward Issuance Worker — unit test suite (Vitest)
- *
- * Covers:
- *  - Worker instantiation with correct queue name and processor
- *  - 'failed' event: routes permanently-failed jobs to DLQ
- *  - 'failed' event: does NOT route to DLQ when retries remain
- *  - 'completed' event: logs correctly
- *  - 'error' event: logs worker errors
- *
- * All external dependencies (BullMQ, Redis) are mocked.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mock BullMQ before requiring the worker module ─────────────────────────
 const mockQueueAdd = vi.fn().mockResolvedValue(true);
+const mockQueueOn = vi.fn();
 const mockWorkerOn = vi.fn();
 const mockWorkerConstructor = vi.fn();
 
@@ -28,12 +14,49 @@ vi.mock('bullmq', () => ({
       opts,
       on: mockWorkerOn,
     };
-    // Simulate event registration by the module
     return worker;
   }),
-  Queue: vi.fn().mockImplementation(() => ({
+  Queue: vi.fn().mockImplementation((queueName, opts) => ({
     add: mockQueueAdd,
+    on: mockQueueOn,
+    name: queueName,
+    opts,
   })),
+}));
+
+// ── Mock repository and metrics ────────────────────────────────────────────
+const mockRecordFailure = vi.fn().mockResolvedValue({ id: 1 });
+const mockIsReprocessed = vi.fn().mockResolvedValue(false);
+const mockMarkReprocessed = vi.fn().mockResolvedValue(true);
+const mockGetByJobId = vi.fn();
+const mockListPending = vi.fn();
+
+vi.mock('../repositories/rewardIssuanceFailureRepository', () => ({
+  default: {
+    recordFailure: mockRecordFailure,
+    isReprocessed: mockIsReprocessed,
+    markReprocessed: mockMarkReprocessed,
+    getByJobId: mockGetByJobId,
+    listPending: mockListPending,
+  },
+}));
+
+const mockCounterInc = vi.fn();
+const mockCreateCounter = vi.fn().mockReturnValue({ inc: mockCounterInc });
+
+vi.mock('../middleware/metricsMiddleware', () => ({
+  default: {
+    createCounter: mockCreateCounter,
+  },
+}));
+
+// ── Mock logger ─────────────────────────────────────────────────────────────
+vi.mock('../lib/logger', () => ({
+  default: {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  },
 }));
 
 // ── Imports ─────────────────────────────────────────────────────────────────
@@ -43,13 +66,14 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ============================================================================
-// Helper: load the worker module fresh and capture registered handlers
-// ============================================================================
 function loadWorkerModule() {
   vi.resetModules();
-  // Re-require to trigger constructor and event registration
   return import('../jobs/rewardIssuanceWorker.js');
+}
+
+function loadQueuesModule() {
+  vi.resetModules();
+  return import('../jobs/queues.js');
 }
 
 describe('rewardIssuanceWorker', () => {
@@ -89,7 +113,6 @@ describe('rewardIssuanceWorker', () => {
   it('routes permanently-failed job to DLQ after max attempts exhausted', async () => {
     await loadWorkerModule();
 
-    // Extract the failed handler registered by the module
     const failedHandler = mockWorkerOn.mock.calls.find((c) => c[0] === 'failed')?.[1];
     expect(failedHandler).toBeDefined();
 
@@ -194,7 +217,6 @@ describe('rewardIssuanceWorker', () => {
     expect(completedHandler).toBeDefined();
 
     const job = { id: 'job-46' };
-    // Should not throw
     expect(() => completedHandler(job)).not.toThrow();
   });
 
@@ -205,21 +227,105 @@ describe('rewardIssuanceWorker', () => {
     expect(errorHandler).toBeDefined();
 
     const err = new Error('Worker connection lost');
-    // Should not throw
     expect(() => errorHandler(err)).not.toThrow();
   });
 
   it('processor function delegates to processRewardIssuance', async () => {
-    // We can verify the processor exists and is a function by checking constructor args
     await loadWorkerModule();
 
     const processor = mockWorkerConstructor.mock.calls[0][1];
     expect(typeof processor).toBe('function');
-
-    // The processor should be async and accept a job argument
-    // We can't easily test the internal import without mocking the service,
-    // but we verify the signature
-    expect(processor.length).toBe(1); // one argument: job
+    expect(processor.length).toBe(1);
   });
 });
 
+describe('queues.js DLQ persistence', () => {
+  it('creates nova_reward_dlq_total counter on module load', async () => {
+    await loadQueuesModule();
+    expect(mockCreateCounter).toHaveBeenCalledWith(
+      'nova_reward_dlq_total',
+      'Total number of reward issuance jobs moved to DLQ after max retries',
+      ['reason']
+    );
+  });
+
+  it('registers a failed event listener on rewardIssuanceQueue', async () => {
+    await loadQueuesModule();
+    const queueCalls = Queue.mock.results;
+    // The first Queue instantiation is reward-issuance
+    expect(mockQueueOn).toHaveBeenCalledWith('failed', expect.any(Function));
+  });
+
+  it('persists permanently failed job to DB and increments counter', async () => {
+    await loadQueuesModule();
+
+    const failedHandler = mockQueueOn.mock.calls.find((c) => c[0] === 'failed')?.[1];
+    expect(failedHandler).toBeDefined();
+
+    const job = {
+      id: 'job-dlq-99',
+      attemptsMade: 3,
+      opts: { attempts: 3 },
+      data: { rewardId: 'r-99', amount: '500' },
+      remove: vi.fn().mockResolvedValue(true),
+    };
+    const err = new Error('Stellar timeout');
+
+    await failedHandler(job, err);
+
+    expect(mockCounterInc).toHaveBeenCalledWith({ reason: 'Stellar timeout' });
+    expect(mockRecordFailure).toHaveBeenCalledWith({
+      jobId: 'job-dlq-99',
+      payload: { rewardId: 'r-99', amount: '500' },
+      error: err,
+      attempts: 3,
+    });
+    expect(job.remove).toHaveBeenCalled();
+  });
+
+  it('does NOT persist when retries remain', async () => {
+    await loadQueuesModule();
+
+    const failedHandler = mockQueueOn.mock.calls.find((c) => c[0] === 'failed')?.[1];
+    expect(failedHandler).toBeDefined();
+
+    const job = {
+      id: 'job-dlq-98',
+      attemptsMade: 1,
+      opts: { attempts: 3 },
+      data: { rewardId: 'r-98' },
+      remove: vi.fn().mockResolvedValue(true),
+    };
+    const err = new Error('Temporary');
+
+    await failedHandler(job, err);
+
+    expect(mockCounterInc).not.toHaveBeenCalled();
+    expect(mockRecordFailure).not.toHaveBeenCalled();
+    expect(job.remove).not.toHaveBeenCalled();
+  });
+
+  it('does NOT remove job when DB persistence fails', async () => {
+    await loadQueuesModule();
+
+    const failedHandler = mockQueueOn.mock.calls.find((c) => c[0] === 'failed')?.[1];
+    expect(failedHandler).toBeDefined();
+
+    mockRecordFailure.mockRejectedValueOnce(new Error('DB down'));
+
+    const job = {
+      id: 'job-dlq-97',
+      attemptsMade: 3,
+      opts: { attempts: 3 },
+      data: { rewardId: 'r-97' },
+      remove: vi.fn().mockResolvedValue(true),
+    };
+    const err = new Error('Stellar timeout');
+
+    await failedHandler(job, err);
+
+    expect(mockCounterInc).toHaveBeenCalled(); // Counter still increments
+    expect(mockRecordFailure).toHaveBeenCalled();
+    expect(job.remove).not.toHaveBeenCalled(); // Job stays in Redis
+  });
+});
