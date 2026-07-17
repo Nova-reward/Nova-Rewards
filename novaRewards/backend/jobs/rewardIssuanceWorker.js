@@ -5,6 +5,7 @@
 
 const { Worker, Queue } = require('bullmq');
 const { processRewardIssuance } = require('../services/rewardIssuanceService');
+const rewardIssuanceRepository = require('../repositories/rewardIssuanceRepository');
 const logger = require('../lib/logger');
 
 const connection = {
@@ -17,7 +18,19 @@ const rewardDLQ = new Queue('reward-issuance-dlq', { connection });
 
 const worker = new Worker(
   'reward-issuance',
-  async (job) => processRewardIssuance(job),
+  async (job) => {
+    // ── Idempotency guard ───────────────────────────────────────
+    const { rewardId } = job.data;
+    if (rewardId) {
+      const existing = await rewardIssuanceRepository.getByRewardId(rewardId);
+      if (existing?.status === 'completed') {
+        logger.info('[RewardWorker] Reward already issued; skipping', { rewardId, jobId: job.id });
+        return { status: 'skipped', rewardId };
+      }
+    }
+
+    return processRewardIssuance(job);
+  },
   {
     connection,
     concurrency: parseInt(process.env.REWARD_WORKER_CONCURRENCY) || 5,
@@ -39,6 +52,14 @@ worker.on('completed', (job) => {
 
 worker.on('error', (err) => {
   logger.error('[RewardWorker] worker error', { error: err.message });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('[RewardWorker] SIGTERM received, closing...');
+  await worker.close();
+  await rewardDLQ.close();
+  process.exit(0);
 });
 
 module.exports = { worker, rewardDLQ };
