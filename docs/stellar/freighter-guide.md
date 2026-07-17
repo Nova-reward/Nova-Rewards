@@ -30,13 +30,15 @@ Nova Rewards uses Freighter as its primary wallet. The user's public key identif
 
 ## Project Structure
 
-The Freighter integration lives in three files:
+The Freighter integration lives in four files:
 
 | File | Purpose |
 |------|---------|
 | `novaRewards/frontend/lib/freighter.ts` | Core wrappers around `@stellar/freighter-api` |
 | `novaRewards/frontend/store/walletStore.js` | Zustand store — wallet state, connect/disconnect/sign actions |
+| `novaRewards/frontend/store/authStore.js` | Zustand store — authentication state, login/logout |
 | `novaRewards/frontend/context/WalletContext.js` | React context — exposes wallet state to components via `useWallet()` |
+| `novaRewards/frontend/hooks/useFreighterSync.js` | React hook — subscribes to Freighter lifecycle events |
 
 Components never call `@stellar/freighter-api` directly. They go through `lib/freighter.ts`, which normalises errors into typed `FreighterError` instances.
 
@@ -134,6 +136,34 @@ const { txHash } = await signAndSubmit(unsignedXdr);
 
 ---
 
+### `useFreighterSync()`
+
+A React hook that subscribes to Freighter's `accountChanged` and `networkChanged` events and reconciles them with the Zustand stores. This prevents the app from using a stale wallet state when the user switches accounts or networks in Freighter without reloading the page.
+
+```ts
+import useFreighterSync from '../hooks/useFreighterSync';
+
+function App() {
+  useFreighterSync(); // Call once at the top level of your app
+  return <Dashboard />;
+}
+```
+
+**Event handling behavior:**
+
+- **`accountChanged`**:
+  - If the new account matches the authenticated user's `stellarPublicKey`, the wallet store's `publicKey` is updated to stay in sync.
+  - If the new account does **not** match the authenticated user, the hook forces a logout from `authStore` and clears all auth tokens atomically. A clear error message is shown: "Wallet account changed. Please log in again."
+
+- **`networkChanged`**:
+  - The hook re-reads Freighter's current network and updates `walletStore.networkMismatch`.
+  - If a mismatch is detected (e.g., Freighter is on Mainnet but the app expects Testnet), a clear error is set: "Network mismatch: Please switch Freighter to Testnet before continuing." This is **not** a silent failure — the user sees an explicit message.
+  - When the user switches back to the correct network, the mismatch state and error are cleared automatically.
+
+The hook is a no-op when Freighter is not installed or does not expose the event API. It cleans up event listeners on unmount to avoid memory leaks.
+
+---
+
 ### `FreighterError`
 
 All errors from `lib/freighter.ts` are instances of `FreighterError`, which extends `Error` with a `code` field:
@@ -180,6 +210,16 @@ Page reload
       → getNOVABalance() + getTransactionHistory() from Horizon
       → checkNetworkMismatch() for Freighter wallets
       → stale key (Horizon 404) → clear localStorage + reset state
+
+Freighter fires accountChanged / networkChanged events
+  → useFreighterSync hook listens on window.freighter
+      → accountChanged:
+          - new key matches authenticated user → sync walletStore.publicKey
+          - new key differs from authenticated user → force logout + clear auth tokens
+      → networkChanged:
+          - re-read Freighter network + check mismatch
+          - mismatch detected → set clear error in walletStore (not silent failure)
+          - network restored → clear mismatch state
 ```
 
 Components read state via `useWallet()` (from `WalletContext`) or `useWalletStore()` (Zustand directly). Both expose the same shape.
