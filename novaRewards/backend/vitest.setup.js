@@ -14,6 +14,7 @@ global.jest = {
   clearAllMocks: vi.clearAllMocks,
   resetAllMocks: vi.resetAllMocks,
   restoreAllMocks: vi.restoreAllMocks,
+  resetModules: vi.resetModules,
 };
 
 // Suppress console.error during tests to reduce noise from expected validation errors

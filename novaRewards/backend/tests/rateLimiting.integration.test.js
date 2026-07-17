@@ -19,7 +19,7 @@ const request = require('supertest');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 
-const { RL_AUTH_MAX, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_RETRY_AFTER_SECS } = require('../../config/constants');
+const { RL_AUTH_MAX, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_RETRY_AFTER_SECS } = require('../config/constants');
 
 // ── Build a self-contained test app ───────────────────────────────────────
 
