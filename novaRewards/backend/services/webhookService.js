@@ -37,9 +37,10 @@ const EVENT_TYPES = [
 // Signature
 // ---------------------------------------------------------------------------
 
-const SIGNATURE_HEADER = 'x-nova-signature';
-const TIMESTAMP_HEADER = 'x-nova-timestamp';
-const TOLERANCE_MS     = 5 * 60 * 1000; // 5 minutes
+const SIGNATURE_HEADER    = 'x-nova-signature';
+const TIMESTAMP_HEADER    = 'x-nova-timestamp';
+const DELIVERY_ID_HEADER  = 'x-nova-delivery-id';
+const TOLERANCE_MS        = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Generates a signing secret (32 random bytes, hex-encoded).
@@ -50,12 +51,12 @@ function generateSecret() {
 
 /**
  * Builds the HMAC-SHA256 signature for a payload.
- * Format: HMAC(secret, `${timestamp}.${rawBody}`)
+ * Format: HMAC(secret, `${timestamp}.${deliveryId}.${rawBody}`)
  */
-function signPayload(secret, timestamp, rawBody) {
+function signPayload(secret, timestamp, deliveryId, rawBody) {
   return crypto
     .createHmac('sha256', secret)
-    .update(`${timestamp}.${rawBody}`)
+    .update(`${timestamp}.${deliveryId}.${rawBody}`)
     .digest('hex');
 }
 
@@ -66,13 +67,14 @@ function signPayload(secret, timestamp, rawBody) {
  * @param {string} secret
  * @param {string} receivedSig   - value of x-nova-signature header
  * @param {string} timestamp     - value of x-nova-timestamp header
+ * @param {string} deliveryId    - value of x-nova-delivery-id header
  * @param {string} rawBody       - raw request body string
  */
-function verifySignature(secret, receivedSig, timestamp, rawBody) {
+function verifySignature(secret, receivedSig, timestamp, deliveryId, rawBody) {
   const ts = parseInt(timestamp, 10);
   if (isNaN(ts) || Math.abs(Date.now() - ts) > TOLERANCE_MS) return false;
 
-  const expected = signPayload(secret, timestamp, rawBody);
+  const expected = signPayload(secret, timestamp, deliveryId, rawBody);
   try {
     return crypto.timingSafeEqual(
       Buffer.from(expected, 'hex'),
@@ -92,13 +94,17 @@ const DELIVERY_TIMEOUT_MS = parseInt(process.env.WEBHOOK_TIMEOUT_MS) || 10_000;
 /**
  * Sends a single HTTP POST to the webhook URL.
  *
+ * @param {string} url
+ * @param {object} payload
+ * @param {string} secret
+ * @param {string} deliveryId - stable per-delivery-attempt UUID
  * @returns {Promise<{ httpStatus: number, responseBody: string }>}
  */
-function deliverHttp(url, payload, secret) {
+function deliverHttp(url, payload, secret, deliveryId) {
   return new Promise((resolve, reject) => {
-    const rawBody  = JSON.stringify(payload);
-    const timestamp = String(Date.now());
-    const signature = signPayload(secret, timestamp, rawBody);
+    const rawBody    = JSON.stringify(payload);
+    const timestamp  = String(Date.now());
+    const signature  = signPayload(secret, timestamp, deliveryId, rawBody);
 
     const parsed  = new URL(url);
     const options = {
@@ -107,11 +113,12 @@ function deliverHttp(url, payload, secret) {
       path:     parsed.pathname + parsed.search,
       method:   'POST',
       headers: {
-        'Content-Type':       'application/json',
-        'Content-Length':     Buffer.byteLength(rawBody),
-        [TIMESTAMP_HEADER]:   timestamp,
-        [SIGNATURE_HEADER]:   signature,
-        'User-Agent':         'NovaRewards-Webhook/1.0',
+        'Content-Type':        'application/json',
+        'Content-Length':      Buffer.byteLength(rawBody),
+        [TIMESTAMP_HEADER]:    timestamp,
+        [SIGNATURE_HEADER]:    signature,
+        [DELIVERY_ID_HEADER]:  deliveryId,
+        'User-Agent':          'NovaRewards-Webhook/1.0',
       },
     };
 
@@ -163,7 +170,7 @@ async function attemptDelivery(delivery) {
   const { id, webhook_id, payload, attempt, url, secret } = delivery;
 
   try {
-    const { httpStatus, responseBody } = await deliverHttp(url, payload, secret);
+    const { httpStatus, responseBody } = await deliverHttp(url, payload, secret, delivery.delivery_id);
     const success = httpStatus >= 200 && httpStatus < 300;
 
     await updateDelivery(id, {
@@ -229,6 +236,7 @@ module.exports = {
   EVENT_TYPES,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
+  DELIVERY_ID_HEADER,
   generateSecret,
   signPayload,
   verifySignature,
