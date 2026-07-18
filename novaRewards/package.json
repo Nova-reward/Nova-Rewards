@@ -12,6 +12,21 @@
     "test": "npm test -w backend",
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
-    "migrate": "node database/migrate.js"
+    "migrate": "node database/migrate.js",
+
+    "deploy": "node deploy/deploy.js",
+    "deploy:testnet": "node deploy/deploy.js --network testnet",
+    "deploy:mainnet": "node deploy/deploy.js --network mainnet",
+    "deploy:dry-run": "node deploy/deploy.js --dry-run",
+
+    "verify": "node deploy/verify.js",
+    "verify:testnet": "node deploy/verify.js --network testnet",
+    "verify:mainnet": "node deploy/verify.js --network mainnet",
+
+    "rollback": "node deploy/rollback.js",
+    "rollback:testnet": "node deploy/rollback.js --network testnet",
+    "rollback:mainnet": "node deploy/rollback.js --network mainnet",
+
+    "init-contract": "node deploy/init-contract.js"
   }
 }
