@@ -1,6 +1,15 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // Stub out missing optional packages so vi.mock() hoisting works with CJS require chains
+      '@bull-board/api': path.resolve('./__mocks__/@bull-board/api.js'),
+      '@bull-board/api/bullMQAdapter': path.resolve('./__mocks__/@bull-board/api/bullMQAdapter.js'),
+      '@bull-board/express': path.resolve('./__mocks__/@bull-board/express.js'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',
@@ -17,6 +26,14 @@ export default defineConfig({
       '**/coverage/**',
     ],
     reporters: ['verbose'],
+    // Inline project source files through Vite's transform pipeline so that
+    // vi.mock() hoisting intercepts require() calls inside CJS service modules.
+    deps: {
+      inline: [
+        /\/backend\//,
+        /\/blockchain\//,
+      ],
+    },
     coverage: {
       provider: 'v8',
       include: [

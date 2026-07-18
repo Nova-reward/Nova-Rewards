@@ -1,7 +1,11 @@
 import { vi, expect } from 'vitest';
 
-// Expose shared backend test utilities globally
-global.testUtils = require('./tests/utils');
+// Expose shared backend test utilities globally (optional — some test files use these)
+try {
+  global.testUtils = require('./tests/utils');
+} catch {
+  // Silently skip if test utils cannot be loaded in this environment
+}
 
 // Suppress console.error during tests to reduce noise from expected validation errors
 vi.spyOn(console, 'error').mockImplementation(() => {});
