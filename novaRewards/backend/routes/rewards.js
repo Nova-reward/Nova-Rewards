@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const express = require('express');
 const router = express.Router();
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
@@ -36,7 +36,7 @@ const { validateIssueReward, validateDistributeReward } = require('../dtos/middl
  *       200: { description: Duplicate — already processed }
  *       400: { description: Validation error }
  */
-router.post('/issue', slidingRewards, authenticateMerchant, validateIssueReward, async (req, res, next) => {
+router.post('/issue', authenticateMerchant, slidingRewards, validateIssueReward, async (req, res, next) => {
   try {
     const { idempotencyKey, walletAddress, amount, campaignId, userId } = req.body;
     if (!idempotencyKey || !walletAddress || !amount || !campaignId) {
@@ -117,7 +117,7 @@ router.post('/issue', slidingRewards, authenticateMerchant, validateIssueReward,
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/distribute', slidingRewards, authenticateMerchant, checkRewardFarming, validateDistributeReward, async (req, res, next) => {
+router.post('/distribute', authenticateMerchant, slidingRewards, checkRewardFarming, validateDistributeReward, async (req, res, next) => {
   try {
     const { walletAddress, customerWallet, amount, campaignId } = req.body;
     const recipientWallet = walletAddress || customerWallet;
