@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PWA Test - Nova Rewards</title>
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+    }
+    .test-section {
+      background: #f3f4f6;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 0.5rem;
+    }
+    .status {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .success { background: #10b981; color: white; }
+    .error { background: #ef4444; color: white; }
+    .pending { background: #f59e0b; color: white; }
+    button {
+      background: #4F46E5;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      margin: 0.5rem 0.5rem 0.5rem 0;
+    }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    pre {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 1rem;
+      border-radius: 0.375rem;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 PWA Test Page</h1>
+  <p>This page tests all PWA features for Nova Rewards.</p>
+
+  <div class="test-section">
+    <h2>1. Service Worker</h2>
+    <p>Status: <span id="sw-status" class="status pending">Testing...</span></p>
+    <p id="sw-details"></p>
+  </div>
+
+  <div class="test-section">
+    <h2>2. Manifest</h2>
+    <p>Status: <span id="manifest-status" class="status pending">Testing...</span></p>
+    <p id="manifest-details"></p>
+  </div>
+
+  <div class="test-section">
+    <h2>3. Push Notifications</h2>
+    <p>Status: <span id="push-status" class="status pending">Not tested</span></p>
+    <button id="test-push">Request Permission</button>
+    <button id="test-subscribe">Subscribe</button>
+    <p id="push-details"></p>
+  </div>
+
+  <div class="test-section">
+    <h2>4. Background Sync</h2>
+    <p>Status: <span id="sync-status" class="status pending">Not tested</span></p>
+    <button id="test-sync">Test Sync</button>
+    <p id="sync-details"></p>
+  </div>
+
+  <div class="test-section">
+    <h2>5. Online/Offline Detection</h2>
+    <p>Status: <span id="online-status" class="status">Checking...</span></p>
+    <p id="online-details"></p>
+  </div>
+
+  <div class="test-section">
+    <h2>6. Install Prompt</h2>
+    <p>Status: <span id="install-status" class="status pending">Waiting...</span></p>
+    <button id="test-install" disabled>Install App</button>
+    <p id="install-details"></p>
+  </div>
+
+  <script>
+    let deferredPrompt = null;
+
+    // Test 1: Service Worker
+    async function testServiceWorker() {
+      const statusEl = document.getElementById('sw-status');
+      const detailsEl = document.getElementById('sw-details');
+
+      if ('serviceWorker' in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          statusEl.textContent = 'Registered';
+          statusEl.className = 'status success';
+          detailsEl.textContent = `Scope: ${registration.scope}`;
+        } catch (error) {
+          statusEl.textContent = 'Failed';
+          statusEl.className = 'status error';
+          detailsEl.textContent = error.message;
+        }
+      } else {
+        statusEl.textContent = 'Not Supported';
+        statusEl.className = 'status error';
+      }
+    }
+
+    // Test 2: Manifest
+    async function testManifest() {
+      const statusEl = document.getElementById('manifest-status');
+      const detailsEl = document.getElementById('manifest-details');
+
+      try {
+        const response = await fetch('/manifest.json');
+        const manifest = await response.json();
+        statusEl.textContent = 'Loaded';
+        statusEl.className = 'status success';
+        detailsEl.innerHTML = `Name: ${manifest.name}<br>Icons: ${manifest.icons.length}`;
+      } catch (error) {
+        statusEl.textContent = 'Failed';
+        statusEl.className = 'status error';
+        detailsEl.textContent = error.message;
+      }
+    }
+
+    // Test 3: Push Notifications
+    document.getElementById('test-push').addEventListener('click', async () => {
+      const statusEl = document.getElementById('push-status');
+      const detailsEl = document.getElementById('push-details');
+
+      if (!('Notification' in window)) {
+        statusEl.textContent = 'Not Supported';
+        statusEl.className = 'status error';
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      statusEl.textContent = permission === 'granted' ? 'Granted' : 'Denied';
+      statusEl.className = permission === 'granted' ? 'status success' : 'status error';
+      detailsEl.textContent = `Permission: ${permission}`;
+    });
+
+    document.getElementById('test-subscribe').addEventListener('click', async () => {
+      const statusEl = document.getElementById('push-status');
+      const detailsEl = document.getElementById('push-details');
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: new Uint8Array([0]) // Dummy key for testing
+        });
+        
+        statusEl.textContent = 'Subscribed';
+        statusEl.className = 'status success';
+        detailsEl.textContent = 'Subscription created (check console for details)';
+        console.log('Subscription:', JSON.stringify(subscription));
+      } catch (error) {
+        statusEl.textContent = 'Failed';
+        statusEl.className = 'status error';
+        detailsEl.textContent = error.message;
+      }
+    });
+
+    // Test 4: Background Sync
+    document.getElementById('test-sync').addEventListener('click', async () => {
+      const statusEl = document.getElementById('sync-status');
+      const detailsEl = document.getElementById('sync-details');
+
+      if (!('serviceWorker' in navigator) || !('SyncManager' in window)) {
+        statusEl.textContent = 'Not Supported';
+        statusEl.className = 'status error';
+        detailsEl.textContent = 'Background Sync API not available';
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.sync.register('test-sync');
+        statusEl.textContent = 'Registered';
+        statusEl.className = 'status success';
+        detailsEl.textContent = 'Background sync registered successfully';
+      } catch (error) {
+        statusEl.textContent = 'Failed';
+        statusEl.className = 'status error';
+        detailsEl.textContent = error.message;
+      }
+    });
+
+    // Test 5: Online/Offline
+    function testOnlineStatus() {
+      const statusEl = document.getElementById('online-status');
+      const detailsEl = document.getElementById('online-details');
+
+      const isOnline = navigator.onLine;
+      statusEl.textContent = isOnline ? '🟢 Online' : '🔴 Offline';
+      statusEl.className = isOnline ? 'status success' : 'status error';
+      detailsEl.textContent = 'Connection events are being monitored';
+
+      window.addEventListener('online', () => {
+        statusEl.textContent = '🟢 Online';
+        statusEl.className = 'status success';
+      });
+
+      window.addEventListener('offline', () => {
+        statusEl.textContent = '🔴 Offline';
+        statusEl.className = 'status error';
+      });
+    }
+
+    // Test 6: Install Prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      
+      const statusEl = document.getElementById('install-status');
+      const button = document.getElementById('test-install');
+      
+      statusEl.textContent = 'Available';
+      statusEl.className = 'status success';
+      button.disabled = false;
+    });
+
+    document.getElementById('test-install').addEventListener('click', async () => {
+      const statusEl = document.getElementById('install-status');
+      const detailsEl = document.getElementById('install-details');
+
+      if (!deferredPrompt) {
+        detailsEl.textContent = 'Install prompt not available (may already be installed)';
+        return;
+      }
+
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      
+      statusEl.textContent = outcome === 'accepted' ? 'Installed' : 'Dismissed';
+      statusEl.className = outcome === 'accepted' ? 'status success' : 'status error';
+      detailsEl.textContent = `User ${outcome} the install prompt`;
+      
+      deferredPrompt = null;
+    });
+
+    // Run tests on load
+    window.addEventListener('load', () => {
+      testServiceWorker();
+      testManifest();
+      testOnlineStatus();
+    });
+  </script>
+</body>
+</html>

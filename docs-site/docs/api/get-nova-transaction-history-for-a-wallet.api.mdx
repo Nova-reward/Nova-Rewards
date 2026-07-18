@@ -1,0 +1,69 @@
+---
+id: get-nova-transaction-history-for-a-wallet
+title: "Get NOVA transaction history for a wallet"
+description: "Queries Horizon first; falls back to PostgreSQL if Horizon is unavailable."
+sidebar_label: "Get NOVA transaction history for a wallet"
+hide_title: true
+hide_table_of_contents: true
+api: eJy9Vttu2zgQ/RWCTy2g+J6mq31ynJsT10kcNUZbBMlYGlvcUKRKUm68hv59MZLsyE02XSwW6xdL5HAu58wcas0dLCz3v/HAgLIQOqGV5Xcej9CGRqT0zn1+naERaNmZNuJPrdhcGOt+Z3OQ0rIZhI/MaXalrVsYvLkeMTHfmgrLMgVLEBJmEhvc4ykYSNChocBrLihACi7mHleQIPf5D5ASXT+KDFrLPW7weyYMRtx3JkOP2zDGBLi/5m6V0gHrjFAL7nF8giSVtHR6eHjUOxiefBhNLw6uDj4dHd/eDKaTg6Orz9Pb7vhL9yi4Pr49GfXG/aDXvz7rfh2NTkb9fZ7ndxTRplpZtBSk02rR3y4kNcCYFNZRZaFWDpUjY0hTKUKg7eYflk6sX6atZ39g6AgSo1M0TpTxbBaGVPiz4UxriaDqBRISuccjcHWPYAysuMeFw8T+OpKIajZCOVygqQdpt9q5x93TfQw2fhtvaM86YTfq4f78Q6PR4OW50v6VcypLqO0iQUuzrACVYI8wSasXRwjP0VA7PsfZOZF7HBKdlZBXMVSWzHar2G/lHp8bndyXjfWLxun3vw57wWDSDb7sX56fDYLzQaffu7758mFwPj0/2x/2z4PTi+G4czw5GB2Oby8uB4PpuChY/7MI/7o1PW4dSgnmXmJEXL3JXu9j57fux95B7vHQIDiM7uHV1ObaJLRD3YR7TiS4k2+n1dnfa3X32q2g3fM7Hb/V+spzqle4wqA2C8W61ZkJ3+Q9LtWBlw08A4u7LG/28+Ln8d5rIzhUS5AiYiXmDEq9+L8HcQ7S0iSiMdq8TXyRbpHKfWmdezxBa2HxOljbgzuCSJK6VcQ6Dcfkc1IpF6+QS9DFOuI+X2BRIAmtz5uupvfN9Y7/nHvcolluBDozkhhxLvWbTalDkLG2zu+2Wu0mpIL/fFmMyIRFuESp04RoyL26F+s36VxD6SUY/AEmsg2hX3V1ZXSUVX11R1mFmRFudUP8lRTNEAyafubq8kRReHVNFKwVRtyrHk427X4+DV6EPJ8GDAramdOPqJieORAKI0YKwh6uLm8C1oTMxU2pF0I9NEoWTRiDcv1UXOCqLsjlgldeczFCVCRSXXRPe5CKvcfCYDeNT5VD1r8askdcMYMuM5SGVszgglSw6CT2zsb6h2Jahfi+UfSDUHNdpFD1xVgvYVICTe64x4nbMk670Wq0XkSfHN8EReS5NszFyMgF2/iYSR0+hjEIxaRegXQrlkpwpCIN1peSpUY7DB1GDFWUaqHctmMZsMOCBEZA/xJbtsXhFU+KPWwBfGAltkwo6xCijQpAWKhAhfdOGQFCQtxJESINzLPZp2FQAJlq6xJQtZ1TdGx8edtntflhsbBOm1UBFlRq9DOk62dN+m+/pqo+c/jkmqkEUVyKxbCtq2H/xuvDzj3u735f3XmcBpoM12uS4s9G5jktf8/QrLj/7c7jSzCCQhaKEAlLz1Elfm+U+m5SCdV79ne5bgZF0RAsQWb0xj1OU/Hzp2B+l3ubIaJESpt+GGLqaqdfaD6Jx1YIT4+J3b8AvzC7Pg==
+sidebar_class_name: "get api-method"
+info_path: docs/api/novarewards-api
+custom_edit_url: null
+---
+
+import MethodEndpoint from "@theme/ApiExplorer/MethodEndpoint";
+import ParamsDetails from "@theme/ParamsDetails";
+import RequestSchema from "@theme/RequestSchema";
+import StatusCodes from "@theme/StatusCodes";
+import OperationTabs from "@theme/OperationTabs";
+import TabItem from "@theme/TabItem";
+import Heading from "@theme/Heading";
+import Translate from "@docusaurus/Translate";
+
+<Heading
+  as={"h1"}
+  className={"openapi__heading"}
+  children={"Get NOVA transaction history for a wallet"}
+>
+</Heading>
+
+<MethodEndpoint
+  method={"get"}
+  path={"/transactions/{walletAddress}"}
+  context={"endpoint"}
+>
+  
+</MethodEndpoint>
+
+
+
+Queries Horizon first; falls back to PostgreSQL if Horizon is unavailable.
+
+<Heading
+  id={"request"}
+  as={"h2"}
+  className={"openapi-tabs__heading"}
+>
+  <Translate id="theme.openapi.request.title">Request</Translate>
+</Heading>
+
+<ParamsDetails
+  {...require("./get-nova-transaction-history-for-a-wallet.ParamsDetails.json")}
+>
+  
+</ParamsDetails>
+
+<RequestSchema
+  {...require("./get-nova-transaction-history-for-a-wallet.RequestSchema.json")}
+>
+  
+</RequestSchema>
+
+<StatusCodes
+  {...require("./get-nova-transaction-history-for-a-wallet.StatusCodes.json")}
+>
+  
+</StatusCodes>
+
+
+      
