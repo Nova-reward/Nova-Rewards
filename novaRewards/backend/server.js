@@ -42,6 +42,10 @@ const corsOptions =
     ? { origin: process.env.ALLOWED_ORIGIN }
     : {}; // Open CORS for development
 
+const { compressionMiddleware } = require('./middleware/compressionMiddleware');
+
+app.use(compressionMiddleware);
+
 app.use(cors(corsOptions));
 
 // Security headers (OWASP)
