@@ -1,5 +1,6 @@
 const { getLeaderboard } = require('../db/leaderboardRepository');
 const cacheService = require('../services/cacheService');
+const logger = require('../lib/logger');
 
 const CACHE_TTL = 300;
 const PERIODS = ['weekly', 'alltime'];
@@ -14,9 +15,9 @@ async function warmLeaderboardCache() {
     try {
       const { rankings } = await getLeaderboard(period, 50, null);
       await cacheService.set(`leaderboard:${period}`, rankings, CACHE_TTL);
-      console.log(`[leaderboard] cache warmed for period=${period}`);
+      logger.info('[leaderboard] cache warmed', { period });
     } catch (err) {
-      console.error(`[leaderboard] cache warm failed for period=${period}`, err);
+      logger.error('[leaderboard] cache warm failed', { period, error: err.message });
     }
   }
 }

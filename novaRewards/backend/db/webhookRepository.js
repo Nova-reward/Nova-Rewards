@@ -1,5 +1,6 @@
 const { query } = require('./index');
 const { encrypt, decrypt } = require('../lib/encryption');
+const crypto = require('crypto');
 
 // ---------------------------------------------------------------------------
 // Encryption helpers for the webhooks.secret column
@@ -108,11 +109,12 @@ async function getActiveWebhooksForEvent(eventType) {
 // ---------------------------------------------------------------------------
 
 async function createDelivery({ webhookId, eventType, payload }) {
+  const deliveryId = crypto.randomUUID();
   const { rows } = await query(
-    `INSERT INTO webhook_deliveries (webhook_id, event_type, payload)
-     VALUES ($1, $2, $3)
+    `INSERT INTO webhook_deliveries (webhook_id, event_type, payload, delivery_id)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [webhookId, eventType, JSON.stringify(payload)]
+    [webhookId, eventType, JSON.stringify(payload), deliveryId]
   );
   return rows[0];
 }

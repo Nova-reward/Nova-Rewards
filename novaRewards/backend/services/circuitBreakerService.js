@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const CircuitBreaker = require('opossum');
 
 /**
@@ -26,9 +27,9 @@ class CircuitBreakerService {
     const breaker = new CircuitBreaker(asyncFunc, { ...defaultOptions, ...options });
 
     // Monitoring circuits
-    breaker.on('open', () => console.warn(`[Circuit Breaker] ${name} opened! Service is down.`));
-    breaker.on('close', () => console.info(`[Circuit Breaker] ${name} closed. Service is back up.`));
-    breaker.on('halfOpen', () => console.info(`[Circuit Breaker] ${name} half-open. Testing service recovery...`));
+    breaker.on('open', () => logger.warn(`[Circuit Breaker] ${name} opened! Service is down.`));
+    breaker.on('close', () => logger.info(`[Circuit Breaker] ${name} closed. Service is back up.`));
+    breaker.on('halfOpen', () => logger.info(`[Circuit Breaker] ${name} half-open. Testing service recovery...`));
 
     this.breakers.set(name, breaker);
     return breaker;
@@ -54,7 +55,7 @@ class CircuitBreakerService {
       } catch (err) {
         if (attempt < maxRetries && breaker.status.closed) {
           attempt++;
-          console.log(`[Circuit Breaker] Retrying ${name} (attempt ${attempt}/${maxRetries})...`);
+          logger.info(`[Circuit Breaker] Retrying ${name} (attempt ${attempt}/${maxRetries})...`);
           continue;
         }
         throw err;

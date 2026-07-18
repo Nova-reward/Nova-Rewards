@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 /**
  * Required environment variables for the NovaRewards backend.
  * Requirements: 11.1, 11.3
@@ -44,7 +45,7 @@ function validateEnv() {
 
   if (missing.length > 0) {
     missing.forEach((key) => {
-      console.error(`[validateEnv] Missing required environment variable: ${key}`);
+      logger.error(`[validateEnv] Missing required environment variable: ${key}`);
     });
     throw new Error(
       `Server startup aborted. Missing environment variables: ${missing.join(', ')}`

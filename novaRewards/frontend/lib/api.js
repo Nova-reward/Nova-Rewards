@@ -15,6 +15,16 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Ensure a correlation id is sent with every request for tracing
+    try {
+      const existing = config.headers && (config.headers['x-correlation-id'] || config.headers['X-Correlation-Id']);
+      if (!existing) {
+        const cid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `cid-${Math.random().toString(36).slice(2,10)}`;
+        config.headers['x-correlation-id'] = cid;
+      }
+    } catch (e) {
+      // ignore
+    }
     return config;
   },
   (error) => Promise.reject(error)

@@ -276,14 +276,14 @@ describe('stellarTransactionService — submit', () => {
     ).rejects.toThrow('At least one signer is required');
   });
 
-  it('attempts fee-bump retry when transaction is stuck (tx_bad_seq)', async () => {
+  it('refreshes sequence and retries once when transaction is stuck (tx_bad_seq)', async () => {
     const sourceKp = Keypair.random();
-    const feeSourceKp = Keypair.random();
-    process.env.FEE_SOURCE_SECRET = feeSourceKp.secret();
+    const destKp = Keypair.random();
 
-    server.loadAccount.mockResolvedValue(mockAccount(sourceKp.publicKey()));
+    server.loadAccount
+      .mockResolvedValueOnce(mockAccount(sourceKp.publicKey(), '111'))
+      .mockResolvedValueOnce(mockAccount(sourceKp.publicKey(), '222'));
 
-    // First submission fails with tx_bad_seq
     const stuckError = new Error('tx_bad_seq');
     stuckError.response = {
       data: {
@@ -292,10 +292,11 @@ describe('stellarTransactionService — submit', () => {
         },
       },
     };
+
     server.submitTransaction
       .mockRejectedValueOnce(stuckError)
       .mockResolvedValueOnce({
-        hash: 'feebumphash',
+        hash: 'retryhash',
         ledger: 101,
         result_xdr: 'CCCCCC==',
       });
@@ -306,20 +307,125 @@ describe('stellarTransactionService — submit', () => {
       sourceAddress: sourceKp.publicKey(),
       operations: [
         Operation.payment({
+          destination: destKp.publicKey(),
+          asset: Asset.native(),
+          amount: '5',
+        }),
+      ],
+      signers: [sourceKp],
+      options: {},
+    });
+
+    expect(result.txHash).toBe('retryhash');
+    // One for initial submit attempt, one for retry submission
+    expect(server.submitTransaction).toHaveBeenCalledTimes(2);
+    // Sequence refreshed via loadAccount on tx_bad_seq
+    expect(server.loadAccount).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries Horizon timeout errors up to 3 times with exponential backoff', async () => {
+    jest.useFakeTimers();
+
+    const sourceKp = Keypair.random();
+    server.loadAccount.mockResolvedValue(mockAccount(sourceKp.publicKey(), '111'));
+
+    const timeoutErr1 = new Error('timeout');
+    const timeoutErr2 = new Error('timeout');
+    const timeoutErr3 = new Error('timeout');
+
+    server.submitTransaction
+      .mockRejectedValueOnce(timeoutErr1)
+      .mockRejectedValueOnce(timeoutErr2)
+      .mockRejectedValueOnce(timeoutErr3);
+
+    recordTransaction.mockResolvedValue({ id: 2 });
+
+    const p = stellarTxService.submit({
+      sourceAddress: sourceKp.publicKey(),
+      operations: [
+        Operation.payment({
           destination: Keypair.random().publicKey(),
           asset: Asset.native(),
           amount: '5',
         }),
       ],
       signers: [sourceKp],
-      options: { feeSourceSecret: feeSourceKp.secret() },
+      options: {},
     });
 
-    expect(result.txHash).toBe('feebumphash');
-    expect(server.submitTransaction).toHaveBeenCalledTimes(2);
+    // Run pending timers (backoffs: 0ms, 500ms, 1000ms)
+    await Promise.resolve();
+    jest.advanceTimersByTime(2000);
 
-    delete process.env.FEE_SOURCE_SECRET;
+    await expect(p).rejects.toThrow('Horizon error');
+    expect(server.submitTransaction).toHaveBeenCalledTimes(3);
+
+    jest.useRealTimers();
   });
+
+  it('maps Horizon insufficient_balance to a 400 response code', async () => {
+    const sourceKp = Keypair.random();
+    server.loadAccount.mockResolvedValue(mockAccount(sourceKp.publicKey(), '111'));
+
+    const err = new Error('insufficient_balance');
+    err.response = {
+      data: {
+        extras: {
+          result_codes: { transaction: ['insufficient_balance'] },
+        },
+      },
+    };
+
+    server.submitTransaction.mockRejectedValue(err);
+
+    await expect(
+      stellarTxService.submit({
+        sourceAddress: sourceKp.publicKey(),
+        operations: [
+          Operation.payment({
+            destination: Keypair.random().publicKey(),
+            asset: Asset.native(),
+            amount: '5',
+          }),
+        ],
+        signers: [sourceKp],
+        options: {},
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('maps all other Horizon errors to 503 with original code', async () => {
+    const sourceKp = Keypair.random();
+    server.loadAccount.mockResolvedValue(mockAccount(sourceKp.publicKey(), '111'));
+
+    const err = new Error('some_horizon_failure');
+    err.response = {
+      data: {
+        extras: {
+          result_codes: { transaction: ['tx_internal_error'] },
+        },
+      },
+    };
+
+    server.submitTransaction.mockRejectedValue(err);
+
+    await expect(
+      stellarTxService.submit({
+        sourceAddress: sourceKp.publicKey(),
+        operations: [
+          Operation.payment({
+            destination: Keypair.random().publicKey(),
+            asset: Asset.native(),
+            amount: '5',
+          }),
+        ],
+        signers: [sourceKp],
+        options: {},
+      }),
+    ).rejects.toMatchObject({ status: 503, code: 'tx_internal_error' });
+  });
+
+
 
   it('does not retry fee-bump for non-stuck errors', async () => {
     const sourceKp = Keypair.random();

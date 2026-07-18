@@ -27,7 +27,7 @@ describe('Input', () => {
 
   it('applies error border class when error is present', () => {
     render(<Input error="Oops" placeholder="x" />);
-    expect(screen.getByPlaceholderText('x')).toHaveClass('border-red-500');
+    expect(screen.getByPlaceholderText('x')).toHaveClass('border-error-500');
   });
 
   it('is disabled when disabled prop is passed', () => {

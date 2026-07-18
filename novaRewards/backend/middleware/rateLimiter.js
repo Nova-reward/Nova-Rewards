@@ -24,12 +24,7 @@ const {
   RATE_LIMIT_RETRY_AFTER_SECS,
   RL_GLOBAL_MAX,
   RL_AUTH_MAX,
-  RL_USER_MAX,
-  RL_SEARCH_MAX,
-  RL_WEBHOOK_MAX,
-  RL_WEBHOOK_API_KEY_MAX,
-  RL_REWARDS_MAX,
-  RL_ADMIN_MAX,
+  RATE_LIMIT_ROUTES,
 } = require('../config/constants');
 
 // ---------------------------------------------------------------------------
@@ -87,72 +82,59 @@ const authLimiter = rateLimit({
 });
 
 // ---------------------------------------------------------------------------
-// Sliding-window limiters
+// Sliding-window limiters — built from the per-route configuration matrix
+// (config/constants.js → RATE_LIMIT_ROUTES). No limits are hardcoded here.
 // ---------------------------------------------------------------------------
 
-const w = (s) => s * 1000; // seconds → ms helper
-
-const slidingGlobal = slidingRateLimiter({
-  prefix:   'sw:global',
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max:      parseInt(process.env.RL_GLOBAL_MAX)  || RL_GLOBAL_MAX,
-  keyBy:    'ip',
-});
-
-const slidingAuth = slidingRateLimiter({
-  prefix:   'sw:auth',
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max:      parseInt(process.env.RL_AUTH_MAX)    || RL_AUTH_MAX,
-  keyBy:    'ip',
-  message:  `Too many authentication attempts. Retry after ${RATE_LIMIT_RETRY_AFTER_SECS} seconds.`,
-});
-
-const slidingUser = slidingRateLimiter({
-  prefix:   'sw:user',
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max:      parseInt(process.env.RL_USER_MAX)    || RL_USER_MAX,
-  keyBy:    'user-or-ip',
-});
-
-const slidingSearch = slidingRateLimiter({
-  prefix:   'sw:search',
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max:      parseInt(process.env.RL_SEARCH_MAX)  || RL_SEARCH_MAX,
-  keyBy:    'user-or-ip',
-  message:  `Search rate limit exceeded. Retry after ${RATE_LIMIT_RETRY_AFTER_SECS} seconds.`,
-});
-
-const slidingWebhook = slidingRateLimiter({
-  prefix:   'sw:webhook',
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max:      parseInt(process.env.RL_WEBHOOK_MAX) || RL_WEBHOOK_MAX,
-  keyBy:    'ip',
-});
+/**
+ * Resolves a route's effective `max`, honouring an optional env override so
+ * ops can retune a single route's limit without a code change or redeploy.
+ *
+ * @param {{ max: number, envMax?: string }} route
+ * @returns {number}
+ */
+function resolveMax({ max, envMax }) {
+  const override = envMax ? parseInt(process.env[envMax], 10) : NaN;
+  return Number.isNaN(override) ? max : override;
+}
 
 /**
- * Webhook endpoint limiter keyed by merchant API key.
- * Falls back to IP if no x-api-key header is present.
+ * Instantiates a sliding-window limiter from a matrix entry, mapping the
+ * declarative config onto the factory's options.
+ *
+ * @param {string} routeName  key in RATE_LIMIT_ROUTES
+ * @returns {import('express').RequestHandler}
  */
-const webhookApiKeyLimiter = slidingRateLimiter({
-  prefix:   'sw:webhook-apikey',
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max:      parseInt(process.env.RL_WEBHOOK_API_KEY_MAX) || RL_WEBHOOK_API_KEY_MAX,
-  keyBy:    'api-key',
-});
+function buildSlidingLimiter(routeName) {
+  const route = RATE_LIMIT_ROUTES[routeName];
+  if (!route) {
+    throw new Error(`[rateLimiter] unknown rate-limit route: ${routeName}`);
+  }
+  return slidingRateLimiter({
+    prefix:   route.prefix,
+    windowMs: route.windowMs,
+    max:      resolveMax(route),
+    keyBy:    route.identifierStrategy,
+    message:  route.message,
+  });
+}
 
-const slidingRewards = slidingRateLimiter({
-  prefix:   'sw:rewards',
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max:      parseInt(process.env.RL_REWARDS_MAX) || RL_REWARDS_MAX,
-  keyBy:    'ip',
-});
+const slidingGlobal        = buildSlidingLimiter('global');
+const slidingAuth          = buildSlidingLimiter('auth');
+const slidingUser          = buildSlidingLimiter('user');
+const slidingSearch        = buildSlidingLimiter('search');
+const slidingWebhook       = buildSlidingLimiter('webhook');
+/** Webhook limiter keyed by merchant API key (falls back to IP). */
+const webhookApiKeyLimiter = buildSlidingLimiter('webhookApiKey');
+/** Reward distribution limiter, keyed per merchant (falls back to IP). */
+const slidingRewards       = buildSlidingLimiter('rewards');
+const slidingAdmin         = buildSlidingLimiter('admin');
 
-const slidingAdmin = slidingRateLimiter({
-  prefix:   'sw:admin',
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max:      parseInt(process.env.RL_ADMIN_MAX)   || RL_ADMIN_MAX,
-  keyBy:    'user',
-});
+// Auth-specific 15-minute-window limiters — Issue #861.
+/** Login endpoint: per-IP, longer window. */
+const loginLimiter         = buildSlidingLimiter('login');
+/** Token refresh endpoint: per-IP, longer window. */
+const refreshLimiter       = buildSlidingLimiter('refresh');
 
 module.exports = {
   // fixed-window (legacy)
@@ -167,4 +149,7 @@ module.exports = {
   webhookApiKeyLimiter,
   slidingRewards,
   slidingAdmin,
+  // auth-specific (15-minute window)
+  loginLimiter,
+  refreshLimiter,
 };

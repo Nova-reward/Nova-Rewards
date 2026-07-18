@@ -1,436 +1,405 @@
-import { useState, useEffect, useCallback } from 'react';
-import dynamic from 'next/dynamic';
-import api from '../lib/api';
-import DashboardLayout from '../components/layout/DashboardLayout';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/router";
+import CampaignForm from "../components/CampaignForm";
+import IssueRewardForm from "../components/IssueRewardForm";
+import Navbar from "../components/Navbar";
+import api from "../lib/api";
 
-const CampaignManager  = dynamic(() => import('../components/CampaignManager'),  { ssr: false });
-const CampaignAnalytics = dynamic(() => import('../components/CampaignAnalytics'), { ssr: false });
-const IssueRewardForm  = dynamic(() => import('../components/IssueRewardForm'),  { ssr: false });
-
-// ── Step indicators ──────────────────────────────────────────────────────────
-const STEPS = ['Business Details', 'Wallet Verification', 'Business Profile', 'Dashboard'];
-
-function StepBar({ current }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '2rem', overflowX: 'auto' }}>
-      {STEPS.map((label, i) => {
-        const done    = i < current;
-        const active  = i === current;
-        return (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? 1 : 'none' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '60px' }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: done ? '#10b981' : active ? 'var(--accent)' : 'rgba(148,163,184,0.2)',
-                color: done || active ? '#fff' : 'var(--muted)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 700, fontSize: '0.85rem',
-                border: active ? '2px solid var(--accent)' : 'none',
-                flexShrink: 0,
-              }}>
-                {done ? '✓' : i + 1}
-              </div>
-              <span style={{ fontSize: '0.7rem', color: active ? 'var(--accent)' : 'var(--muted)', marginTop: '4px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                {label}
-              </span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? '#10b981' : 'rgba(148,163,184,0.2)', margin: '0 4px', marginBottom: '1.2rem' }} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
+function getCampaignStatus(c) {
+  const now = new Date();
+  const start = new Date(c.start_date);
+  const end = new Date(c.end_date);
+  if (now < start) return "upcoming";
+  if (now > end || !c.is_active) return "ended";
+  return "active";
 }
 
-// ── Step 1: Business Details ─────────────────────────────────────────────────
-function StepBusinessDetails({ onNext }) {
-  const [form, setForm] = useState({ name: '', email: '', businessCategory: '', website: '' });
-  const [error, setError] = useState('');
+const STATUS_LABELS = { active: "Active", ended: "Ended", upcoming: "Upcoming" };
+const STATUS_BADGES = { active: "badge-green", ended: "badge-gray", upcoming: "badge-blue" };
+const FILTER_OPTIONS = ["all", "active", "ended", "upcoming"];
 
-  const set = field => e => setForm(f => ({ ...f, [field]: e.target.value }));
+/**
+ * Merchant dashboard — registration, campaigns, reward issuance, totals.
+ * Requirements: 10.1, 10.2, 10.3, 10.4
+ */
+export default function MerchantDashboard() {
+  // Registration state
+  const [regForm, setRegForm] = useState({
+    name: "",
+    walletAddress: "",
+    businessCategory: "",
+  });
+  const [merchant, setMerchant] = useState(null);
+  const [apiKey, setApiKey] = useState("");
+  const [regStatus, setRegStatus] = useState("idle");
+  const [regMessage, setRegMessage] = useState("");
 
-  function handleNext(e) {
-    e.preventDefault();
-    if (!form.name.trim()) return setError('Business name is required.');
-    if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) return setError('Valid email is required.');
-    setError('');
-    onNext(form);
-  }
+  // Dashboard state
+  const [campaigns, setCampaigns] = useState([]);
+  const [totals, setTotals] = useState({
+    totalDistributed: 0,
+    totalRedeemed: 0,
+  });
+  const [totalsLoading, setTotalsLoading] = useState(false);
 
-  return (
-    <div className="card">
-      <h2 style={{ marginBottom: '0.5rem' }}>Step 1 — Business Details</h2>
-      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-        Tell us about your business to get started.
-      </p>
-      <form onSubmit={handleNext}>
-        <label className="label">Business Name *</label>
-        <input className="input" value={form.name} onChange={set('name')} placeholder="Acme Coffee" required />
+  // Search / filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-        <label className="label">Business Email *</label>
-        <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="hello@acme.com" required />
+  const router = useRouter();
+  const urlSyncReady = useRef(false);
 
-        <label className="label">Business Category</label>
-        <select className="input" value={form.businessCategory} onChange={set('businessCategory')} style={{ cursor: 'pointer' }}>
-          <option value="">Select a category…</option>
-          {['Food & Beverage', 'Retail', 'E-commerce', 'Health & Wellness', 'Entertainment', 'Travel', 'Other'].map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-
-        <label className="label">Website (optional)</label>
-        <input className="input" type="url" value={form.website} onChange={set('website')} placeholder="https://acme.com" />
-
-        {error && <p className="error" style={{ marginBottom: '0.5rem' }}>{error}</p>}
-        <button className="btn btn-primary" type="submit" style={{ width: '100%', marginTop: '0.5rem' }}>
-          Continue →
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// ── Step 2: Wallet Verification ──────────────────────────────────────────────
-function StepWalletVerification({ businessData, onNext }) {
-  const [walletAddress, setWalletAddress] = useState('');
-  const [status, setStatus] = useState('idle'); // idle | connecting | signing | done | error
-  const [message, setMessage] = useState('');
-
-  async function connectFreighter() {
-    setStatus('connecting');
-    setMessage('');
+  const getMerchantTotals = useCallback(async (mid) => {
+    setTotalsLoading(true);
     try {
-      // Dynamic import so SSR doesn't break
-      const { getPublicKey, isConnected } = await import('@stellar/freighter-api').catch(() => null) || {};
-      if (!getPublicKey) throw new Error('Freighter API not available. Please install the Freighter extension.');
-
-      const connected = await isConnected();
-      if (!connected) throw new Error('Freighter is not connected. Please open the extension and connect.');
-
-      const pubKey = await getPublicKey();
-      setWalletAddress(pubKey);
-      setStatus('signing');
-      setMessage('Wallet connected! Click "Sign & Verify" to prove ownership.');
-    } catch (err) {
-      setStatus('error');
-      setMessage(err.message || 'Failed to connect Freighter.');
+      const totalsRes = await api.get(
+        `/api/transactions/merchant-totals/${mid}`,
+      );
+      setTotals(
+        totalsRes.data.data || { totalDistributed: 0, totalRedeemed: 0 },
+      );
+    } catch {
+      setTotals({ totalDistributed: 0, totalRedeemed: 0 });
+    } finally {
+      setTotalsLoading(false);
     }
-  }
+  }, []);
 
-  async function signAndVerify() {
-    setStatus('signing');
-    setMessage('');
-    try {
-      const { signTransaction } = await import('@stellar/freighter-api').catch(() => null) || {};
-      if (!signTransaction) throw new Error('Freighter API not available.');
-
-      // Sign a challenge message to prove wallet ownership
-      const challenge = `Nova Rewards merchant verification: ${walletAddress} at ${Date.now()}`;
-      await signTransaction(challenge, { networkPassphrase: 'Test SDF Network ; September 2015' });
-
-      setStatus('done');
-      setMessage('✓ Wallet verified successfully!');
-    } catch (err) {
-      // Fallback: accept manual entry for environments without Freighter
-      if (walletAddress && walletAddress.startsWith('G') && walletAddress.length === 56) {
-        setStatus('done');
-        setMessage('✓ Wallet address accepted (manual entry).');
-      } else {
-        setStatus('error');
-        setMessage(err.message || 'Signing failed. Please try again.');
+  const loadDashboard = useCallback(
+    async (mid) => {
+      try {
+        const [campRes] = await Promise.all([api.get(`/api/campaigns/${mid}`)]);
+        setCampaigns(campRes.data.data || []);
+        await getMerchantTotals(mid);
+      } catch {
+        // silently ignore on first load
       }
-    }
-  }
-
-  function handleManualEntry(e) {
-    setWalletAddress(e.target.value);
-    if (status === 'error') setStatus('idle');
-  }
-
-  return (
-    <div className="card">
-      <h2 style={{ marginBottom: '0.5rem' }}>Step 2 — Wallet Verification</h2>
-      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-        Connect your Stellar wallet to verify ownership. We use Freighter for secure signing.
-      </p>
-
-      <div style={{ background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: '0.75rem', padding: '1rem', marginBottom: '1.5rem', fontSize: '0.85rem', color: 'var(--muted)' }}>
-        <strong style={{ color: 'var(--text)' }}>How it works:</strong>
-        <ol style={{ margin: '0.5rem 0 0 1.2rem', lineHeight: 1.8 }}>
-          <li>Install the <a href="https://www.freighter.app/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Freighter browser extension</a></li>
-          <li>Click "Connect Freighter" to retrieve your public key</li>
-          <li>Click "Sign &amp; Verify" — Freighter will ask you to sign a challenge</li>
-          <li>No funds are moved; this only proves wallet ownership</li>
-        </ol>
-      </div>
-
-      <label className="label">Stellar Wallet Address</label>
-      <input
-        className="input"
-        value={walletAddress}
-        onChange={handleManualEntry}
-        placeholder="G… (or connect Freighter below)"
-        style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
-      />
-
-      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-        <button
-          className="btn btn-secondary"
-          onClick={connectFreighter}
-          disabled={status === 'connecting' || status === 'done'}
-          style={{ flex: 1 }}
-        >
-          {status === 'connecting' ? 'Connecting…' : '🔗 Connect Freighter'}
-        </button>
-        <button
-          className="btn btn-primary"
-          onClick={signAndVerify}
-          disabled={!walletAddress || status === 'done' || status === 'connecting'}
-          style={{ flex: 1 }}
-        >
-          {status === 'signing' ? 'Signing…' : '✍️ Sign & Verify'}
-        </button>
-      </div>
-
-      {message && (
-        <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: status === 'done' ? '#10b981' : status === 'error' ? '#ef4444' : 'var(--muted)' }}>
-          {message}
-        </p>
-      )}
-
-      {status === 'done' && (
-        <button
-          className="btn btn-primary"
-          onClick={() => onNext(walletAddress)}
-          style={{ width: '100%', marginTop: '1rem' }}
-        >
-          Continue →
-        </button>
-      )}
-    </div>
+    },
+    [getMerchantTotals],
   );
-}
 
-// ── Step 3: Business Profile Upload ─────────────────────────────────────────
-function StepBusinessProfile({ businessData, walletAddress, onNext }) {
-  const [profile, setProfile] = useState({ description: '', website: businessData.website || '', logoPreview: null });
-  const [logoFile, setLogoFile] = useState(null);
-  const [status, setStatus] = useState('idle');
-  const [error, setError] = useState('');
+  useEffect(() => {
+    if (merchant?.id) loadDashboard(merchant.id);
+  }, [merchant, loadDashboard]);
 
-  function handleLogo(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) return setError('Logo must be under 2 MB.');
-    setLogoFile(file);
-    setError('');
-    const reader = new FileReader();
-    reader.onload = ev => setProfile(p => ({ ...p, logoPreview: ev.target.result }));
-    reader.readAsDataURL(file);
-  }
+  // Initialise filters from URL once router is ready
+  useEffect(() => {
+    if (!router.isReady) return;
+    urlSyncReady.current = true;
+    setSearchQuery(router.query.q || "");
+    setDebouncedSearch(router.query.q || "");
+    setStatusFilter(router.query.status || "all");
+  }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleSubmit(e) {
+  // Debounce search input by 300 ms
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
+
+  // Reflect active filters in URL query string
+  useEffect(() => {
+    if (!router.isReady || !urlSyncReady.current) return;
+    const query = {};
+    if (debouncedSearch) query.q = debouncedSearch;
+    if (statusFilter !== "all") query.status = statusFilter;
+    router.replace({ pathname: router.pathname, query }, undefined, {
+      shallow: true,
+    });
+  }, [debouncedSearch, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleRegister(e) {
     e.preventDefault();
-    setStatus('loading');
-    setError('');
+    setRegMessage("");
+    setRegStatus("loading");
     try {
-      const payload = {
-        name: businessData.name,
-        email: businessData.email,
-        walletAddress,
-        businessCategory: businessData.businessCategory,
-        website: profile.website,
-        description: profile.description,
-      };
-      const { data } = await api.post('/api/merchants/register', payload);
-      onNext({ merchant: data.data, apiKey: data.data.api_key });
+      const { data } = await api.post("/api/merchants/register", regForm);
+      setMerchant(data.data);
+      setApiKey(data.data.api_key);
+      setRegStatus("done");
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Registration failed.');
-      setStatus('idle');
+      setRegStatus("error");
+      setRegMessage(err.response?.data?.message || err.message);
     }
   }
 
-  return (
-    <div className="card">
-      <h2 style={{ marginBottom: '0.5rem' }}>Step 3 — Business Profile</h2>
-      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-        Add your logo and description so customers can recognise your brand.
-      </p>
-      <form onSubmit={handleSubmit}>
-        {/* Logo upload */}
-        <label className="label">Business Logo</label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-          {profile.logoPreview ? (
-            <img src={profile.logoPreview} alt="Logo preview" style={{ width: 64, height: 64, borderRadius: '0.5rem', objectFit: 'cover', border: '1px solid var(--border)' }} />
-          ) : (
-            <div style={{ width: 64, height: 64, borderRadius: '0.5rem', background: 'rgba(148,163,184,0.1)', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '1.5rem' }}>
-              🏪
-            </div>
-          )}
-          <label style={{ cursor: 'pointer' }}>
-            <span className="btn btn-secondary" style={{ fontSize: '0.85rem' }}>Upload Logo</span>
-            <input type="file" accept="image/*" onChange={handleLogo} style={{ display: 'none' }} />
-          </label>
-          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>PNG, JPG, SVG · max 2 MB</span>
-        </div>
-
-        <label className="label">Business Description</label>
-        <textarea
-          className="input"
-          value={profile.description}
-          onChange={e => setProfile(p => ({ ...p, description: e.target.value }))}
-          placeholder="Tell customers what makes your loyalty program special…"
-          rows={3}
-          style={{ resize: 'vertical' }}
-        />
-
-        <label className="label">Website</label>
-        <input
-          className="input"
-          type="url"
-          value={profile.website}
-          onChange={e => setProfile(p => ({ ...p, website: e.target.value }))}
-          placeholder="https://acme.com"
-        />
-
-        {error && <p className="error" style={{ marginBottom: '0.5rem' }}>{error}</p>}
-        <button className="btn btn-primary" type="submit" disabled={status === 'loading'} style={{ width: '100%', marginTop: '0.5rem' }}>
-          {status === 'loading' ? 'Registering…' : 'Complete Registration →'}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// ── Tutorial Overlay ─────────────────────────────────────────────────────────
-const TUTORIAL_STEPS = [
-  { icon: '🎯', title: 'Create your first campaign', body: 'Go to the Campaigns tab and click "New Campaign". Set a name, reward rate, and date range.' },
-  { icon: '🪙', title: 'Issue rewards to customers', body: 'Use the "Issue Rewards" tab to send NOVA tokens directly to a customer\'s Stellar wallet.' },
-  { icon: '📊', title: 'Track performance', body: 'The Analytics tab shows distributed vs redeemed tokens and campaign performance over time.' },
-  { icon: '🚀', title: "You're ready!", body: 'Your first campaign takes under 2 minutes. Let\'s go!' },
-];
-
-function TutorialOverlay({ onClose }) {
-  const [step, setStep] = useState(0);
-  const current = TUTORIAL_STEPS[step];
-  const isLast = step === TUTORIAL_STEPS.length - 1;
+  const setReg = (field) => (e) =>
+    setRegForm((f) => ({ ...f, [field]: e.target.value }));
 
   return (
     <>
-      <div className="container">
-        <h1 style={{ marginBottom: '1.5rem', fontSize: '1.8rem', fontWeight: 700 }}>Merchant Portal</h1>
+      <Navbar />
 
+      <div className="container">
+        <h1
+          style={{
+            marginBottom: "1.5rem",
+            fontSize: "1.8rem",
+            fontWeight: 700,
+          }}
+        >
+          Merchant Portal
+        </h1>
+
+        {/* Registration */}
         {!merchant ? (
           <div className="card">
-            <h2 style={{ marginBottom: '1rem' }}>Register as a Merchant</h2>
+            <h2 style={{ marginBottom: "1rem" }}>Register as a Merchant</h2>
             <form onSubmit={handleRegister}>
-              <div>
-                <label className="label">Business Name</label>
-                <input className="input" value={regForm.name} onChange={setReg('name')} placeholder="Acme Coffee" disabled={regStatus === 'loading'} />
-              </div>
-              <div>
-                <label className="label">Stellar Wallet Address</label>
-                <input className="input" value={regForm.walletAddress} onChange={setReg('walletAddress')} placeholder="G…" disabled={regStatus === 'loading'} />
-              </div>
-              <div>
-                <label className="label">Business Category (optional)</label>
-                <input className="input" value={regForm.businessCategory} onChange={setReg('businessCategory')} placeholder="Food & Beverage" disabled={regStatus === 'loading'} />
-              </div>
-              <button className="btn btn-primary" type="submit" disabled={regStatus === 'loading'}>
-                {regStatus === 'loading' ? 'Registering…' : 'Register'}
+              <label className="label">Business Name</label>
+              <input
+                className="input"
+                value={regForm.name}
+                onChange={setReg("name")}
+                placeholder="Acme Coffee"
+                disabled={regStatus === "loading"}
+              />
+
+              <label className="label">Stellar Wallet Address</label>
+              <input
+                className="input"
+                value={regForm.walletAddress}
+                onChange={setReg("walletAddress")}
+                placeholder="G..."
+                disabled={regStatus === "loading"}
+              />
+
+              <label className="label">Business Category (optional)</label>
+              <input
+                className="input"
+                value={regForm.businessCategory}
+                onChange={setReg("businessCategory")}
+                placeholder="Food & Beverage"
+                disabled={regStatus === "loading"}
+              />
+
+              <button
+                className="btn btn-primary"
+                type="submit"
+                disabled={regStatus === "loading"}
+              >
+                {regStatus === "loading" ? "Registering…" : "Register"}
               </button>
               {regMessage && <p className="error">{regMessage}</p>}
             </form>
           </div>
-          <div style={{ display: 'flex', gap: '2rem' }}>
-            {[['Distributed', totals.totalDistributed, 'var(--accent)'], ['Redeemed', totals.totalRedeemed, 'var(--success)']].map(([label, val, color]) => (
-              <div key={label} style={{ textAlign: 'center' }}>
-                <p style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{label}</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 700, color }}>{parseFloat(val).toFixed(2)}</p>
-                <p style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>NOVA</p>
+        ) : (
+          <>
+            {/* Merchant info + API key */}
+            <div className="card">
+              <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                Logged in as
+              </p>
+              <p style={{ fontWeight: 700, fontSize: "1.1rem" }}>
+                {merchant.name}
+              </p>
+              <p
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: "0.8rem",
+                  color: "#94a3b8",
+                  marginTop: "0.3rem",
+                }}
+              >
+                API Key: <span style={{ color: "#7c3aed" }}>{apiKey}</span>
+              </p>
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "#64748b",
+                  marginTop: "0.3rem",
+                }}
+              >
+                Keep this key secret — it authorises reward distributions.
+              </p>
+            </div>
+
+            {/* Totals summary — Requirements 10.2 */}
+            <div className="card">
+              {totalsLoading && (
+                <p
+                  style={{
+                    color: "#94a3b8",
+                    fontSize: "0.8rem",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  Refreshing totals…
+                </p>
+              )}
+              <div style={{ display: "flex", gap: "2rem" }}>
+                <div>
+                  <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                    Total Distributed
+                  </p>
+                  <p
+                    style={{
+                      fontSize: "1.8rem",
+                      fontWeight: 700,
+                      color: "#7c3aed",
+                    }}
+                  >
+                    {parseFloat(totals.totalDistributed).toFixed(2)}
+                  </p>
+                  <p style={{ color: "#94a3b8", fontSize: "0.8rem" }}>NOVA</p>
+                </div>
+                <div>
+                  <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+                    Total Redeemed
+                  </p>
+                  <p
+                    style={{
+                      fontSize: "1.8rem",
+                      fontWeight: 700,
+                      color: "#34d399",
+                    }}
+                  >
+                    {parseFloat(totals.totalRedeemed).toFixed(2)}
+                  </p>
+                  <p style={{ color: "#94a3b8", fontSize: "0.8rem" }}>NOVA</p>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
+            </div>
 
-      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
-        {TABS.map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{
-            padding: '0.6rem 1.2rem', background: 'none', border: 'none',
-            borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
-            color: activeTab === tab ? 'var(--accent)' : 'var(--muted)',
-            fontWeight: activeTab === tab ? 700 : 400,
-            cursor: 'pointer', fontSize: '0.95rem', marginBottom: '-1px',
-          }}>
-            {tab}
-          </button>
-        ))}
-      </div>
+            {/* Issue rewards — Requirements 10.4 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Issue Rewards</h2>
+              <IssueRewardForm
+                merchantId={merchant.id}
+                apiKey={apiKey}
+                campaigns={campaigns}
+                onSuccess={() => getMerchantTotals(merchant.id)}
+              />
+            </div>
 
-      {activeTab === 'Campaigns' && (
-        <div className="card">
-          <h2 style={{ marginBottom: '1rem' }}>Campaign Management</h2>
-          <CampaignManager merchantId={merchant.id} apiKey={apiKey} onUpdate={refreshTotals} />
-        </div>
-      )}
-      {activeTab === 'Analytics' && <CampaignAnalytics merchantId={merchant.id} apiKey={apiKey} />}
-      {activeTab === 'Issue Rewards' && (
-        <div className="card">
-          <h2 style={{ marginBottom: '1rem' }}>Issue Rewards</h2>
-          <IssueRewardForm merchantId={merchant.id} apiKey={apiKey} onSuccess={refreshTotals} />
-        </div>
-      )}
+            {/* Create campaign — Requirements 10.3 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Create Campaign</h2>
+              <CampaignForm
+                merchantId={merchant.id}
+                apiKey={apiKey}
+                onSuccess={() => loadDashboard(merchant.id)}
+              />
+            </div>
+
+            {/* Campaign list — Requirements 10.1 */}
+            <div className="card">
+              <h2 style={{ marginBottom: "1rem" }}>Campaigns</h2>
+
+              {campaigns.length === 0 ? (
+                <p style={{ color: "#94a3b8" }}>
+                  No campaigns yet. Create one above.
+                </p>
+              ) : (
+                <>
+                  {/* Search and status filter controls */}
+                  <div style={{ marginBottom: "1.25rem" }}>
+                    <label
+                      htmlFor="campaign-search"
+                      className="label"
+                      style={{ marginBottom: "0.4rem" }}
+                    >
+                      Search
+                    </label>
+                    <input
+                      id="campaign-search"
+                      type="search"
+                      className="input"
+                      style={{ marginBottom: "0.75rem" }}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search by name…"
+                      aria-label="Search campaigns by name"
+                    />
+                    <div
+                      role="group"
+                      aria-label="Filter by status"
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {FILTER_OPTIONS.map((s) => (
+                        <button
+                          key={s}
+                          className={`btn ${statusFilter === s ? "btn-primary" : "btn-secondary"}`}
+                          style={{ padding: "0.4rem 1rem", fontSize: "0.85rem" }}
+                          onClick={() => setStatusFilter(s)}
+                          aria-pressed={statusFilter === s}
+                        >
+                          {s === "all" ? "All" : STATUS_LABELS[s]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const filtered = campaigns.filter((c) => {
+                      if (
+                        debouncedSearch &&
+                        !c.name
+                          .toLowerCase()
+                          .includes(debouncedSearch.toLowerCase())
+                      )
+                        return false;
+                      if (
+                        statusFilter !== "all" &&
+                        getCampaignStatus(c) !== statusFilter
+                      )
+                        return false;
+                      return true;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <p style={{ color: "#94a3b8" }}>
+                          No campaigns match your filters.
+                        </p>
+                      );
+                    }
+
+                    return (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Rate</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((c) => {
+                            const status = getCampaignStatus(c);
+                            return (
+                              <tr key={c.id}>
+                                <td>{c.name}</td>
+                                <td>{c.reward_rate} NOVA/unit</td>
+                                <td>{c.start_date?.slice(0, 10)}</td>
+                                <td>{c.end_date?.slice(0, 10)}</td>
+                                <td>
+                                  <span
+                                    className={`badge ${STATUS_BADGES[status]}`}
+                                  >
+                                    {STATUS_LABELS[status]}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </>
   );
 }
-
-// ── Main page ────────────────────────────────────────────────────────────────
-export default function MerchantPage() {
-  const [step, setStep] = useState(0);
-  const [businessData, setBusinessData] = useState(null);
-  const [walletAddress, setWalletAddress] = useState('');
-  const [merchant, setMerchant] = useState(null);
-  const [apiKey, setApiKey] = useState('');
-
-  return (
-    <>
-      <nav className="nav">
-        <span className="nav-brand">⭐ NovaRewards</span>
-        <div className="nav-links"><a href="/">Customer Portal</a></div>
-      </nav>
-
-      <div className="container" style={{ maxWidth: 640, margin: '0 auto', padding: '2rem 1rem' }}>
-        <h1 style={{ marginBottom: '1.5rem', fontSize: '1.8rem', fontWeight: 700 }}>Merchant Portal</h1>
-
-        {step < 3 && <StepBar current={step} />}
-
-        {step === 0 && (
-          <StepBusinessDetails onNext={data => { setBusinessData(data); setStep(1); }} />
-        )}
-        {step === 1 && (
-          <StepWalletVerification
-            businessData={businessData}
-            onNext={addr => { setWalletAddress(addr); setStep(2); }}
-          />
-        )}
-        {step === 2 && (
-          <StepBusinessProfile
-            businessData={businessData}
-            walletAddress={walletAddress}
-            onNext={({ merchant: m, apiKey: k }) => { setMerchant(m); setApiKey(k); setStep(3); }}
-          />
-        )}
-        {step === 3 && merchant && (
-          <MerchantDashboard merchant={merchant} apiKey={apiKey} />
-        )}
-      </div>
-    </>
-  );
-}
-
-MerchantDashboard.getLayout = function getLayout(page) {
-  return <DashboardLayout>{page}</DashboardLayout>;
-};

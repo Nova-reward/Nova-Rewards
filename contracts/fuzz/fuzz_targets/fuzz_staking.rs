@@ -22,7 +22,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use nova_rewards::{NovaRewardsContract, NovaRewardsContractClient};
+use nova_rewards::{EventConfig, NovaRewardsContract, NovaRewardsContractClient};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{Address, Env};
 
@@ -53,7 +53,9 @@ fuzz_target!(|data: &[u8]| {
     let admin = Address::generate(&env);
     let staker = Address::generate(&env);
 
-    client.initialize(&admin);
+    let nova_token = Address::generate(&env);
+    let event_config = EventConfig { schema_version: 1 };
+    client.initialize(&admin, &nova_token, &event_config);
     client.set_annual_rate(&rate);
     client.set_balance(&staker, &amount);
 

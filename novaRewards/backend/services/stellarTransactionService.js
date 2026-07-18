@@ -8,6 +8,8 @@ const {
 const { server } = require('../../blockchain/stellarService');
 const { recordTransaction } = require('../db/transactionRepository');
 const { getConfig, getRequiredConfig } = require('./configService');
+const logger = require('../lib/logger');
+
 
 // ---------------------------------------------------------------------------
 // Network configuration — selected via STELLAR_NETWORK env var
@@ -113,7 +115,13 @@ async function submit({ sourceAddress, operations, signers, options = {} }) {
   }
 
   // 4. Submit with automatic fee-bump retry for stuck transactions
-  const result = await submitWithFeeBumpRetry(transaction, options);
+  const result = await submitWithFeeBumpRetry(transaction, {
+    ...options,
+    sourceAddress,
+    operations: ops,
+    signers: signerList,
+  });
+
 
   // 5. Parse and store result in DB
   await storeTransactionResult(result, options);
@@ -136,9 +144,31 @@ async function submit({ sourceAddress, operations, signers, options = {} }) {
 async function submitWithFeeBumpRetry(transaction, options = {}) {
   let lastError;
 
+  // Acceptance criteria: Horizon tx_bad_seq triggers a sequence refresh and one retry.
+  let didRefreshSequenceRetry = false;
+
+  const submitContext = {
+    sourceAddress: options?.sourceAddress,
+    transaction,
+    operations: options?.operations,
+    signers: options?.signers,
+    feeSourceSecret: options?.feeSourceSecret,
+    timeout: options?.timeout,
+    memo: options?.memo,
+    txType: options?.txType,
+  };
+
   for (let attempt = 0; attempt <= MAX_FEE_BUMP_ATTEMPTS; attempt++) {
     try {
-      const horizonResult = await server.submitTransaction(transaction);
+      const horizonResult = await submitHorizonTransaction(transaction, {
+        options,
+        didRefreshSequenceRetry,
+        refreshSequenceAndRebuildOnce: async () => {
+          if (didRefreshSequenceRetry) return null;
+          didRefreshSequenceRetry = true;
+          return refreshAndRebuildTransaction(submitContext);
+        },
+      });
 
       return {
         txHash: horizonResult.hash,
@@ -151,15 +181,13 @@ async function submitWithFeeBumpRetry(transaction, options = {}) {
       lastError = err;
 
       const resultCodes = extractResultCodes(err);
-      const isStuck = STUCK_RESULT_CODES.some((code) =>
-        resultCodes.includes(code),
-      );
+      const isStuck = STUCK_RESULT_CODES.some((code) => resultCodes.includes(code));
 
       if (!isStuck || attempt >= MAX_FEE_BUMP_ATTEMPTS) {
         break;
       }
 
-      // Transaction is stuck — build and submit a fee-bump transaction
+      // Keep existing fee-bump retry behavior for stuck tx_insufficient_fee/tx_too_late.
       const feeSourceSecret =
         options.feeSourceSecret || getRequiredConfig('FEE_SOURCE_SECRET');
       const feeSourceKeypair = Keypair.fromSecret(feeSourceSecret);
@@ -175,14 +203,11 @@ async function submitWithFeeBumpRetry(transaction, options = {}) {
       );
       feeBumpTx.sign(feeSourceKeypair);
 
-      // Replace transaction reference for next iteration
-      // (on next attempt we'll submit the fee-bump tx itself)
       const feeBumpResult = await submitFeeBumpTransaction(feeBumpTx);
       return feeBumpResult;
     }
   }
 
-  // All attempts exhausted — parse and throw
   const resultCodes = extractResultCodes(lastError);
   throw createError(
     `Transaction submission failed: ${resultCodes.join(', ') || lastError.message}`,
@@ -190,6 +215,9 @@ async function submitWithFeeBumpRetry(transaction, options = {}) {
     'tx_submission_failed',
   );
 }
+
+
+
 
 /**
  * Submits a fee-bump transaction to Horizon.
@@ -264,20 +292,145 @@ async function submitFeeBump({ innerTxXDR, feeSourceSecret, baseFee }) {
  */
 function extractResultCodes(err) {
   try {
-    const extras = err.response?.data?.extras;
+    const extras = err?.response?.data?.extras;
     if (!extras) return [];
 
     const codes = extras.result_codes || {};
     const allCodes = [];
 
-    if (codes.transaction) allCodes.push(...codes.transaction);
-    if (codes.operations) allCodes.push(...codes.operations);
+    if (Array.isArray(codes.transaction)) allCodes.push(...codes.transaction);
+    if (Array.isArray(codes.operations)) allCodes.push(...codes.operations);
+
+    // Some Horizon variants may return a flat transaction error code.
+    if (typeof extras.result_code === 'string') allCodes.push(extras.result_code);
 
     return allCodes;
   } catch {
     return [];
   }
 }
+
+function extractHorizonResponseBody(err) {
+  try {
+    return err?.response?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isHorizonTimeout(err) {
+  const msg = `${err?.message || ''}`.toLowerCase();
+  const code = `${err?.code || ''}`.toLowerCase();
+
+  return (
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    code.includes('etimedout') ||
+    code.includes('timeout')
+  );
+}
+
+function isInsufficientBalance(err) {
+  const codes = extractResultCodes(err);
+  return codes.some((c) => c === 'insufficient_balance' || c === 'tx_insufficient_balance');
+}
+
+function findPrimaryHorizonCode(err) {
+  const codes = extractResultCodes(err);
+  if (codes?.length) return codes[0];
+
+  // Fallback to extras/result codes string if available
+  return err?.response?.data?.extras?.result_codes?.transaction?.[0] || err?.response?.data?.title || err?.response?.data?.type || 'horizon_error';
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function refreshAndRebuildTransaction({ sourceAddress, operations, signers, memo, timeout }) {
+  if (!sourceAddress || !operations || !signers) return null;
+  const account = await server.loadAccount(sourceAddress);
+
+  let builder = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  });
+
+  const ops = Array.isArray(operations) ? operations : [operations];
+  for (const op of ops) {
+    builder = builder.addOperation(op);
+  }
+
+  if (memo) {
+    builder = builder.addMemo(require('stellar-sdk').Memo.text(memo));
+  }
+
+  builder = builder.setTimeout(timeout || DEFAULT_TIMEOUT);
+  const tx = builder.build();
+
+  const signerList = Array.isArray(signers) ? signers : [signers];
+  for (const signer of signerList) {
+    tx.sign(signer);
+  }
+
+  return tx;
+}
+
+
+async function submitHorizonTransaction(transaction, { refreshSequenceAndRebuildOnce }) {
+  const maxTimeoutRetries = 3;
+  let timeoutAttempt = 0;
+
+
+  // Attempt loop only for timeout errors.
+  while (true) {
+    try {
+      return await server.submitTransaction(transaction);
+    } catch (err) {
+      const horizonBody = extractHorizonResponseBody(err);
+      logger.error('[stellarTransactionService] Horizon submission error', {
+        message: err?.message,
+        code: findPrimaryHorizonCode(err),
+        horizonBody,
+      });
+
+      const codes = extractResultCodes(err);
+
+      // Acceptance criteria: tx_bad_seq => refresh sequence and one retry.
+      if (codes.includes('tx_bad_seq') && typeof refreshSequenceAndRebuildOnce === 'function') {
+        const rebuiltTx = await refreshSequenceAndRebuildOnce();
+        if (rebuiltTx) {
+          // After refresh/rebuild, retry the submission once.
+          transaction = rebuiltTx;
+          continue;
+        }
+      }
+
+      // Acceptance criteria: insufficient_balance => map to 400.
+      if (isInsufficientBalance(err)) {
+        const code = findPrimaryHorizonCode(err);
+        const e = createError('Insufficient balance', 400, code);
+        e.horizonBody = horizonBody;
+        throw e;
+      }
+
+      // Acceptance criteria: timeout => retry up to 3 times with exponential backoff.
+      if (isHorizonTimeout(err) && timeoutAttempt < maxTimeoutRetries - 1) {
+        const backoffMs = Math.pow(2, timeoutAttempt) * 500; // 0.5s, 1s, 2s
+        timeoutAttempt += 1;
+        await sleep(backoffMs);
+        continue;
+      }
+
+      // Acceptance criteria: all other Horizon errors => 503 with original error code.
+      const originalCode = findPrimaryHorizonCode(err);
+      const e = createError('Horizon error', 503, originalCode);
+      e.horizonBody = horizonBody;
+      throw e;
+    }
+  }
+}
+
 
 /**
  * Parses a successful Horizon submission result into a structured object.
@@ -321,7 +474,7 @@ async function storeTransactionResult(result, options = {}) {
     });
   } catch (dbErr) {
     // Log but don't fail the response — the tx was already submitted on-chain
-    console.error('[stellarTransactionService] Failed to store transaction result:', dbErr.message);
+    logger.error('[stellarTransactionService] Failed to store transaction result:', dbErr.message);
   }
 }
 

@@ -251,7 +251,8 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
               border: 'none',
               fontSize: '1.5rem',
               cursor: 'pointer',
-              color: '#6b7280',
+              /* #4b5563 on white → 7.6:1 — fixes ISSUE-CC-04 (was #6b7280, 4.1:1) */
+              color: '#4b5563',
               padding: '0.25rem'
             }}
           >
@@ -276,7 +277,7 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
             <p style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
               You received <strong>{claimedAmount} NOVA</strong> tokens
             </p>
-            <p style={{ color: '#6b7280' }}>
+            <p style={{ color: '#4b5563' }}>
               The tokens have been added to your balance
             </p>
           </div>
@@ -295,7 +296,7 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
               >
                 Stellar Drop Available!
               </h2>
-              <p style={{ color: '#6b7280' }}>
+              <p style={{ color: '#4b5563' }}>
                 You've qualified for a special reward
               </p>
             </div>
@@ -308,7 +309,7 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
               marginBottom: '1.5rem' 
             }}>
               <div style={{ marginBottom: '1rem' }}>
-                <div style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                <div style={{ color: '#4b5563', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
                   Token Amount
                 </div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#7c3aed' }}>
@@ -317,7 +318,7 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
-                <div style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                <div style={{ color: '#4b5563', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
                   Expires
                 </div>
                 <div style={{ fontSize: '1rem', color: '#111827' }}>
@@ -326,7 +327,7 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
               </div>
 
               <div>
-                <div style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                <div style={{ color: '#4b5563', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
                   Eligibility Reason
                 </div>
                 <div style={{ fontSize: '1rem', color: '#111827' }}>
@@ -361,7 +362,8 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
                     borderRadius: '6px',
                     border: '1px solid #d1d5db',
                     backgroundColor: 'white',
-                    color: '#6b7280',
+                    /* #4b5563 on white → 7.6:1 — fixes ISSUE-CC-04 (was #6b7280, 4.1:1) */
+                    color: '#4b5563',
                     cursor: 'pointer'
                   }}
                 >

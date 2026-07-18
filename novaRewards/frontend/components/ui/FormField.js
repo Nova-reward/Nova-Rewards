@@ -61,12 +61,12 @@ export default function FormField({
       .filter(Boolean)
       .join(' ') || undefined,
     className: [
-      'block w-full rounded-md border px-3 py-2 text-sm',
+      'block w-full rounded-md border px-3 py-2 type-body-sm',
       'focus:outline-none focus:ring-2',
       showError
-        ? 'border-red-500 focus:ring-red-400'
-        : 'border-gray-300 focus:ring-indigo-400',
-      disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white',
+        ? 'border-error-500 focus:ring-error-400 dark:border-error-400'
+        : 'border-neutral-300 focus:ring-primary-400 dark:border-neutral-600 dark:focus:ring-primary-400',
+      disabled ? 'bg-neutral-100 cursor-not-allowed dark:bg-neutral-800' : 'bg-white dark:bg-neutral-900 dark:text-neutral-100',
     ].join(' '),
   };
 
@@ -74,11 +74,11 @@ export default function FormField({
     <div className="mb-4">
       <label
         htmlFor={id}
-        className="mb-1 block text-sm font-medium text-gray-700"
+        className="mb-1 block type-label text-neutral-700 dark:text-neutral-300"
       >
         {label}
         {required && (
-          <span className="ml-1 text-red-500" aria-hidden="true">
+          <span className="ml-1 text-error-500 dark:text-error-400" aria-hidden="true">
             *
           </span>
         )}
@@ -93,7 +93,7 @@ export default function FormField({
       )}
 
       {hint && !showError && (
-        <p id={hintId} className="mt-1 text-xs text-gray-500">
+        <p id={hintId} className="mt-1 type-caption text-neutral-500">
           {hint}
         </p>
       )}
@@ -102,7 +102,7 @@ export default function FormField({
         <p
           id={errorId}
           role="alert"
-          className="mt-1 text-xs text-red-600"
+          className="mt-1 type-caption text-error-600 dark:text-error-400"
         >
           {error}
         </p>

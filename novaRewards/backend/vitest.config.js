@@ -18,6 +18,8 @@ export default defineConfig({
     testTimeout: 15000,
     clearMocks: true,
     restoreMocks: true,
+    // Disable auto-loading of .env files since we set vars in globalSetup
+    env: {},
     include: ['tests/**/*.test.js'],
     exclude: [
       'tests/load/**',
@@ -57,6 +59,7 @@ export default defineConfig({
       thresholds: {
         lines: 80,
         branches: 75,
+        functions: 80,
       },
     },
   },

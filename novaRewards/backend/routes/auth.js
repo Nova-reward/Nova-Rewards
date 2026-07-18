@@ -1,11 +1,24 @@
+const logger = require('./lib/logger');
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { query } = require('../db/index');
-const { signAccessToken, signRefreshToken } = require('../services/tokenService');
+const {
+  signAccessToken,
+  signRefreshToken,
+  storeRefreshJti,
+  verifyToken,
+  revokeToken,
+  consumeRefreshJti,
+  revokeAllUserRefreshJtis,
+  issueDbRefreshToken,
+  rotateDbRefreshToken,
+  revokeAllDbRefreshTokens,
+} = require('../services/tokenService');
 const { validateRegisterDto } = require('../dtos/registerDto');
 const { validateLoginDto } = require('../dtos/loginDto');
 const { checkIpBlock, recordFailedLogin } = require('../middleware/abuseDetection');
 const { logAudit } = require('../db/auditLogRepository');
+const { authenticateUser } = require('../middleware/authenticateUser');
 
 const SALT_ROUNDS = 12;
 
@@ -91,7 +104,7 @@ router.post('/register', async (req, res, next) => {
       actorType: 'user',
       details: { email: normalizedEmail },
       source: 'POST /api/auth/register',
-    }).catch((err) => console.error('[audit] register:', err.message));
+    }).catch((err) => logger.error('[audit] register:', err.message));
 
     return res.status(201).json({ success: true, data: newUser });
   } catch (err) {
@@ -179,10 +192,10 @@ router.post('/login', checkIpBlock, async (req, res, next) => {
       actorType: user.role === 'admin' ? 'admin' : 'user',
       details: { email: normalizedEmail },
       source: 'POST /api/auth/login',
-    }).catch((err) => console.error('[audit] login:', err.message));
+    }).catch((err) => logger.error('[audit] login:', err.message));
 
     const accessToken  = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
+    const { token: refreshToken } = await issueDbRefreshToken(user);
 
     return res.json({
       success: true,
@@ -217,9 +230,7 @@ router.post('/refresh', async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'unauthorized', message: 'Refresh token required' });
     }
 
-    const { verifyToken, consumeRefreshJti, signAccessToken, signRefreshToken, storeRefreshJti } =
-      require('../services/tokenService');
-
+    // Verify JWT signature and expiry
     let decoded;
     try {
       decoded = verifyToken(refreshToken);
@@ -227,30 +238,39 @@ router.post('/refresh', async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'unauthorized', message: 'Invalid or expired refresh token' });
     }
 
-    if (decoded.type !== 'refresh' || !decoded.jti) {
+    if (decoded.type !== 'refresh') {
       return res.status(401).json({ success: false, error: 'unauthorized', message: 'Invalid token type' });
     }
 
-    // Consume jti — one-time use (rotation)
-    const walletAddress = await consumeRefreshJti(decoded.jti);
-    if (!walletAddress) {
-      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Refresh token already used or revoked' });
-    }
-
+    // Look up user by wallet address from JWT sub
     const result = await query(
       `SELECT id, wallet_address, role FROM users WHERE wallet_address = $1 AND is_deleted = FALSE`,
-      [walletAddress]
+      [decoded.sub]
     );
     const user = result.rows[0];
     if (!user) {
       return res.status(401).json({ success: false, error: 'unauthorized', message: 'User not found' });
     }
 
-    const accessToken = signAccessToken(user);
-    const { token: newRefreshToken, jti: newJti } = signRefreshToken(user);
-    await storeRefreshJti(newJti, user.wallet_address);
+    // Rotate: bcrypt-compare against DB, detect reuse, issue new token
+    let newTokenData;
+    try {
+      newTokenData = await rotateDbRefreshToken(refreshToken, user.id);
+    } catch (reuseErr) {
+      if (reuseErr.code === 'token_reuse') {
+        // Entire family already revoked — also revoke all DB tokens for safety
+        await revokeAllDbRefreshTokens(user.id);
+        return res.status(401).json({ success: false, error: 'token_reuse', message: 'Refresh token reuse detected. All sessions revoked.' });
+      }
+      throw reuseErr;
+    }
 
-    return res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });
+    if (!newTokenData) {
+      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Refresh token not found or expired' });
+    }
+
+    const accessToken = signAccessToken(user);
+    return res.json({ success: true, data: { accessToken, refreshToken: newTokenData.token } });
   } catch (err) {
     next(err);
   }
@@ -262,12 +282,12 @@ router.post('/refresh', async (req, res, next) => {
  *   post:
  *     tags: [Auth]
  *     summary: Revoke access token and refresh token (add to blocklist)
+ *     security:
+ *       - bearerAuth: []
  */
-router.post('/logout', async (req, res, next) => {
+router.post('/logout', authenticateUser, async (req, res, next) => {
   try {
-    const { revokeToken, verifyToken, consumeRefreshJti } = require('../services/tokenService');
-
-    // Revoke access token
+    // Revoke access token in Redis blocklist
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
@@ -276,19 +296,52 @@ router.post('/logout', async (req, res, next) => {
       } catch { /* already expired */ }
     }
 
-    // Revoke refresh token
+    // Revoke the presented refresh token in DB
     const { refreshToken } = req.body || {};
     if (refreshToken) {
       try {
         const decoded = verifyToken(refreshToken);
-        if (decoded.jti) {
-          await consumeRefreshJti(decoded.jti);
-          await revokeToken(decoded.jti, decoded.exp);
+        if (decoded.sub === req.user.wallet_address) {
+          await rotateDbRefreshToken(refreshToken, req.user.id).catch(() => {});
+          // Immediately revoke the newly-issued replacement (if any) — we just want to invalidate
+          await revokeAllDbRefreshTokens(req.user.id);
         }
-      } catch { /* already expired */ }
+      } catch { /* already expired or invalid */ }
     }
 
     return res.json({ success: true, message: 'Logged out' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /auth/logout-all:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Revoke all refresh tokens for the authenticated user
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/logout-all', authenticateUser, async (req, res, next) => {
+  try {
+    // Revoke the current access token
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = verifyToken(authHeader.substring(7));
+        if (decoded.jti) await revokeToken(decoded.jti, decoded.exp);
+      } catch { /* already expired */ }
+    }
+
+    // Revoke all DB refresh tokens + Redis JTIs for this user
+    await Promise.all([
+      revokeAllDbRefreshTokens(req.user.id),
+      revokeAllUserRefreshJtis(req.user.wallet_address),
+    ]);
+
+    return res.json({ success: true, message: 'All sessions revoked' });
   } catch (err) {
     next(err);
   }

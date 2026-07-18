@@ -3,6 +3,7 @@ const {
   getBackupConfig,
   pruneExpiredBackups,
 } = require('../services/backupService');
+const logger = require('../lib/logger');
 
 function msUntilNextScheduledRun(now = new Date(), schedule = getBackupConfig().schedule) {
   const next = new Date(Date.UTC(
@@ -25,14 +26,14 @@ function msUntilNextScheduledRun(now = new Date(), schedule = getBackupConfig().
 async function runBackupCycle(now = new Date(), reason = 'scheduled') {
   const manifest = await createEncryptedBackup({ now, reason });
   const pruned = await pruneExpiredBackups(now);
-  console.log(`[backup] created ${manifest.backupId}; pruned=${pruned.length}`);
+  logger.info('[backup] cycle complete', { backupId: manifest.backupId, pruned: pruned.length });
   return { manifest, pruned };
 }
 
 function startBackupJob() {
   const config = getBackupConfig();
   if (!config.enabled) {
-    console.log('[backup] disabled; skipping scheduler startup');
+    logger.info('[backup] disabled; skipping scheduler startup');
     return null;
   }
 
@@ -43,13 +44,13 @@ function startBackupJob() {
       try {
         await runBackupCycle(new Date(), 'scheduled');
       } catch (err) {
-        console.error('[backup] scheduled backup failed', err);
+        logger.error('[backup] scheduled backup failed', { error: err.message });
       } finally {
         scheduleNext();
       }
     }, delay);
 
-    console.log(`[backup] next run at ${config.schedule.value} UTC in ${Math.round(delay / 1000)}s`);
+    logger.info('[backup] next run scheduled', { schedule: config.schedule.value, nextRunInSec: Math.round(delay / 1000) });
   }
 
   scheduleNext();

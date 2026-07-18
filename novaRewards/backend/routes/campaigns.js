@@ -15,8 +15,10 @@ const {
   pauseCampaign,
 } = require('../services/sorobanService');
 const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { getNOVABalance } = require('../../blockchain/stellarService');
 const { getRedisClient } = require('../cache/redisClient');
 const { metrics } = require('../middleware/metricsMiddleware');
+const { rewardDistributionQueue } = require('../jobs/queues');
 const {
   validateCreateCampaign,
   validateUpdateCampaign,
@@ -64,23 +66,36 @@ async function cacheDel(key) {
 // ---------------------------------------------------------------------------
 router.post('/', authenticateMerchant, validateCreateCampaign, async (req, res, next) => {
   try {
-    const { name, rewardRate, startDate, endDate } = req.body;
-    const merchantId = req.merchant.id;
+    const { name, tokenAmount, rewardPerAction, startDate, endDate } = req.body;
+    const merchant = req.merchant;
 
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      return res.status(400).json({ success: false, error: 'validation_error', message: 'name is required' });
+    // Balance check: merchant's NOVA balance must cover the tokenAmount
+    let balance;
+    try {
+      balance = await getNOVABalance(merchant.wallet_address);
+    } catch {
+      balance = '0';
     }
-
-    const { valid, errors } = validateCampaign({ rewardRate, startDate, endDate });
-    if (!valid) {
-      return res.status(400).json({ success: false, error: 'validation_error', message: errors.join('; ') });
+    if (parseFloat(balance) < Number(tokenAmount)) {
+      return res.status(400).json({
+        success: false,
+        error: 'insufficient_balance',
+        message: 'Merchant balance is less than tokenAmount',
+      });
     }
 
     // 1. Persist to DB first (on_chain_status = 'pending')
-    const campaign = await createCampaign({ merchantId, name: name.trim(), rewardRate, startDate, endDate });
+    const campaign = await createCampaign({
+      merchantId: merchant.id,
+      name: name.trim(),
+      tokenAmount,
+      rewardPerAction,
+      startDate,
+      endDate,
+    });
 
     // Invalidate merchant campaign list cache on creation
-    await cacheDel(`campaigns:merchant:${merchantId}`);
+    await cacheDel(`campaigns:merchant:${merchant.id}`);
 
     // 2. Submit to Soroban; roll back (mark failed) on error
     let confirmed;
@@ -251,6 +266,54 @@ router.get('/', authenticateMerchant, async (req, res, next) => {
     await cacheSet(cacheKey, campaigns);
 
     res.json({ success: true, data: campaigns, cached: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /campaigns/:id/distribute — enqueue bulk reward distribution job
+// ---------------------------------------------------------------------------
+router.post('/:id/distribute', authenticateMerchant, async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+
+    const campaign = await getCampaignById(id);
+    if (!campaign) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'Campaign not found' });
+    }
+    if (campaign.merchant_id !== req.merchant.id) {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Access denied' });
+    }
+
+    const { recipients, amount } = req.body;
+
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'recipients must be a non-empty array' });
+    }
+
+    for (const r of recipients) {
+      if (typeof r.walletAddress !== 'string' || !r.walletAddress.trim()) {
+        return res.status(400).json({ success: false, error: 'validation_error', message: 'each recipient must have a walletAddress string' });
+      }
+    }
+
+    const defaultAmount = amount ?? campaign.reward_per_action ?? campaign.reward_rate;
+    if (!defaultAmount) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'amount is required when the campaign has no default reward_per_action' });
+    }
+
+    const job = await rewardDistributionQueue.add('distribute', {
+      campaignId: id,
+      merchantId: req.merchant.id,
+      recipients,
+      defaultAmount: String(defaultAmount),
+    });
+
+    return res.status(202).json({ success: true, data: { jobId: job.id } });
   } catch (err) {
     next(err);
   }

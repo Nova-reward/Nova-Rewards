@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const { createNotification } = require('../db/notificationRepository');
 const { sendEmail } = require('./emailService');
 const { query } = require('../db/index');
@@ -107,7 +108,7 @@ async function send(userId, type, payload) {
   const { subject, html } = template({ userName, ...payload });
 
   await sendEmail({ to: user.email, subject, html, emailType: type }).catch((err) => {
-    console.error(`[NotificationService] email failed for user ${userId}:`, err.message);
+    logger.error(`[NotificationService] email failed for user ${userId}:`, err.message);
   });
 }
 

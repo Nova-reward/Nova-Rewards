@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const router = require('express').Router();
 const { EventEmitter } = require('events');
 const { authenticateUser } = require('../middleware/authenticateUser');
@@ -8,7 +9,7 @@ const dropEvents = new EventEmitter();
 
 // Forward drop.claimed to any registered listeners (frontend SSE, email service, etc.)
 dropEvents.on('drop.claimed', ({ drop, user, claim }) => {
-  console.log(`[drop.claimed] drop=${drop.id} user=${user.id} claim=${claim.id}`);
+  logger.info(`[drop.claimed] drop=${drop.id} user=${user.id} claim=${claim.id}`);
 });
 
 /**

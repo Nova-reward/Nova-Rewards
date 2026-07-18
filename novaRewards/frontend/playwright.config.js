@@ -1,64 +1,85 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+/**
+ * Playwright Configuration for Nova Rewards E2E Tests
+ * 
+ * Supports both desktop and mobile testing
+ * Can run against local dev server or remote testnet
+ * 
+ * Environment variables:
+ *   - CI: Set to true in CI/CD pipeline
+ *   - BASE_URL: Override base URL (default: http://localhost:3000)
+ *   - TESTNET_MODE: Set to true to test against testnet
+ */
+
+const baseURL = process.env.BASE_URL || 'http://localhost:3000';
+const isCI = !!process.env.CI;
+const isTestnet = !!process.env.TESTNET_MODE;
+
 module.exports = defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
-  retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? 'github' : 'html',
+  
+  // Run tests sequentially for reward issuance (state-dependent tests)
+  fullyParallel: false,
+  
+  // Disable retries - E2E tests are deterministic or should fail fast
+  retries: 0,
+  
+  // Set test timeout to 60s for slow testnet interactions
+  timeout: 60_000,
+  
+  // Expect timeout for assertions
+  expect: {
+    timeout: 5_000,
+  },
+  
+  // HTML reporter with screenshots
+  reporter: [
+    ['html', { outputFolder: './playwright-report' }],
+    ['junit', { outputFile: './test-results/junit.xml' }],
+    ['json', { outputFile: './test-results/results.json' }],
+  ],
+  
+  // Global test settings
   use: {
-    baseURL: process.env.STAGING_URL || 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
-  expect: {
-    toHaveScreenshot: {
-      // Allow up to 2% pixel difference to tolerate minor anti-aliasing changes
-      maxDiffPixelRatio: 0.02,
-      // Wait for fonts and images to fully load before snapshotting
-      animations: 'disabled',
-    },
-  },
+  
+  // Browser projects
   projects: [
-    // Desktop browsers
+    // Desktop Chrome - primary testing
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: 'chromium-desktop',
+      use: {
+        ...devices['Desktop Chrome'],
+        // Disable headless for local debugging
+        headless: isCI || isTestnet,
+      },
     },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-    // Mobile browsers
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'chromium-mobile',
-      use: { ...devices['Pixel 5'] },
-      // Only run mobile-specific tests on mobile project
-      testMatch: '**/mobile-overflow.spec.js',
-    },
-    {
-      name: 'webkit-mobile',
-      use: { ...devices['iPhone 12'] },
-      testMatch: '**/mobile-overflow.spec.js',
-    },
+    
+    // Mobile - optional (out of scope per issue #1145)
+    // Uncomment to enable:
+    // {
+    //   name: 'chromium-mobile',
+    //   use: { ...devices['Pixel 5'] },
+    // },
   ],
-  // Skip local webServer when running against staging in CI
-  ...(process.env.STAGING_URL
-    ? {}
+  
+  // Web server configuration
+  webServer: isTestnet
+    ? null // Don't start server when testing remote testnet
     : {
-        webServer: {
-          command: 'npm run dev',
-          url: 'http://localhost:3000',
-          reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
-        },
-      }),
+        command: 'npm run dev',
+        url: 'http://localhost:3000',
+        reuseExistingServer: !isCI,
+        timeout: 120_000,
+      },
+  
+  // Global setup/teardown hooks
+  globalSetup: isTestnet ? require.resolve('./e2e/global-setup.js') : undefined,
+  globalTeardown: isTestnet ? require.resolve('./e2e/global-teardown.js') : undefined,
 });

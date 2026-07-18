@@ -7,6 +7,20 @@ try {
   // Silently skip if test utils cannot be loaded in this environment
 }
 
+// Expose jest as global for backwards compatibility with existing tests
+// jest.fn() returns a mock function that needs to have all mock methods
+global.jest = {
+  fn: (...args) => {
+    const mock = vi.fn(...args);
+    return mock;
+  },
+  mock: vi.mock,
+  clearAllMocks: vi.clearAllMocks,
+  resetAllMocks: vi.resetAllMocks,
+  restoreAllMocks: vi.restoreAllMocks,
+  resetModules: vi.resetModules,
+};
+
 // Suppress console.error during tests to reduce noise from expected validation errors
 vi.spyOn(console, 'error').mockImplementation(() => {});
 

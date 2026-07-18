@@ -30,14 +30,14 @@ function validateCampaign({ rewardRate, startDate, endDate }) {
 
 /**
  * Creates a new campaign row (on_chain_status defaults to 'pending').
- * Requirements: 7.2
+ * Requirements: 7.2, #868
  */
-async function createCampaign({ merchantId, name, rewardRate, startDate, endDate }) {
+async function createCampaign({ merchantId, name, rewardRate, tokenAmount, rewardPerAction, startDate, endDate }) {
   const result = await query(
-    `INSERT INTO campaigns (merchant_id, name, reward_rate, start_date, end_date)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO campaigns (merchant_id, name, reward_rate, token_amount, reward_per_action, start_date, end_date)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [merchantId, name, rewardRate, startDate, endDate]
+    [merchantId, name, rewardRate ?? rewardPerAction, tokenAmount, rewardPerAction, startDate, endDate]
   );
   return result.rows[0];
 }

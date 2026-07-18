@@ -7,6 +7,7 @@ const {
   EMAIL_FROM,
   SENDGRID_API_KEY,
 } = require('./configService');
+const { asyncLocalStorage, getLogger } = require('../lib/logger');
 const {
   createEmailLog,
   markEmailSent,
@@ -54,11 +55,14 @@ async function sendEmail({ to, subject, html, emailType }) {
     // Use SendGrid if API key is available, otherwise use SMTP
     if (SENDGRID_API_KEY) {
       // SendGrid API implementation
+      const store = asyncLocalStorage.getStore();
+      const correlationId = store && store.correlationId;
       const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SENDGRID_API_KEY}`,
           'Content-Type': 'application/json',
+          ...(correlationId ? { 'x-correlation-id': correlationId } : {}),
         },
         body: JSON.stringify({
           personalizations: [{ to: [{ email: to }] }],
@@ -87,8 +91,9 @@ async function sendEmail({ to, subject, html, emailType }) {
       await markEmailSent(logId);
       return { success: true, logId };
     }
-  } catch (error) {
-    console.error('Error sending email:', error);
+    } catch (error) {
+    const logger = getLogger();
+    logger.error({ err: error }, 'Error sending email');
     if (logId) {
       await markEmailFailed(logId, error.message);
     }

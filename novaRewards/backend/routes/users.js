@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const router = require('express').Router();
 const { query } = require('../db/index');
 const { getUserByWallet, getUserById, createUser } = require('../db/userRepository');
@@ -14,6 +15,37 @@ const { client: redisClient } = require('../lib/redis');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+
+// Magic-byte signatures for allowed image types
+const IMAGE_SIGNATURES = [
+  { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
+  { mime: 'image/png',  bytes: [0x89, 0x50, 0x4e, 0x47] },
+  { mime: 'image/webp', bytes: [0x52, 0x49, 0x46, 0x46] }, // RIFF.... (WebP)
+];
+
+const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+/**
+ * Reads the first 12 bytes of a file and confirms it matches a known image
+ * magic-byte signature. Returns the detected MIME type, or null on mismatch.
+ * @param {string} filePath
+ * @returns {string|null}
+ */
+function detectImageMime(filePath) {
+  const buf = Buffer.alloc(12);
+  let fd;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    fs.readSync(fd, buf, 0, 12, 0);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+  for (const { mime, bytes } of IMAGE_SIGNATURES) {
+    if (bytes.every((b, i) => buf[i] === b)) return mime;
+  }
+  return null;
+}
 
 const SALT_ROUNDS = 12;
 
@@ -22,19 +54,28 @@ const upload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
       const dir = path.join(__dirname, '../../frontend/public/avatars');
-      require('fs').mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);
     },
     filename: (req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
+      // Use a safe, predictable filename — do not trust originalname beyond extension
       cb(null, `user-${req.params.id}-${Date.now()}${ext}`);
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
   fileFilter: (req, file, cb) => {
+    // Gate 1: extension whitelist (guards against missing/wrong Content-Type)
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      return cb(new Error('Only .jpg, .jpeg, .png, and .webp files are allowed'));
+    }
+    // Gate 2: client-supplied MIME type (defence-in-depth; magic bytes checked post-write)
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (allowed.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+    }
+    cb(null, true);
   },
 });
 
@@ -137,7 +178,7 @@ router.post('/', async (req, res, next) => {
     const user = await createUser({ walletAddress, referredBy });
 
     sendWelcome({ to: walletAddress, userName: walletAddress, referralCode: walletAddress })
-      .catch(err => console.error('Failed to send welcome email:', err));
+      .catch(err => logger.error('Failed to send welcome email:', err));
 
     res.status(201).json({ success: true, data: user });
   } catch (err) {
@@ -282,7 +323,7 @@ router.get('/:id/token-balance', async (req, res, next) => {
       try {
         await redisClient.setEx(cacheKey, 30, tokenBalance);
       } catch (cacheErr) {
-        console.warn('Redis cache set failed', cacheErr);
+        logger.warn('Redis cache set failed', cacheErr);
       }
     }
 
@@ -661,6 +702,18 @@ router.post('/:id/profile-picture', authenticateUser, (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'validation_error', message: 'No file uploaded' });
     }
+
+    // Gate 3: verify actual file content via magic bytes (prevents MIME spoofing)
+    const detectedMime = detectImageMime(req.file.path);
+    if (!detectedMime) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({
+        success: false,
+        error: 'upload_error',
+        message: 'File content does not match an allowed image type',
+      });
+    }
+
     const avatarUrl = `/avatars/${req.file.filename}`;
     await query(
       `UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2`,

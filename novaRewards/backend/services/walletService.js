@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const {
   server,
   NOVA,
@@ -300,7 +301,7 @@ class WalletService {
 
       await recordTransaction(transactionData);
     } catch (error) {
-      console.error("Failed to record transaction:", error);
+      logger.error("Failed to record transaction:", error);
     }
   }
 
@@ -332,7 +333,7 @@ class WalletService {
         ],
       );
     } catch (error) {
-      console.error("Failed to update transaction status:", error);
+      logger.error("Failed to update transaction status:", error);
     }
   }
 

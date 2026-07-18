@@ -1,3 +1,5 @@
+const jwt = require('jsonwebtoken');
+const logger = require('../lib/logger');
 const { query } = require('../db/index');
 const { verifyToken, isRevoked } = require('../services/tokenService');
 const AuditService = require('../services/auditService');
@@ -6,7 +8,8 @@ const SecurityAlertService = require('../services/securityAlertService');
 /**
  * Middleware: validates RS256 JWT from Authorization header.
  * Checks Redis blocklist before accepting the token.
- * Attaches the user record to req.user on success.
+ * Attaches { userId, role, walletAddress } (plus full DB row) to req.user on success.
+ * Issue #857 — JWT authentication middleware.
  * Issue #648 — JWT RS256 hardening.
  */
 async function authenticateUser(req, res, next) {
@@ -15,7 +18,7 @@ async function authenticateUser(req, res, next) {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       success: false,
-      error: 'unauthorized',
+      code: 'TOKEN_MISSING',
       message: 'Bearer token is required in Authorization header',
     });
   }
@@ -25,21 +28,21 @@ async function authenticateUser(req, res, next) {
   try {
     const decoded = verifyToken(token);
 
-    // Reject if jti is in the Redis blocklist
-    if (decoded.jti && await isRevoked(decoded.jti)) {
-      return res.status(401).json({
-        success: false,
-        error: 'unauthorized',
-        message: 'Token has been revoked',
-      });
-    }
-
     // sub = wallet_address (RS256 payload uses sub, not userId)
     if (!decoded || !decoded.sub) {
       return res.status(401).json({
         success: false,
-        error: 'unauthorized',
-        message: 'Invalid token',
+        code: 'TOKEN_INVALID',
+        message: 'Invalid token payload',
+      });
+    }
+
+    // Reject if jti is in the Redis blocklist
+    if (decoded.jti && await isRevoked(decoded.jti)) {
+      return res.status(401).json({
+        success: false,
+        code: 'TOKEN_INVALID',
+        message: 'Token has been revoked',
       });
     }
 
@@ -54,19 +57,31 @@ async function authenticateUser(req, res, next) {
     if (!result.rows[0]) {
       return res.status(401).json({
         success: false,
-        error: 'unauthorized',
+        code: 'TOKEN_INVALID',
         message: 'User not found or account deleted',
       });
     }
 
-    req.user = result.rows[0];
+    const dbUser = result.rows[0];
+    req.user = {
+      ...dbUser,
+      userId: dbUser.id,
+      walletAddress: dbUser.wallet_address,
+    };
     next();
   } catch (err) {
-    console.error('Authentication error:', err);
+    if (err instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({
+        success: false,
+        code: 'TOKEN_EXPIRED',
+        message: 'Token has expired',
+      });
+    }
+    logger.error('Authentication error:', err);
     return res.status(401).json({
       success: false,
-      error: 'unauthorized',
-      message: 'Invalid or expired token',
+      code: 'TOKEN_INVALID',
+      message: 'Invalid or malformed token',
     });
   }
 }
@@ -95,11 +110,11 @@ async function requireAdmin(req, res, next) {
       try {
         await AuditService.log(event);
       } catch (auditErr) {
-        console.error('[requireAdmin] AuditService failed:', auditErr);
+        logger.error('[requireAdmin] AuditService failed:', auditErr);
       }
       // Fire-and-forget alert (non-blocking)
       SecurityAlertService.send({ ...event, timestamp: new Date().toISOString() })
-        .catch(err => console.error('[requireAdmin] SecurityAlertService failed:', err));
+        .catch(err => logger.error('[requireAdmin] SecurityAlertService failed:', err));
     }
     return res.status(403).json({
       success: false,

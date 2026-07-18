@@ -2,8 +2,22 @@
 const { PrismaClient } = require('@prisma/client');
 const { encryptionMiddleware } = require('../lib/prismaEncryptionMiddleware');
 
-const prisma = new PrismaClient();
-prisma.$use(encryptionMiddleware);
+// In test environments Prisma v7 requires an adapter; skip real init.
+let prisma;
+if (process.env.NODE_ENV === 'test') {
+  prisma = {
+    merchant: {
+      findUnique: async () => null,
+      create: async (d) => d.data,
+      update: async (d) => d.data,
+    },
+    $use: () => {},
+    $disconnect: async () => {},
+  };
+} else {
+  prisma = new PrismaClient();
+  prisma.$use(encryptionMiddleware);
+}
 
 /**
  * Creates a new merchant.

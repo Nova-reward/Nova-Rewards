@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const { Queue, Worker, QueueEvents } = require('bullmq');
 const bcrypt = require('bcryptjs');
 const { recordPointTransaction } = require('../db/pointTransactionRepository');
@@ -28,7 +29,7 @@ const rewardWorker = new Worker('batch-reward-distribution', async (job) => {
   let succeeded = 0;
   const failed = [];
 
-  console.log(`[batch-rewards] job ${job.id} started — ${total} items`);
+  logger.info(`[batch-rewards] job ${job.id} started — ${total} items`);
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -49,7 +50,7 @@ const rewardWorker = new Worker('batch-reward-distribution', async (job) => {
   }
 
   const summary = { total, succeeded, failed: failed.length, failedItems: failed };
-  console.log(`[batch-rewards] job ${job.id} complete — ${succeeded}/${total} succeeded, ${failed.length} failed`);
+  logger.info(`[batch-rewards] job ${job.id} complete — ${succeeded}/${total} succeeded, ${failed.length} failed`);
   return summary;
 }, { connection });
 
@@ -61,7 +62,7 @@ const importWorker = new Worker('batch-user-import', async (job) => {
   let imported = 0;
   const skipped = [];
 
-  console.log(`[batch-import] job ${job.id} started — ${total} items`);
+  logger.info(`[batch-import] job ${job.id} started — ${total} items`);
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -94,14 +95,14 @@ const importWorker = new Worker('batch-user-import', async (job) => {
   }
 
   const summary = { total, imported, skipped: skipped.length, skippedItems: skipped };
-  console.log(`[batch-import] job ${job.id} complete — ${imported}/${total} imported, ${skipped.length} skipped`);
+  logger.info(`[batch-import] job ${job.id} complete — ${imported}/${total} imported, ${skipped.length} skipped`);
   return summary;
 }, { connection });
 
 // ── Worker error logging ──────────────────────────────────────────────────
 for (const [name, worker] of [['batch-rewards', rewardWorker], ['batch-import', importWorker]]) {
   worker.on('failed', (job, err) => {
-    console.error(`[${name}] job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err.message}`);
+    logger.error(`[${name}] job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err.message}`);
   });
 }
 

@@ -5,6 +5,7 @@
 process.env.ISSUER_PUBLIC = 'GDQGIY5T5QULPD7V54LJODKC5CMKPNGTWVEMYBQH4LV6STKI6IGO543K';
 process.env.HORIZON_URL = 'https://horizon-testnet.stellar.org';
 process.env.STELLAR_NETWORK = 'testnet';
+process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_db';
 
 const request = require('supertest');
 
@@ -14,16 +15,31 @@ jest.mock('../../blockchain/stellarService', () => ({
   server: {},
   NOVA: {},
   isValidStellarAddress: jest.fn().mockReturnValue(true),
-  getNOVABalance: jest.fn().mockResolvedValue('0'),
+  getNOVABalance: jest.fn().mockResolvedValue('1000'),
 }));
 jest.mock('../../blockchain/sendRewards', () => ({ sendRewards: jest.fn() }));
 jest.mock('../../blockchain/issueAsset', () => ({}));
 jest.mock('../../blockchain/trustline', () => ({}));
 jest.mock('../db/index', () => ({ query: jest.fn(), pool: { query: jest.fn() } }));
-// rewards.js has a module-level bug (getRedisClient not imported); mock the whole route
+jest.mock('../db/merchantRepository', () => ({
+  getMerchantByApiKeyHash: jest.fn(),
+  getMerchantById: jest.fn(),
+  createMerchant: jest.fn(),
+  updateMerchant: jest.fn(),
+  prisma: { $disconnect: jest.fn() },
+}));
+jest.mock('@prisma/client', () => ({
+  PrismaClient: jest.fn().mockImplementation(() => ({
+    $use: jest.fn(),
+    merchant: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+    $disconnect: jest.fn(),
+  })),
+}));
+// Mock routes that pull in Prisma or have module-level bugs
 jest.mock('../routes/rewards', () => require('express').Router());
-// transactions.js has a non-ASCII character that Babel's parser rejects; mock the route
 jest.mock('../routes/transactions', () => require('express').Router());
+jest.mock('../routes/merchants', () => require('express').Router());
+jest.mock('../routes/users', () => require('express').Router());
 
 // ── Mock the entire repository ────────────────────────────────────────────
 jest.mock('../db/campaignRepository', () => ({
@@ -47,7 +63,7 @@ jest.mock('../services/sorobanService', () => ({
 // ── Inject test merchant via middleware mock ──────────────────────────────
 jest.mock('../middleware/authenticateMerchant', () => ({
   authenticateMerchant: (req, _res, next) => {
-    req.merchant = { id: 1, name: 'Test Merchant' };
+    req.merchant = { id: 1, name: 'Test Merchant', wallet_address: 'GDTEST1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890ABCDE' };
     next();
   },
 }));
@@ -55,11 +71,13 @@ jest.mock('../middleware/authenticateMerchant', () => ({
 const app = require('../server');
 const repo = require('../db/campaignRepository');
 const soroban = require('../services/sorobanService');
+const stellar = require('../../blockchain/stellarService');
 
 // ── Shared fixtures ───────────────────────────────────────────────────────
 const VALID_BODY = {
   name: 'Summer Sale',
-  rewardRate: 5,
+  tokenAmount: 500,
+  rewardPerAction: 5,
   startDate: '2026-06-01',
   endDate: '2026-08-31',
 };
@@ -69,6 +87,8 @@ const DB_CAMPAIGN = {
   merchant_id: 1,
   name: 'Summer Sale',
   reward_rate: '5',
+  token_amount: '500',
+  reward_per_action: '5',
   start_date: '2026-06-01',
   end_date: '2026-08-31',
   is_active: true,
@@ -92,6 +112,7 @@ beforeEach(() => jest.clearAllMocks());
 // ============================================================================
 describe('POST /api/campaigns', () => {
   test('201 — creates campaign in DB and registers on-chain', async () => {
+    stellar.getNOVABalance.mockResolvedValue('1000');
     repo.createCampaign.mockResolvedValue(DB_CAMPAIGN);
     soroban.registerCampaign.mockResolvedValue({ txHash: 'txhash-abc', contractCampaignId: 'contract-id-abc' });
     repo.confirmOnChain.mockResolvedValue(CONFIRMED_CAMPAIGN);
@@ -101,7 +122,11 @@ describe('POST /api/campaigns', () => {
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.data.on_chain_status).toBe('confirmed');
-    expect(repo.createCampaign).toHaveBeenCalledTimes(1);
+    expect(repo.createCampaign).toHaveBeenCalledWith(expect.objectContaining({
+      merchantId: 1,
+      tokenAmount: 500,
+      rewardPerAction: 5,
+    }));
     expect(soroban.registerCampaign).toHaveBeenCalledTimes(1);
     expect(repo.confirmOnChain).toHaveBeenCalledWith({
       id: 42,
@@ -118,8 +143,30 @@ describe('POST /api/campaigns', () => {
     expect(repo.createCampaign).not.toHaveBeenCalled();
   });
 
-  test('400 — rejects invalid rewardRate', async () => {
-    const res = await request(app).post('/api/campaigns').send({ ...VALID_BODY, rewardRate: 0 });
+  test('400 — rejects missing tokenAmount', async () => {
+    const { tokenAmount, ...body } = VALID_BODY;
+    const res = await request(app).post('/api/campaigns').send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('validation_error');
+    expect(res.body.fields.tokenAmount).toBeDefined();
+  });
+
+  test('400 — rejects missing rewardPerAction', async () => {
+    const { rewardPerAction, ...body } = VALID_BODY;
+    const res = await request(app).post('/api/campaigns').send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('validation_error');
+    expect(res.body.fields.rewardPerAction).toBeDefined();
+  });
+
+  test('400 — rejects zero tokenAmount', async () => {
+    const res = await request(app).post('/api/campaigns').send({ ...VALID_BODY, tokenAmount: 0 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('validation_error');
+  });
+
+  test('400 — rejects zero rewardPerAction', async () => {
+    const res = await request(app).post('/api/campaigns').send({ ...VALID_BODY, rewardPerAction: 0 });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('validation_error');
   });
@@ -132,7 +179,28 @@ describe('POST /api/campaigns', () => {
     expect(res.body.error).toBe('validation_error');
   });
 
+  test('400 — returns insufficient_balance when merchant balance < tokenAmount', async () => {
+    stellar.getNOVABalance.mockResolvedValue('100');
+
+    const res = await request(app).post('/api/campaigns').send({ ...VALID_BODY, tokenAmount: 500 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('insufficient_balance');
+    expect(repo.createCampaign).not.toHaveBeenCalled();
+  });
+
+  test('400 — treats balance fetch failure as zero balance', async () => {
+    stellar.getNOVABalance.mockRejectedValue(new Error('Horizon unavailable'));
+
+    const res = await request(app).post('/api/campaigns').send({ ...VALID_BODY, tokenAmount: 500 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('insufficient_balance');
+    expect(repo.createCampaign).not.toHaveBeenCalled();
+  });
+
   test('502 — marks DB failed and returns chain_error when Soroban throws', async () => {
+    stellar.getNOVABalance.mockResolvedValue('1000');
     repo.createCampaign.mockResolvedValue(DB_CAMPAIGN);
     soroban.registerCampaign.mockRejectedValue(new Error('RPC timeout'));
 

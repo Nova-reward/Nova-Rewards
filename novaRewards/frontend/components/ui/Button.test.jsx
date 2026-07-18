@@ -12,17 +12,17 @@ describe('Button', () => {
 
   it('applies primary variant class by default', () => {
     render(<Button>Primary</Button>);
-    expect(screen.getByRole('button')).toHaveClass('bg-blue-600');
+    expect(screen.getByRole('button')).toHaveClass('bg-primary-600');
   });
 
   it('applies danger variant class', () => {
     render(<Button variant="danger">Delete</Button>);
-    expect(screen.getByRole('button')).toHaveClass('bg-red-600');
+    expect(screen.getByRole('button')).toHaveClass('bg-error-600');
   });
 
   it('applies secondary variant class', () => {
     render(<Button variant="secondary">Secondary</Button>);
-    expect(screen.getByRole('button')).toHaveClass('bg-gray-200');
+    expect(screen.getByRole('button')).toHaveClass('bg-neutral-100');
   });
 
   it('applies outline variant class', () => {

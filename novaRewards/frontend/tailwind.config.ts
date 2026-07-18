@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import plugin from 'tailwindcss/plugin';
 
 const config: Config = {
   content: [
@@ -53,27 +54,34 @@ const config: Config = {
           900: '#0f172a',
           950: '#020617',
         },
-        // Semantic
+        // Semantic — success
         success: {
           50:  '#f0fdf4',
+          100: '#dcfce7',
           500: '#22c55e',
           600: '#16a34a',
           700: '#15803d',
         },
+        // Semantic — warning
         warning: {
           50:  '#fffbeb',
+          100: '#fef3c7',
           500: '#f59e0b',
           600: '#d97706',
           700: '#b45309',
         },
+        // Semantic — error
         error: {
           50:  '#fef2f2',
+          100: '#fee2e2',
           500: '#ef4444',
           600: '#dc2626',
           700: '#b91c1c',
         },
+        // Semantic — info
         info: {
           50:  '#eff6ff',
+          100: '#dbeafe',
           500: '#3b82f6',
           600: '#2563eb',
           700: '#1d4ed8',
@@ -102,6 +110,7 @@ const config: Config = {
         '2xl':['1.5rem',   { lineHeight: '2rem' }],
         '3xl':['1.875rem', { lineHeight: '2.25rem' }],
         '4xl':['2.25rem',  { lineHeight: '2.5rem' }],
+        '5xl':['3rem',     { lineHeight: '1' }],
       },
 
       fontWeight: {
@@ -114,8 +123,20 @@ const config: Config = {
 
       lineHeight: {
         tight:   '1.25',
+        snug:    '1.375',
         normal:  '1.5',
-        relaxed: '1.75',
+        relaxed: '1.625',
+        loose:   '1.75',
+      },
+
+      letterSpacing: {
+        tighter: '-0.02em',
+        tight:   '-0.015em',
+        snug:    '-0.01em',
+        normal:  '0em',
+        wide:    '0.01em',
+        wider:   '0.05em',
+        widest:  '0.08em',
       },
 
       // 4px base unit spacing scale
@@ -140,14 +161,93 @@ const config: Config = {
 
       screens: {
         sm:  '640px',
-        md:  '768px',   // mobile breakpoint
-        lg:  '1024px',  // tablet → desktop
+        md:  '768px',
+        lg:  '1024px',
         xl:  '1280px',
         '2xl': '1536px',
       },
     },
   },
-  plugins: [],
+  plugins: [
+    /**
+     * Type scale utilities
+     * Adds semantic classes: .type-h1 through .type-h6,
+     * .type-body-lg, .type-body, .type-body-sm, .type-caption, .type-label
+     *
+     * Each class sets font-size, line-height, letter-spacing, and font-weight
+     * so a single class fully expresses the intended typographic role.
+     */
+    plugin(function ({ addUtilities }) {
+      addUtilities({
+        '.type-h1': {
+          fontSize:      '2.25rem',   /* 36px */
+          lineHeight:    '1.1',
+          letterSpacing: '-0.02em',
+          fontWeight:    '700',
+        },
+        '.type-h2': {
+          fontSize:      '1.875rem',  /* 30px */
+          lineHeight:    '1.2',
+          letterSpacing: '-0.015em',
+          fontWeight:    '700',
+        },
+        '.type-h3': {
+          fontSize:      '1.5rem',    /* 24px */
+          lineHeight:    '1.25',
+          letterSpacing: '-0.01em',
+          fontWeight:    '600',
+        },
+        '.type-h4': {
+          fontSize:      '1.25rem',   /* 20px */
+          lineHeight:    '1.3',
+          letterSpacing: '-0.005em',
+          fontWeight:    '600',
+        },
+        '.type-h5': {
+          fontSize:      '1.125rem',  /* 18px */
+          lineHeight:    '1.4',
+          letterSpacing: '0em',
+          fontWeight:    '600',
+        },
+        '.type-h6': {
+          fontSize:      '1rem',      /* 16px */
+          lineHeight:    '1.5',
+          letterSpacing: '0em',
+          fontWeight:    '600',
+        },
+        '.type-body-lg': {
+          fontSize:      '1.125rem',  /* 18px */
+          lineHeight:    '1.7',
+          letterSpacing: '0em',
+          fontWeight:    '400',
+        },
+        '.type-body': {
+          fontSize:      '1rem',      /* 16px */
+          lineHeight:    '1.6',
+          letterSpacing: '0em',
+          fontWeight:    '400',
+        },
+        '.type-body-sm': {
+          fontSize:      '0.875rem',  /* 14px */
+          lineHeight:    '1.5',
+          letterSpacing: '0em',
+          fontWeight:    '400',
+        },
+        '.type-caption': {
+          fontSize:      '0.75rem',   /* 12px */
+          lineHeight:    '1.4',
+          letterSpacing: '0.01em',
+          fontWeight:    '400',
+        },
+        '.type-label': {
+          fontSize:      '0.875rem',  /* 14px */
+          lineHeight:    '1.25',
+          letterSpacing: '0.01em',
+          fontWeight:    '500',
+        },
+      });
+    }),
+  ],
 };
 
 export default config;

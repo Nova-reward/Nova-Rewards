@@ -1,12 +1,13 @@
 const { cleanupStaleFlags } = require('../services/featureFlagService');
+const logger = require('../lib/logger');
 
 /** Runs daily at midnight to remove expired feature flags */
 async function runFlagCleanup() {
   try {
     const deleted = await cleanupStaleFlags();
-    if (deleted > 0) console.log(`[featureFlagCleanup] removed ${deleted} stale flag(s)`);
+    if (deleted > 0) logger.info('[featureFlagCleanup] removed stale flags', { count: deleted });
   } catch (err) {
-    console.error('[featureFlagCleanup] error:', err.message);
+    logger.error('[featureFlagCleanup] error', { error: err.message });
   }
 }
 

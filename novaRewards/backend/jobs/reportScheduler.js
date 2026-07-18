@@ -1,4 +1,5 @@
 const { getReport } = require('../services/reportingService');
+const logger = require('../lib/logger');
 
 const VALID_INTERVALS = ['daily', 'weekly', 'monthly'];
 const VALID_TYPES = ['user', 'campaign', 'transaction', 'revenue'];
@@ -45,8 +46,8 @@ function scheduleReport(id, type, interval, params = {}) {
 
   function run() {
     getReport(type, params)
-      .then(() => console.log(`[reporting] scheduled report id=${id} type=${type} completed`))
-      .catch((err) => console.error(`[reporting] scheduled report id=${id} failed:`, err.message));
+      .then(() => logger.info('[reporting] scheduled report completed', { id, type }))
+      .catch((err) => logger.error('[reporting] scheduled report failed', { id, type, error: err.message }));
 
     const timer = setTimeout(run, msUntilNext(interval));
     schedules.set(id, { id, type, interval, params, timer });
@@ -55,7 +56,7 @@ function scheduleReport(id, type, interval, params = {}) {
   const timer = setTimeout(run, msUntilNext(interval));
   schedules.set(id, { id, type, interval, params, timer });
 
-  console.log(`[reporting] scheduled id=${id} type=${type} interval=${interval}`);
+  logger.info('[reporting] report scheduled', { id, type, interval });
   return { id, type, interval, params };
 }
 

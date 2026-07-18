@@ -1,4 +1,5 @@
 const { createClient, createCluster } = require('redis');
+const logger = require('./logger');
 
 const REDIS_URL    = process.env.REDIS_URL    || 'redis://localhost:6379';
 const REDIS_MODE   = process.env.REDIS_MODE   || 'single'; // 'single' | 'cluster' | 'sentinel'
@@ -35,8 +36,8 @@ function buildClient() {
 
 const client = buildClient();
 
-client.on('error', (err) => console.error('[Redis]', err));
-client.on('ready', () => console.log(`[Redis] Connected (mode: ${REDIS_MODE})`));
+client.on('error', (err) => logger.error('[Redis] connection error', { error: err.message }));
+client.on('ready', () => logger.info('[Redis] connected', { mode: REDIS_MODE }));
 
 async function connectRedis() {
   if (!client.isOpen) await client.connect();

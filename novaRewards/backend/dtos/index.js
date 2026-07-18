@@ -177,13 +177,16 @@ function validateResetPasswordDto(body) {
 // ---------------------------------------------------------------------------
 
 function validateCreateCampaignDto(body) {
-  const errs = { name: [], rewardRate: [], startDate: [], endDate: [] };
+  const errs = { name: [], tokenAmount: [], rewardPerAction: [], startDate: [], endDate: [] };
   if (!body.name || typeof body.name !== 'string' || !body.name.trim()) errs.name.push('name is required');
   else if (body.name.length > 200) errs.name.push('name must be 200 characters or less');
   else if (!isSafeString(body.name)) errs.name.push('name contains invalid characters');
-  if (body.rewardRate === undefined || body.rewardRate === null) errs.rewardRate.push('rewardRate is required');
-  else if (!isPositiveNum(body.rewardRate)) errs.rewardRate.push('rewardRate must be a positive number');
-  else if (Number(body.rewardRate) > 1000000) errs.rewardRate.push('rewardRate exceeds maximum allowed value');
+  if (body.tokenAmount === undefined || body.tokenAmount === null) errs.tokenAmount.push('tokenAmount is required');
+  else if (!isPositiveNum(body.tokenAmount)) errs.tokenAmount.push('tokenAmount must be a positive number');
+  else if (Number(body.tokenAmount) > 1e15) errs.tokenAmount.push('tokenAmount exceeds maximum allowed value');
+  if (body.rewardPerAction === undefined || body.rewardPerAction === null) errs.rewardPerAction.push('rewardPerAction is required');
+  else if (!isPositiveNum(body.rewardPerAction)) errs.rewardPerAction.push('rewardPerAction must be a positive number');
+  else if (Number(body.rewardPerAction) > 1000000) errs.rewardPerAction.push('rewardPerAction exceeds maximum allowed value');
   if (!body.startDate) errs.startDate.push('startDate is required');
   else if (isNaN(Date.parse(body.startDate))) errs.startDate.push('startDate must be a valid ISO 8601 date');
   if (!body.endDate) errs.endDate.push('endDate is required');

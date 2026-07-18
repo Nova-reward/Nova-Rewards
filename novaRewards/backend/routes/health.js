@@ -1,3 +1,4 @@
+const logger = require('./lib/logger');
 const express = require('express');
 const router = express.Router();
 const { runHealthChecks } = require('../services/healthCheckService');
@@ -89,7 +90,7 @@ router.get('/detailed', async (req, res) => {
       data: healthData,
     });
   } catch (error) {
-    console.error('Health check failed:', error);
+    logger.error('Health check failed:', error);
     res.status(503).json({
       success: false,
       data: {
@@ -101,4 +102,35 @@ router.get('/detailed', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /ready:
+ *   get:
+ *     summary: Readiness check
+ *     description: Returns 200 only when the service is ready to handle requests (DB and cache reachable)
+ *     tags: [Health]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Service is ready
+ *       503:
+ *         description: Service is not ready
+ */
+async function readyHandler(req, res) {
+  try {
+    const { checkDatabase, checkCache } = require('../services/healthCheckService');
+    const [db, cache] = await Promise.all([checkDatabase(), checkCache()]);
+    const ready = db.status !== 'unhealthy' && cache.status !== 'unhealthy';
+    res.status(ready ? 200 : 503).json({
+      success: ready,
+      data: { status: ready ? 'ready' : 'not_ready', database: db.status, cache: cache.status },
+    });
+  } catch (error) {
+    res.status(503).json({ success: false, data: { status: 'not_ready', error: error.message } });
+  }
+}
+
+router.get('/ready', readyHandler);
+
 module.exports = router;
+module.exports.readyHandler = readyHandler;

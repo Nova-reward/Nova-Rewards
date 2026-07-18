@@ -11,9 +11,10 @@ export async function setup() {
 
   process.env.STELLAR_NETWORK        = 'testnet';
   process.env.HORIZON_URL            = 'https://horizon-testnet.stellar.org';
-  // Valid Stellar testnet keypair — used only for unit tests, never holds real funds
+  // Valid Stellar testnet keypairs — used only for unit tests, never hold real funds
   process.env.ISSUER_PUBLIC          = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
   process.env.ISSUER_SECRET          = 'SCZANGBA5OKUQZY5JNBMY7FVTDMA6HKZF7MAYK4QUMZF6EQEQO5JKRI';
+  process.env.FEE_SOURCE_SECRET      = 'SCZANGBA5OKUQZY5JNBMY7FVTDMA6HKZF7MAYK4QUMZF6EQEQO5JKRI';
   process.env.DISTRIBUTION_PUBLIC    = 'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN';
   process.env.DISTRIBUTION_SECRET    = 'SDMO45FDCUV6KBQVWIQGDMLWF6KQZAMXLPK7CVMMXJKP57FHZCCMTIH';
 
@@ -29,4 +30,7 @@ export async function setup() {
 
   // Test key: 64 hex chars = 32 bytes. NOT for production use.
   process.env.FIELD_ENCRYPTION_KEY   = '0000000000000000000000000000000000000000000000000000000000000001';
+
+  // Idempotency HMAC secret — used by reward issuance engine (#1138). NOT for production use.
+  process.env.IDEMPOTENCY_HMAC_SECRET = '0000000000000000000000000000000000000000000000000000000000000002';
 }

@@ -16,17 +16,17 @@ describe('Alert', () => {
 
   it('applies default variant class', () => {
     render(<Alert data-testid="alert">Default</Alert>);
-    expect(screen.getByTestId('alert')).toHaveClass('bg-white');
+    expect(screen.getByTestId('alert')).toHaveClass('bg-neutral-50');
   });
 
   it('applies destructive variant class', () => {
     render(<Alert variant="destructive" data-testid="alert">Error</Alert>);
-    expect(screen.getByTestId('alert')).toHaveClass('text-red-500');
+    expect(screen.getByTestId('alert')).toHaveClass('text-error-600');
   });
 
   it('applies success variant class', () => {
     render(<Alert variant="success" data-testid="alert">Success</Alert>);
-    expect(screen.getByTestId('alert')).toHaveClass('text-green-700');
+    expect(screen.getByTestId('alert')).toHaveClass('text-success-700');
   });
 
   it('renders AlertTitle and AlertDescription', () => {

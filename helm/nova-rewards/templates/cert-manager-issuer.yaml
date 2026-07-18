@@ -1,0 +1,16 @@
+{{- if .Values.ingress.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.ingress.certManager.clusterIssuer }}
+spec:
+  acme:
+    email: {{ .Values.ingress.certManager.email | quote }}
+    server: {{ .Values.ingress.certManager.server | quote }}
+    privateKeySecretRef:
+      name: {{ .Values.ingress.certManager.clusterIssuer }}-private-key
+    solvers:
+      - http01:
+          ingress:
+            class: {{ .Values.ingress.ingressClassName }}
+{{- end }}

@@ -7,25 +7,38 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
+# Stand-alone crate: keep out of the contracts workspace (cargo-fuzz layout).
+[workspace]
+
 [dependencies]
 libfuzzer-sys = "0.4"
-soroban-sdk = { version = "25.3.1", features = ["testutils"] }
-nova-rewards = { path = "../nova-rewards" }
-nova_token = { path = "../nova_token" }
-distribution = { path = "../distribution" }
+soroban-sdk = { version = "26.0.1", features = ["testutils"] }
+nova-rewards = { path = "../nova-rewards", optional = true }
+nova_token = { path = "../nova_token", optional = true }
+distribution = { path = "../distribution", optional = true }
 vesting = { path = "../vesting" }
+
+[features]
+# The distribution contract does not parse on main (mangled merge in
+# contracts/distribution/src/lib.rs) and nova-rewards fails to build with the
+# soroban-sdk "testutils" feature enabled. Until those crates are repaired,
+# their fuzz targets are gated behind this feature so the remaining targets
+# stay buildable: cargo fuzz run <target> --features broken-contracts
+broken-contracts = ["dep:nova-rewards", "dep:nova_token", "dep:distribution"]
 
 [[bin]]
 name = "fuzz_calculate_payout"
 path = "fuzz_targets/fuzz_calculate_payout.rs"
 test = false
 doc = false
+required-features = ["broken-contracts"]
 
 [[bin]]
 name = "fuzz_staking"
 path = "fuzz_targets/fuzz_staking.rs"
 test = false
 doc = false
+required-features = ["broken-contracts"]
 
 [[bin]]
 name = "fuzz_vesting"
@@ -38,9 +51,11 @@ name = "fuzz_token_transfer"
 path = "fuzz_targets/fuzz_token_transfer.rs"
 test = false
 doc = false
+required-features = ["broken-contracts"]
 
 [[bin]]
 name = "fuzz_reward_distribution"
 path = "fuzz_targets/fuzz_reward_distribution.rs"
 test = false
 doc = false
+required-features = ["broken-contracts"]
