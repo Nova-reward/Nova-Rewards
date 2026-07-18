@@ -3,12 +3,8 @@ const express = require('express');
 const router = express.Router();
 const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
-const { authenticateMerchant } = require('../middleware/authenticateMerchant');
-const { verifyTrustline } = require('../../blockchain/trustline');
-const { slidingRewards } = require('../middleware/rateLimiter');
-const { enqueueRewardIssuance } = require('../services/rewardIssuanceService');
-const { checkRewardFarming, recordRewardClaim } = require('../middleware/abuseDetection');
-const { validateIssueReward, validateDistributeReward } = require('../dtos/middleware');
+const { isValidStellarAddress } = require('../../blockchain/stellarService');
+const { log } = require('../monitoring/eventsLogger');
 
 /**
  * @openapi
@@ -181,9 +177,16 @@ router.post('/distribute', authenticateMerchant, slidingRewards, checkRewardFarm
       campaignId,
     });
 
-    await recordRewardClaim(recipientWallet, campaignId);
+    // Log domain event
+    log.rewardDistributed({
+      txHash,
+      amount,
+      customerWallet,
+      merchantId: req.merchant.id,
+      campaignId: campaign.id,
+    });
 
-    res.json({ success: true, txHash: result.txHash, transaction: result.tx });
+    res.json({ success: true, txHash, transaction: tx });
   } catch (err) {
     if (err.code === 'no_trustline') {
       return res.status(400).json({
@@ -192,13 +195,18 @@ router.post('/distribute', authenticateMerchant, slidingRewards, checkRewardFarm
         message: err.message,
       });
     }
-    
-    logger.error('Error distributing rewards:', err);
-    res.status(500).json({
-      success: false,
-      error: 'internal_server_error',
-      message: err.message || 'Failed to distribute rewards',
-    });
+    if (err.code === 'insufficient_balance') {
+      return res.status(400).json({
+        success: false,
+        error: 'insufficient_balance',
+        message: err.message,
+      });
+    }
+    // Log blockchain / unhandled errors
+    if (err.code === 'invalid_address' || err.response?.title === 'Transaction Failed') {
+      log.blockchainError({ errorCode: err.code, message: err.message });
+    }
+    next(err);
   }
 });
 

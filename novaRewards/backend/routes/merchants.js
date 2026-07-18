@@ -1,10 +1,9 @@
 'use strict';
 const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
-const { createHash } = require('crypto');
-const { validateCreateMerchant, validateUpdateMerchant } = require('../dtos/merchantDto');
-const { createMerchant, getMerchantById, updateMerchant } = require('../db/merchantRepository');
-const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { query } = require('../db/index');
+const { isValidStellarAddress } = require('../../blockchain/stellarService');
+const { log } = require('../monitoring/eventsLogger');
 
 /**
  * POST /merchants
@@ -101,8 +100,14 @@ router.post('/register', async (req, res, next) => {
     const apiKey = uuidv4().replace(/-/g, '');
     const apiKeyHash = createHash('sha256').update(apiKey).digest('hex');
 
-    const merchant = await createMerchant({ name, walletAddress, businessCategory, apiKeyHash });
-    res.status(201).json({ success: true, data: { ...merchant, api_key: apiKey } });
+    res.status(201).json({ success: true, data: result.rows[0] });
+
+    // Log domain event (fire-and-forget after response)
+    log.merchantRegistered({
+      merchantId: result.rows[0].id,
+      name: result.rows[0].name,
+      walletAddress: result.rows[0].wallet_address,
+    });
   } catch (err) {
     if (err.code === 'P2002') {
       return res.status(409).json({

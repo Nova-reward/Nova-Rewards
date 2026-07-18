@@ -48,18 +48,22 @@ function DashboardContent() {
 
   return (
     <>
-      <Navbar>
-        <span style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
-          {shortKey}
-        </span>
-        <button
-          className="btn btn-secondary"
-          onClick={disconnect}
-          style={{ padding: "0.4rem 1rem" }}
-        >
-          Disconnect
-        </button>
-      </Navbar>
+      <nav className="nav">
+        <span className="nav-brand">⭐ NovaRewards</span>
+        <div className="nav-links">
+          <span style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
+            {shortKey}
+          </span>
+          <a href="/monitoring" style={{ fontSize: "0.9rem" }}>Monitoring</a>
+          <button
+            className="btn btn-secondary"
+            onClick={disconnect}
+            style={{ padding: "0.4rem 1rem" }}
+          >
+            Disconnect
+          </button>
+        </div>
+      </nav>
 
       <div className="container">
         {loading ? (

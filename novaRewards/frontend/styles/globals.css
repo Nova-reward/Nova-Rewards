@@ -281,9 +281,15 @@ a:hover {
   background: var(--badge-gray-bg);
   color: var(--badge-gray-text);
 }
-.badge-blue {
-  background: var(--badge-blue-bg);
-  color: var(--badge-blue-text);
+.badge-red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+@media (prefers-color-scheme: dark) {
+  .badge-red {
+    background: #450a0a;
+    color: #fca5a5;
+  }
 }
 
 table {

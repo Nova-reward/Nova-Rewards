@@ -9,23 +9,7 @@ const {
   updateCampaign,
   softDeleteCampaign,
 } = require('../db/campaignRepository');
-const {
-  registerCampaign,
-  updateCampaign: updateCampaignOnChain,
-  pauseCampaign,
-} = require('../services/sorobanService');
-const { authenticateMerchant } = require('../middleware/authenticateMerchant');
-const { getNOVABalance } = require('../../blockchain/stellarService');
-const { getRedisClient } = require('../cache/redisClient');
-const { metrics } = require('../middleware/metricsMiddleware');
-const { rewardDistributionQueue } = require('../jobs/queues');
-const {
-  validateCreateCampaign,
-  validateUpdateCampaign,
-  validateCampaignId,
-} = require('../dtos/middleware');
-
-const CAMPAIGN_TTL = 60; // 60s TTL per issue #576
+const { log } = require('../monitoring/eventsLogger');
 
 /**
  * Cache helpers with hit/miss metric tracking.
@@ -94,30 +78,16 @@ router.post('/', authenticateMerchant, validateCreateCampaign, async (req, res, 
       endDate,
     });
 
-    // Invalidate merchant campaign list cache on creation
-    await cacheDel(`campaigns:merchant:${merchant.id}`);
+    res.status(201).json({ success: true, data: campaign });
 
-    // 2. Submit to Soroban; roll back (mark failed) on error
-    let confirmed;
-    try {
-      const { txHash, contractCampaignId } = await registerCampaign({
-        id: campaign.id,
-        name: campaign.name,
-        rewardRate: campaign.reward_rate,
-        startDate: campaign.start_date,
-        endDate: campaign.end_date,
-      });
-      confirmed = await confirmOnChain({ id: campaign.id, contractCampaignId, txHash });
-    } catch (chainErr) {
-      await markOnChainFailed(campaign.id);
-      return res.status(502).json({
-        success: false,
-        error: 'chain_error',
-        message: `On-chain registration failed: ${chainErr.message}`,
-      });
-    }
-
-    res.status(201).json({ success: true, data: confirmed });
+    // Log domain event
+    log.campaignCreated({
+      campaignId: campaign.id,
+      merchantId: campaign.merchant_id,
+      name: campaign.name,
+      startDate: campaign.start_date,
+      endDate: campaign.end_date,
+    });
   } catch (err) {
     next(err);
   }
