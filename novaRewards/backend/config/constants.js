@@ -84,6 +84,43 @@ const MAX_PAGE_SIZE = 100;
 const MIN_PAGE_SIZE = 1;
 
 // ---------------------------------------------------------------------------
+// Horizon contract-event streaming
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum number of Horizon events fetched per polling request.
+ * Horizon accepts up to 200; keep this lower to bound per-transaction work.
+ */
+const CONTRACT_EVENT_BATCH_SIZE = 50;
+
+/**
+ * How often the Horizon polling loop checks for new events (milliseconds).
+ * Used when SSE is unavailable and a manual polling loop is employed.
+ */
+const CONTRACT_EVENT_POLLING_INTERVAL_MS = 5 * MS_PER_SECOND;
+
+/**
+ * Base delay for exponential back-off when the Horizon stream disconnects.
+ */
+const HORIZON_RECONNECT_BASE_MS = 1_000;
+
+/**
+ * Maximum delay cap for exponential back-off when reconnecting to Horizon.
+ */
+const HORIZON_RECONNECT_MAX_MS = 60_000;
+
+/**
+ * How often the failed-event retry loop runs (milliseconds).
+ */
+const CONTRACT_EVENT_RETRY_LOOP_INTERVAL_MS = MS_PER_MINUTE;
+
+/**
+ * Maximum number of dispatch retries before an event is left in 'failed' state
+ * and manual intervention is required.
+ */
+const CONTRACT_EVENT_MAX_RETRIES = 5;
+
+// ---------------------------------------------------------------------------
 // Reward issuance
 // ---------------------------------------------------------------------------
 
@@ -120,6 +157,13 @@ module.exports = {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
   MIN_PAGE_SIZE,
+  // horizon / contract-event streaming
+  CONTRACT_EVENT_BATCH_SIZE,
+  CONTRACT_EVENT_POLLING_INTERVAL_MS,
+  HORIZON_RECONNECT_BASE_MS,
+  HORIZON_RECONNECT_MAX_MS,
+  CONTRACT_EVENT_RETRY_LOOP_INTERVAL_MS,
+  CONTRACT_EVENT_MAX_RETRIES,
   // rewards
   REWARD_ISSUANCE_MAX_ATTEMPTS,
   DEFAULT_REFERRAL_BONUS_POINTS,
