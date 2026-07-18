@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const { query } = require('../db/index');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
+const { log } = require('../monitoring/eventsLogger');
 
 /**
  * POST /api/merchants/register
@@ -38,6 +39,13 @@ router.post('/register', async (req, res, next) => {
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
+
+    // Log domain event (fire-and-forget after response)
+    log.merchantRegistered({
+      merchantId: result.rows[0].id,
+      name: result.rows[0].name,
+      walletAddress: result.rows[0].wallet_address,
+    });
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({

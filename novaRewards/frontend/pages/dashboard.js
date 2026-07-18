@@ -53,6 +53,7 @@ function DashboardContent() {
           <span style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
             {shortKey}
           </span>
+          <a href="/monitoring" style={{ fontSize: "0.9rem" }}>Monitoring</a>
           <button
             className="btn btn-secondary"
             onClick={disconnect}

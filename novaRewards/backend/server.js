@@ -11,6 +11,7 @@ require('./db/index');
 
 const express = require('express');
 const cors = require('cors');
+const { requestMonitor, errorMonitor } = require('./monitoring/requestMonitor');
 
 const app = express();
 
@@ -21,6 +22,10 @@ const corsOptions = process.env.NODE_ENV === 'production' && process.env.ALLOWED
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// ── Monitoring middleware ──────────────────────────────────────────────────────
+// Mount before all routes so every request is timed and counted.
+app.use(requestMonitor);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -33,6 +38,11 @@ app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/rewards', require('./routes/rewards'));
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/trustline', require('./routes/trustline'));
+app.use('/api/monitoring', require('./routes/monitoring'));
+
+// ── Error monitoring middleware ───────────────────────────────────────────────
+// Captures errors into the events logger before the global handler responds.
+app.use(errorMonitor);
 
 // Global error handler — returns consistent error envelope
 app.use((err, req, res, _next) => {

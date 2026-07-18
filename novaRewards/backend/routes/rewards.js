@@ -4,6 +4,7 @@ const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository
 const { recordTransaction } = require('../db/transactionRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
+const { log } = require('../monitoring/eventsLogger');
 
 /**
  * Middleware: validates the merchant API key from the x-api-key header.
@@ -106,6 +107,15 @@ router.post('/distribute', merchantAuth, async (req, res, next) => {
       campaignId: campaign.id,
     });
 
+    // Log domain event
+    log.rewardDistributed({
+      txHash,
+      amount,
+      customerWallet,
+      merchantId: req.merchant.id,
+      campaignId: campaign.id,
+    });
+
     res.json({ success: true, txHash, transaction: tx });
   } catch (err) {
     if (err.code === 'no_trustline') {
@@ -121,6 +131,10 @@ router.post('/distribute', merchantAuth, async (req, res, next) => {
         error: 'insufficient_balance',
         message: err.message,
       });
+    }
+    // Log blockchain / unhandled errors
+    if (err.code === 'invalid_address' || err.response?.title === 'Transaction Failed') {
+      log.blockchainError({ errorCode: err.code, message: err.message });
     }
     next(err);
   }

@@ -84,6 +84,7 @@ export default function MerchantDashboard() {
         <span className="nav-brand">⭐ NovaRewards</span>
         <div className="nav-links">
           <a href="/">Customer Portal</a>
+          <a href="/monitoring">Monitoring</a>
         </div>
       </nav>
 

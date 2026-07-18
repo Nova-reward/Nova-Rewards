@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { server, NOVA, isValidStellarAddress } = require('../../blockchain/stellarService');
 const { recordTransaction, getTransactionsByMerchant, getMerchantTotals } = require('../db/transactionRepository');
 const { query } = require('../db/index');
+const { log } = require('../monitoring/eventsLogger');
 
 /**
  * POST /api/transactions/record
@@ -53,6 +54,13 @@ router.post('/record', async (req, res, next) => {
       campaignId: campaignId || null,
       stellarLedger,
     });
+
+    // Log domain event for the appropriate transaction type
+    if (txType === 'redemption') {
+      log.rewardRedeemed({ txHash, amount, fromWallet, toWallet, merchantId });
+    } else if (txType === 'transfer') {
+      log.transferCompleted({ txHash, amount, fromWallet, toWallet });
+    }
 
     res.status(201).json({ success: true, data: tx });
   } catch (err) {

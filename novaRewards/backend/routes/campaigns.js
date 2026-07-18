@@ -4,6 +4,7 @@ const {
   createCampaign,
   getCampaignsByMerchant,
 } = require('../db/campaignRepository');
+const { log } = require('../monitoring/eventsLogger');
 
 /**
  * POST /api/campaigns
@@ -48,6 +49,15 @@ router.post('/', async (req, res, next) => {
     });
 
     res.status(201).json({ success: true, data: campaign });
+
+    // Log domain event
+    log.campaignCreated({
+      campaignId: campaign.id,
+      merchantId: campaign.merchant_id,
+      name: campaign.name,
+      startDate: campaign.start_date,
+      endDate: campaign.end_date,
+    });
   } catch (err) {
     next(err);
   }

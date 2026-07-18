@@ -21,6 +21,7 @@ export default function Home() {
         <span className="nav-brand">⭐ NovaRewards</span>
         <div className="nav-links">
           <a href="/merchant">Merchant Portal</a>
+          <a href="/monitoring">Monitoring</a>
           {publicKey && (
             <button
               className="btn btn-secondary"
