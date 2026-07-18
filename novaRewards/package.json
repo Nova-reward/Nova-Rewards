@@ -24,16 +24,20 @@
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
     "migrate": "node database/migrate.js",
-    "migrate:rollback": "node database/migrate.js --rollback",
-    "migrate:status": "node database/migrate.js --status",
-    "db:migrate": "npm run migrate",
-    "db:rollback": "npm run migrate:rollback",
-    "db:status": "npm run migrate:status",
-    "reset-testnet": "node scripts/reset-testnet.js"
-  },
-  "dependencies": {
-    "@apidevtools/swagger-parser": "^12.1.0",
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+
+    "deploy": "node deploy/deploy.js",
+    "deploy:testnet": "node deploy/deploy.js --network testnet",
+    "deploy:mainnet": "node deploy/deploy.js --network mainnet",
+    "deploy:dry-run": "node deploy/deploy.js --dry-run",
+
+    "verify": "node deploy/verify.js",
+    "verify:testnet": "node deploy/verify.js --network testnet",
+    "verify:mainnet": "node deploy/verify.js --network mainnet",
+
+    "rollback": "node deploy/rollback.js",
+    "rollback:testnet": "node deploy/rollback.js --network testnet",
+    "rollback:mainnet": "node deploy/rollback.js --network mainnet",
+
+    "init-contract": "node deploy/init-contract.js"
   }
 }
