@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="3" failures="3" errors="0" time="8.909">
+  <testsuite name="CampaignForm accessibility" errors="0" failures="3" skipped="0" timestamp="2026-07-18T20:18:10" time="6.31" tests="3">
+    <testcase classname="CampaignForm accessibility associates labels and inline error descriptions with form controls" name="CampaignForm accessibility associates labels and inline error descriptions with form controls" time="0.424">
+      <failure>Error: Objects are not valid as a React child (found: object with keys {$$typeof, type, key, props, _owner, _store}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:13123:9)
+    at reconcileChildFibers (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:14064:7)
+    at reconcileChildren (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:19193:28)
+    at updateHostRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:19912:5)
+    at beginWork (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:21654:14)
+    at beginWork$1 (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:27465:14)
+    at performUnitOfWork (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26599:12)
+    at workLoopSync (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26505:5)
+    at renderRootSync (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26473:7)
+    at performConcurrentWorkOnRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:25777:74)
+    at flushActQueue (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react/cjs/react.development.js:2667:24)
+    at act (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react/cjs/react.development.js:2582:11)
+    at /home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/act-compat.js:46:25
+    at renderRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/pure.js:189:26)
+    at render (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/pure.js:291:10)
+    at Object.&lt;anonymous&gt; (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/frontend/__tests__/CampaignForm.accessibility.test.js:79:11)
+    at Promise.then.completed (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:121:9)
+    at run (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-runner/build/runTest.js:444:34)</failure>
+    </testcase>
+    <testcase classname="CampaignForm accessibility announces validation feedback in a polite live region and avoids axe violations" name="CampaignForm accessibility announces validation feedback in a polite live region and avoids axe violations" time="0.063">
+      <failure>Error: Objects are not valid as a React child (found: object with keys {$$typeof, type, key, props, _owner, _store}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:13123:9)
+    at reconcileChildFibers (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:14064:7)
+    at reconcileChildren (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:19193:28)
+    at updateHostRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:19912:5)
+    at beginWork (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:21654:14)
+    at beginWork$1 (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:27465:14)
+    at performUnitOfWork (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26599:12)
+    at workLoopSync (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26505:5)
+    at renderRootSync (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26473:7)
+    at performConcurrentWorkOnRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:25777:74)
+    at flushActQueue (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react/cjs/react.development.js:2667:24)
+    at act (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react/cjs/react.development.js:2582:11)
+    at /home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/act-compat.js:46:25
+    at renderRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/pure.js:189:26)
+    at render (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/pure.js:291:10)
+    at expectNoViolations (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/frontend/__tests__/CampaignForm.accessibility.test.js:66:31)
+    at Object.expectNoViolations (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/frontend/__tests__/CampaignForm.accessibility.test.js:93:33)
+    at Promise.then.completed (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:121:9)
+    at run (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-runner/build/runTest.js:444:34)</failure>
+    </testcase>
+    <testcase classname="CampaignForm accessibility adds token rows in DOM order and keeps them reachable with the keyboard" name="CampaignForm accessibility adds token rows in DOM order and keeps them reachable with the keyboard" time="0.054">
+      <failure>Error: Objects are not valid as a React child (found: object with keys {$$typeof, type, key, props, _owner, _store}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:13123:9)
+    at reconcileChildFibers (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:14064:7)
+    at reconcileChildren (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:19193:28)
+    at updateHostRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:19912:5)
+    at beginWork (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:21654:14)
+    at beginWork$1 (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:27465:14)
+    at performUnitOfWork (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26599:12)
+    at workLoopSync (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26505:5)
+    at renderRootSync (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:26473:7)
+    at performConcurrentWorkOnRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react-dom/cjs/react-dom.development.js:25777:74)
+    at flushActQueue (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react/cjs/react.development.js:2667:24)
+    at act (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/react/cjs/react.development.js:2582:11)
+    at /home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/act-compat.js:46:25
+    at renderRoot (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/pure.js:189:26)
+    at render (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/@testing-library/react/dist/pure.js:291:10)
+    at Object.&lt;anonymous&gt; (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/frontend/__tests__/CampaignForm.accessibility.test.js:104:11)
+    at Promise.then.completed (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/utils.js:298:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/utils.js:231:10)
+    at _callCircusTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:316:40)
+    at _runTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:252:3)
+    at _runTestsForDescribeBlock (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:126:9)
+    at _runTestsForDescribeBlock (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:121:9)
+    at run (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/run.js:71:3)
+    at runAndTransformResultsToJestFormat (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+    at jestAdapter (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+    at runTestInternal (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-runner/build/runTest.js:367:16)
+    at runTest (/home/femi-john/Documents/Grant/Nova-Rewards/novaRewards/node_modules/jest-runner/build/runTest.js:444:34)</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
