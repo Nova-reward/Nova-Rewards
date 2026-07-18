@@ -6,6 +6,7 @@ import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
+import Navbar from "../components/Navbar";
 import { truncateAddress } from "../lib/truncateAddress";
 
 /**

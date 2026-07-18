@@ -1,0 +1,853 @@
+const logger = require('./lib/logger');
+const router = require('express').Router();
+const { query } = require('../db/index');
+const { getUserByWallet, getUserById, createUser } = require('../db/userRepository');
+const userRepository = require('../db/userRepository');
+const { getUserReferralStats, processReferralBonus } = require('../services/referralService');
+const { getUserBalance, getUserTotalPoints, getUserReferralPoints } = require('../db/pointTransactionRepository');
+const { getUserRedemptions } = require('../db/redemptionRepository');
+const { getTransactionsByUser, getRewardsHistoryCursor } = require('../db/transactionRepository');
+const { sendWelcome } = require('../services/emailService');
+const { authenticateUser, requireAdmin, requireOwnershipOrAdmin } = require('../middleware/authenticateUser');
+const { validateUpdateUserDto } = require('../middleware/validateDto');
+const { isValidStellarAddress, getNOVABalance } = require('../../blockchain/stellarService');
+const { client: redisClient } = require('../lib/redis');
+const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Magic-byte signatures for allowed image types
+const IMAGE_SIGNATURES = [
+  { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
+  { mime: 'image/png',  bytes: [0x89, 0x50, 0x4e, 0x47] },
+  { mime: 'image/webp', bytes: [0x52, 0x49, 0x46, 0x46] }, // RIFF.... (WebP)
+];
+
+const ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+/**
+ * Reads the first 12 bytes of a file and confirms it matches a known image
+ * magic-byte signature. Returns the detected MIME type, or null on mismatch.
+ * @param {string} filePath
+ * @returns {string|null}
+ */
+function detectImageMime(filePath) {
+  const buf = Buffer.alloc(12);
+  let fd;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    fs.readSync(fd, buf, 0, 12, 0);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+  for (const { mime, bytes } of IMAGE_SIGNATURES) {
+    if (bytes.every((b, i) => buf[i] === b)) return mime;
+  }
+  return null;
+}
+
+const SALT_ROUNDS = 12;
+
+// Store avatars in memory; persist to disk under /public/avatars
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const dir = path.join(__dirname, '../../frontend/public/avatars');
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      // Use a safe, predictable filename — do not trust originalname beyond extension
+      cb(null, `user-${req.params.id}-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    // Gate 1: extension whitelist (guards against missing/wrong Content-Type)
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      return cb(new Error('Only .jpg, .jpeg, .png, and .webp files are allowed'));
+    }
+    // Gate 2: client-supplied MIME type (defence-in-depth; magic bytes checked post-write)
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new Error('Only JPEG, PNG, and WebP images are allowed'));
+    }
+    cb(null, true);
+  },
+});
+
+function parsePositiveInteger(value) {
+  const parsed = parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parsePagination(query) {
+  const page = query.page === undefined ? 1 : parseInt(query.page, 10);
+  const limit = query.limit === undefined ? 20 : parseInt(query.limit, 10);
+
+  if (!Number.isInteger(page) || page <= 0) {
+    return { error: 'page must be a positive integer' };
+  }
+
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+    return { error: 'limit must be a positive integer between 1 and 100' };
+  }
+
+  return { page, limit };
+}
+
+function ensureSelfOrAdmin(req, res, userId) {
+  if (req.user.id !== userId && req.user.role !== 'admin') {
+    res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * @openapi
+ * /users:
+ *   post:
+ *     tags: [Users]
+ *     summary: Create a new user with optional referral tracking
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [walletAddress]
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
+ *               referralCode:
+ *                 type: string
+ *                 example: GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN
+ *     responses:
+ *       201:
+ *         description: User created.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       400:
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: Wallet address already registered.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.post('/', async (req, res, next) => {
+  try {
+    const { walletAddress, referralCode } = req.body;
+
+    if (!walletAddress) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'walletAddress is required',
+      });
+    }
+
+    const existingUser = await getUserByWallet(walletAddress);
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: 'duplicate_user',
+        message: 'User with this wallet address already exists',
+      });
+    }
+
+    let referredBy = null;
+    if (referralCode) {
+      const referrer = await getUserByWallet(referralCode);
+      if (referrer) referredBy = referrer.id;
+    }
+
+    const user = await createUser({ walletAddress, referredBy });
+
+    sendWelcome({ to: walletAddress, userName: walletAddress, referralCode: walletAddress })
+      .catch(err => logger.error('Failed to send welcome email:', err));
+
+    res.status(201).json({ success: true, data: user });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /users/{walletAddress}/points:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get current point balance for a wallet address
+ *     parameters:
+ *       - in: path
+ *         name: walletAddress
+ *         required: true
+ *         schema: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *     responses:
+ *       200:
+ *         description: Point balance.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     walletAddress: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *                     balance: { type: number, example: 1250.5 }
+ *       400:
+ *         description: Invalid wallet address.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.get('/:walletAddress/points', async (req, res, next) => {
+  try {
+    const { walletAddress } = req.params;
+
+    if (!isValidStellarAddress(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'walletAddress must be a valid Stellar public key',
+      });
+    }
+
+    const result = await query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN tx_type = 'distribution' AND to_wallet = $1 THEN amount ELSE 0 END), 0) -
+         COALESCE(SUM(CASE WHEN tx_type = 'redemption'   AND from_wallet = $1 THEN amount ELSE 0 END), 0) AS balance
+       FROM transactions
+       WHERE to_wallet = $1 OR from_wallet = $1`,
+      [walletAddress]
+    );
+
+    const balance = parseFloat(result.rows[0].balance || 0);
+    res.json({
+      success: true,
+      data: { walletAddress, balance: balance < 0 ? 0 : balance },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /users/{id}/token-balance:
+ *   get:
+ *     summary: Get user's on-chain token balance
+ *     description: Reads the user's linked Stellar public key and returns token balance from Horizon/Soroban.
+ *     tags:
+ *       - Users
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: Token balance retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: User not found or no linked Stellar public key.
+ *       400:
+ *         description: Validation error on input.
+ */
+router.get('/:id/token-balance', async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (Number.isNaN(userId) || userId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'id must be a positive integer',
+      });
+    }
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    if (!user.stellar_public_key) {
+      return res.status(404).json({
+        success: false,
+        error: 'not_found',
+        message: 'User does not have a linked Stellar public key',
+      });
+    }
+
+    const cacheKey = `tokenBalance:${userId}`;
+    let tokenBalance;
+
+    if (redisClient && redisClient.isOpen) {
+      const cachedBalance = await redisClient.get(cacheKey);
+      if (cachedBalance) {
+        return res.json({
+          success: true,
+          data: {
+            userId,
+            stellarPublicKey: user.stellar_public_key,
+            tokenBalance: cachedBalance,
+            cached: true,
+          },
+        });
+      }
+    }
+
+    tokenBalance = await getNOVABalance(user.stellar_public_key);
+
+    if (redisClient && redisClient.isOpen) {
+      try {
+        await redisClient.setEx(cacheKey, 30, tokenBalance);
+      } catch (cacheErr) {
+        logger.warn('Redis cache set failed', cacheErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        userId,
+        stellarPublicKey: user.stellar_public_key,
+        tokenBalance,
+        cached: false,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /users/{id}:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get user profile (public or private depending on ownership)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: User profile.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       400:
+ *         description: Invalid id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.get('/:id', authenticateUser, requireOwnershipOrAdmin, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+
+    if (isNaN(userId) || userId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'id must be a positive integer',
+      });
+    }
+
+    const userExists = await userRepository.exists(userId);
+    if (!userExists) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const currentUserId = req.user.id;
+    const isAdminUser = req.user.role === 'admin';
+
+    const profile = (currentUserId === userId || isAdminUser)
+      ? await userRepository.getPrivateProfile(userId)
+      : await userRepository.getPublicProfile(userId);
+
+    res.json({ success: true, data: profile });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /users/{id}/referrals:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get referral statistics for a user
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: Referral stats.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     total_referrals: { type: integer, example: 5 }
+ *                     total_bonus_earned: { type: number, example: 250 }
+ *       400:
+ *         description: Invalid id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.get('/:id/referrals', async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+
+    if (isNaN(userId) || userId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'id must be a positive integer',
+      });
+    }
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const referralStats = await getUserReferralStats(userId);
+    res.json({ success: true, data: referralStats });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /users/{id}:
+ *   patch:
+ *     tags: [Users]
+ *     summary: Partial profile update
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName: { type: string, example: Alice }
+ *               lastName: { type: string, example: Smith }
+ *               bio: { type: string, example: "Stellar enthusiast" }
+ *               stellarPublicKey: { type: string, example: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5 }
+ *     responses:
+ *       200:
+ *         description: Updated user profile.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/User' }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Forbidden — not owner or admin.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+async function updateUserProfile(req, res, next) {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    const currentUserId = req.user.id;
+    const isAdminUser = req.user.role === 'admin';
+
+    // Check ownership before hitting the DB
+    if (currentUserId !== userId && !isAdminUser) {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    }
+
+    const userExists = await userRepository.exists(userId);
+    if (!userExists) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const updates = {};
+    if (req.body.firstName !== undefined) updates.first_name = req.body.firstName;
+    if (req.body.lastName !== undefined) updates.last_name = req.body.lastName;
+    if (req.body.bio !== undefined) updates.bio = req.body.bio;
+    if (req.body.stellarPublicKey !== undefined) updates.stellar_public_key = req.body.stellarPublicKey;
+
+    const updatedUser = await userRepository.update(userId, updates);
+    res.json({ success: true, data: updatedUser });
+  } catch (err) {
+    next(err);
+  }
+}
+
+router.put('/:id', authenticateUser, validateUpdateUserDto, updateUserProfile);
+router.patch('/:id', authenticateUser, validateUpdateUserDto, updateUserProfile);
+
+/**
+ * @openapi
+ * /users/{id}:
+ *   delete:
+ *     tags: [Users]
+ *     summary: Soft-delete and anonymise a user account
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *     responses:
+ *       200:
+ *         description: Account deleted.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "User account deleted successfully" }
+ *       401:
+ *         description: Unauthenticated.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: Forbidden.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.delete('/:id', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    const currentUserId = req.user.id;
+    const isAdminUser = req.user.role === 'admin';
+
+    // Check existence first (404 takes priority over 403)
+    const userExists = await userRepository.exists(userId);
+    if (!userExists) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    if (currentUserId !== userId && !isAdminUser) {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    }
+
+    await userRepository.softDelete(userId);
+    res.json({ success: true, message: 'User account deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /users/{id}/referrals/process:
+ *   post:
+ *     tags: [Users]
+ *     summary: Manually process a referral bonus
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, example: 42 }
+ *         description: Referrer user ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [referredUserId]
+ *             properties:
+ *               referredUserId: { type: integer, example: 99 }
+ *     responses:
+ *       200:
+ *         description: Referral bonus processed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     bonus: { type: number, example: 50 }
+ *       400:
+ *         description: Validation or referral error.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.post('/:id/referrals/process', async (req, res, next) => {
+  try {
+    const referrerId = parseInt(req.params.id, 10);
+    const { referredUserId } = req.body;
+
+    if (isNaN(referrerId) || referrerId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'id must be a positive integer',
+      });
+    }
+
+    if (!referredUserId) {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'referredUserId is required',
+      });
+    }
+
+    const result = await processReferralBonus(referrerId, referredUserId);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: 'referral_error', message: result.message });
+    }
+
+    res.json({ success: true, data: result.bonus, message: result.message });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/users/:id/profile-picture
+ * Upload avatar image (JPEG/PNG/WebP, max 5 MB).
+ * Requirements: #171
+ */
+router.post('/:id/profile-picture', authenticateUser, (req, res, next) => {
+  const userId = parseInt(req.params.id, 10);
+  if (req.user.id !== userId && req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+  }
+  upload.single('avatar')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: 'upload_error', message: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'No file uploaded' });
+    }
+
+    // Gate 3: verify actual file content via magic bytes (prevents MIME spoofing)
+    const detectedMime = detectImageMime(req.file.path);
+    if (!detectedMime) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({
+        success: false,
+        error: 'upload_error',
+        message: 'File content does not match an allowed image type',
+      });
+    }
+
+    const avatarUrl = `/avatars/${req.file.filename}`;
+    await query(
+      `UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2`,
+      [avatarUrl, userId]
+    );
+    res.json({ success: true, data: { avatarUrl } });
+  });
+});
+
+/**
+ * PATCH /api/users/:id/password
+ * Change password — requires current password verification.
+ * Requirements: #171
+ */
+router.patch('/:id/password', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (req.user.id !== userId) {
+      return res.status(403).json({ success: false, error: 'forbidden', message: 'Forbidden' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false, error: 'validation_error', message: 'currentPassword and newPassword are required',
+      });
+    }
+    if (newPassword.length < 8 || !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+      return res.status(400).json({
+        success: false, error: 'validation_error',
+        message: 'New password must be at least 8 characters with uppercase, lowercase, and a number',
+      });
+    }
+
+    const result = await query(
+      'SELECT password_hash FROM users WHERE id = $1 AND is_deleted = FALSE',
+      [userId]
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const match = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!match) {
+      return res.status(401).json({ success: false, error: 'invalid_credentials', message: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [newHash, userId]);
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /users/:id/balance — Horizon token balance per campaign, cached 30s
+// ---------------------------------------------------------------------------
+router.get('/:id/balance', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parsePositiveInteger(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+    if (!ensureSelfOrAdmin(req, res, userId)) return;
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const cacheKey = `balance:${userId}`;
+    if (redisClient && redisClient.isOpen) {
+      const cached = await redisClient.get(cacheKey).catch(() => null);
+      if (cached) {
+        return res.json({ success: true, data: JSON.parse(cached), cached: true });
+      }
+    }
+
+    // Fetch on-chain balance from Horizon
+    const onChainBalance = user.stellar_public_key
+      ? await getNOVABalance(user.stellar_public_key).catch(() => '0')
+      : '0';
+
+    // Fetch off-chain point balance
+    const offChainBalance = await getUserBalance(userId).catch(() => 0);
+
+    const data = {
+      userId,
+      stellarPublicKey: user.stellar_public_key || null,
+      onChainBalance,          // NOVA token balance from Horizon
+      offChainPoints: offChainBalance, // accumulated off-chain points
+    };
+
+    if (redisClient && redisClient.isOpen) {
+      redisClient.setEx(cacheKey, 30, JSON.stringify(data)).catch(() => {});
+    }
+
+    res.json({ success: true, data, cached: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /users/:id/rewards/history — cursor-paginated reward history
+// ---------------------------------------------------------------------------
+router.get('/:id/rewards/history', authenticateUser, async (req, res, next) => {
+  try {
+    const userId = parsePositiveInteger(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'id must be a positive integer' });
+    }
+    if (!ensureSelfOrAdmin(req, res, userId)) return;
+
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'User not found' });
+    }
+
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'limit must be between 1 and 100' });
+    }
+
+    const { data, nextCursor } = await getRewardsHistoryCursor(userId, {
+      limit,
+      cursor: req.query.cursor,
+    });
+
+    res.json({ success: true, data, pagination: { nextCursor, limit } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;

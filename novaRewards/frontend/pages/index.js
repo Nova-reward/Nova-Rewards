@@ -1,6 +1,7 @@
 import { useWallet } from '../context/WalletContext';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
+import Navbar from '../components/Navbar';
 
 export default function Home() {
   const { publicKey, connect, loading, error, freighterInstalled, disconnect } = useWallet();

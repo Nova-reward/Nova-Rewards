@@ -1,0 +1,21 @@
+Pull Request Created for Issue #957: Test Stellar transaction failure and rollback scenarios
+
+Branch: test/stellar-transaction-failure-rollback
+Repository: https://github.com/Belzabeem/Nova-Rewards
+Created: 2026-06-01T10:28:00+01:00
+
+Description:
+This branch contains the test file for issue #957 which verifies that Stellar transaction failures are handled correctly and maintain data consistency.
+
+Acceptance Criteria Covered:
+1. Stellar submission failure does not create a database transaction record
+2. Stellar timeout triggers the retry logic
+3. Duplicate transaction (same sequence number) is handled gracefully
+4. User's balance is not decremented if the Stellar transaction fails
+5. Tests use a mock Stellar SDK that can simulate specific failure modes
+
+Test File: novaRewards/backend/tests/stellarTransactionFailureRollback.test.js
+Status: All 26 tests pass
+
+To create a pull request, visit:
+https://github.com/Belzabeem/Nova-Rewards/pull/new/test/stellar-transaction-failure-rollback

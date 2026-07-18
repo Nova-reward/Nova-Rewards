@@ -1,0 +1,1 @@
+{"responses":{"200":{"description":"Token balance retrieved successfully.","content":{"application/json":{"schema":{"type":"object"}}}},"400":{"description":"Validation error on input."},"404":{"description":"User not found or no linked Stellar public key."}}}
