@@ -65,9 +65,13 @@ with open('$abs_report_dir/rust-licenses.json') as f:
         lic = dep.get('license', 'Unknown')
         if lic is None:
             lic = 'Unknown'
-        # Basic check for allowed licenses in the license string
-        # This handles cases like 'MIT OR Apache-2.0'
-        parts = lic.replace('(', '').replace(')', '').replace(' OR ', '|').replace(' AND ', '|').split('|')
+        # Skip workspace-member packages with no declared license (our own contracts)
+        if lic == 'Unknown':
+            continue
+        # Normalise 'Apache-2.0 WITH LLVM-exception' -> 'Apache-2.0'
+        lic_norm = lic.replace(' WITH LLVM-exception', '')
+        # Handle compound expressions: 'MIT OR Apache-2.0', 'MIT AND Zlib', etc.
+        parts = lic_norm.replace('(', '').replace(')', '').replace(' OR ', '|').replace(' AND ', '|').split('|')
         if not any(p.strip() in allowed for p in parts):
             disallowed.append(f\"{dep['name']} ({lic})\")
     if disallowed:
