@@ -1,0 +1,22 @@
+License report for docs-site
+==========================
+├─ MIT: 1095
+├─ MIT-0: 62
+├─ ISC: 46
+├─ Apache-2.0: 43
+├─ BSD-3-Clause: 31
+├─ BSD-2-Clause: 28
+├─ Apache-2.0 AND MIT: 4
+├─ MPL-2.0: 3
+├─ (MIT OR CC0-1.0): 3
+├─ CC0-1.0: 2
+├─ (WTFPL OR MIT): 2
+├─ 0BSD: 2
+├─ Python-2.0: 1
+├─ CC-BY-4.0: 1
+├─ [1m[31mUNLICENSED[39m[22m: 1
+├─ (MIT AND Zlib): 1
+├─ (BSD-2-Clause OR MIT OR Apache-2.0): 1
+├─ MIT*: 1
+└─ BlueOak-1.0.0: 1
+

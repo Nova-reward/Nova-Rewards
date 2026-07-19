@@ -7,7 +7,10 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 // Validate all required environment variables at build / dev-server startup.
 // If any variable is missing or invalid this throws with a clear error message
 // and the build is aborted before any code is compiled.
-require('./lib/env');
+// Skip validation during Jest runs — test env vars are loaded separately.
+if (process.env.JEST_WORKER_ID === undefined && process.env.NODE_ENV !== 'test') {
+  require('./lib/env');
+}
 
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none';" },

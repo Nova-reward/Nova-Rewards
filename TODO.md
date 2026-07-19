@@ -12,5 +12,5 @@
 - [x] 9. Update `components/WalletConnectFlow.js` with install modal + network warning
 - [x] 10. Create `lib/__tests__/freighter.test.ts`
 - [x] 11. Delete old `lib/freighter.js`
-- [ ] 12. Build & test verification
+- [x] 12. Build & test verification
 
