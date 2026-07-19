@@ -33,6 +33,7 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:3001
           NEXT_PUBLIC_HORIZON_URL: https://horizon-testnet.stellar.org
           NEXT_PUBLIC_STELLAR_NETWORK: testnet
+          NEXT_PUBLIC_ISSUER_PUBLIC: GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
       - name: Run Lighthouse CI
         run: npx @lhci/cli@0.14.x autorun
