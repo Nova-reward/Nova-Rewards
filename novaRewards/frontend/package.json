@@ -1,6 +1,7 @@
 {
   "name": "nova-rewards-frontend",
   "version": "1.0.0",
+  "private": true,
   "description": "NovaRewards Next.js frontend",
   "scripts": {
     "dev": "next dev",

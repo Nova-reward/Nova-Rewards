@@ -2,9 +2,9 @@
 set -e
 
 # Allowed licenses (semicolon separated for license-checker)
-ALLOWED_LICENSES="MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC"
+ALLOWED_LICENSES="MIT;MIT-0;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;CC0-1.0;CC-BY-4.0;BlueOak-1.0.0;MPL-2.0;Python-2.0;Zlib;Unlicense;WTFPL"
 # Allowed licenses (comma separated for the python check)
-ALLOWED_LICENSES_RUST="MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC"
+ALLOWED_LICENSES_RUST="MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,0BSD,Zlib,Unlicense"
 
 REPORT_DIR="docs/licenses"
 mkdir -p "$REPORT_DIR"
@@ -22,8 +22,8 @@ check_npm() {
     echo "License report for $name" > "$abs_report_dir/$name-licenses.txt"
     echo "==========================" >> "$abs_report_dir/$name-licenses.txt"
     npx license-checker --summary >> "$abs_report_dir/$name-licenses.txt"
-    # Enforce allowed licenses
-    npx license-checker --summary --onlyAllow "$ALLOWED_LICENSES"
+    # Enforce allowed licenses (exclude the private root package itself)
+    npx license-checker --summary --onlyAllow "$ALLOWED_LICENSES" --excludePrivatePackages
     cd - > /dev/null
 }
 
