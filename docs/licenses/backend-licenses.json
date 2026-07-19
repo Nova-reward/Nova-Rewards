@@ -1,0 +1,7 @@
+{
+  "nova-rewards-backend@1.0.0": {
+    "licenses": "UNLICENSED",
+    "private": true,
+    "path": "/workspaces/Nova-Rewards/novaRewards/backend"
+  }
+}
