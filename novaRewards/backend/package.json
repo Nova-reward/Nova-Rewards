@@ -1,6 +1,7 @@
 {
   "name": "nova-rewards-backend",
   "version": "1.0.0",
+  "private": true,
   "description": "NovaRewards backend API",
   "main": "server.js",
   "scripts": {
