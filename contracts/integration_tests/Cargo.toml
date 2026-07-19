@@ -13,3 +13,6 @@ nova-rewards = { path = "../nova-rewards" }
 nova_token = { path = "../nova_token" }
 escrow = { path = "../escrow" }
 reward_pool = { path = "../reward_pool" }
+campaign = { path = "../campaign" }
+distribution = { path = "../distribution" }
+governance = { path = "../governance" }
