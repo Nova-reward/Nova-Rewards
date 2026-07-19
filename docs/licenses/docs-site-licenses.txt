@@ -1,9 +1,9 @@
 License report for docs-site
 ==========================
-├─ MIT: 1095
+├─ MIT: 1103
 ├─ MIT-0: 62
+├─ Apache-2.0: 49
 ├─ ISC: 46
-├─ Apache-2.0: 43
 ├─ BSD-3-Clause: 31
 ├─ BSD-2-Clause: 28
 ├─ Apache-2.0 AND MIT: 4
@@ -14,7 +14,7 @@ License report for docs-site
 ├─ 0BSD: 2
 ├─ Python-2.0: 1
 ├─ CC-BY-4.0: 1
-├─ [1m[31mUNLICENSED[39m[22m: 1
+├─ UNLICENSED: 1
 ├─ (MIT AND Zlib): 1
 ├─ (BSD-2-Clause OR MIT OR Apache-2.0): 1
 ├─ MIT*: 1
