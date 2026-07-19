@@ -1,4 +1,4 @@
 License report for frontend
 ==========================
-└─ [1m[31mUNLICENSED[39m[22m: 1
+└─ UNLICENSED: 1
 
