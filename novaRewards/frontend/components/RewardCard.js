@@ -22,6 +22,8 @@ export default function RewardCard({
             src={reward.image_url}
             alt={reward.name}
             className="reward-image"
+            loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="reward-image-placeholder">No Image</div>

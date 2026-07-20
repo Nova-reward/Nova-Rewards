@@ -1,9 +1,17 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "../context/WalletContext";
-import TrustlineButton from "../components/TrustlineButton";
-import TransferForm from "../components/TransferForm";
-import RedeemForm from "../components/RedeemForm";
+import dynamic from "next/dynamic";
+
+const TrustlineButton = dynamic(() => import("../components/TrustlineButton"), {
+  loading: () => <p style={{ color: "#94a3b8" }}>Loading...</p>,
+});
+const TransferForm = dynamic(() => import("../components/TransferForm"), {
+  loading: () => <p style={{ color: "#94a3b8" }}>Loading...</p>,
+});
+const RedeemForm = dynamic(() => import("../components/RedeemForm"), {
+  loading: () => <p style={{ color: "#94a3b8" }}>Loading...</p>,
+});
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 import Navbar from "../components/Navbar";

@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { render, act, fireEvent } from '@testing-library/react';
-import { ToastProvider, useToast } from '../../components/Toast';
+import { ToastProvider, useToast } from '../components/Toast';
 
 jest.useFakeTimers();
 

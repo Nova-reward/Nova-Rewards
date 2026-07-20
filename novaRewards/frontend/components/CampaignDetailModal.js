@@ -116,7 +116,7 @@ export default function CampaignDetailModal({ campaign, onClose }) {
             }}
           >
             {merchantLogo ? (
-              <img src={merchantLogo} alt={`${merchantName} logo`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={merchantLogo} alt={`${merchantName} logo`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" decoding="async" />
             ) : (
               <span style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)' }}>
                 {(merchantName || 'M').charAt(0).toUpperCase()}
