@@ -145,9 +145,21 @@ function metricsMiddleware(req, res, next) {
   next();
 }
 
+function createCounter(name, help, labelNames = []) {
+  const existing = registry.getSingleMetric(name);
+  if (existing) return existing;
+  return new client.Counter({
+    name,
+    help,
+    labelNames,
+    registers: [registry],
+  });
+}
+
 module.exports = {
   metricsMiddleware,
   registry,
+  createCounter,
   metrics: {
     httpRequestDuration,
     httpRequestTotal,

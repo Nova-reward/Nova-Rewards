@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const appEvents = require('./eventEmitter');
 const { sendRedemptionConfirmation } = require('./emailService');
 const notificationService = require('./notificationService');

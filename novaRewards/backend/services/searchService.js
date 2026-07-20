@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 /**
  * Search Service — Elasticsearch integration
  *
