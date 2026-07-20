@@ -134,8 +134,21 @@ async function submit({ sourceAddress, operations, signers, options = {} }) {
 // ---------------------------------------------------------------------------
 
 /**
- * Submits a transaction, and if it's stuck (bad_seq, insufficient_fee, too_late),
+ * Submits a transaction, and if it's stuck (insufficient_fee, too_late),
  * retries with a fee-bump transaction up to MAX_FEE_BUMP_ATTEMPTS times.
+ *
+ * tx_bad_seq is handled separately inside submitHorizonTransaction (sequence
+ * refresh + rebuild once) and does NOT trigger the fee-bump path.
+ *
+ * Before each fee-bump attempt the source account sequence number is re-fetched
+ * from Horizon so that the rebuilt inner transaction carries a fresh sequence.
+ * This prevents infinite retries under high-load conditions where the account
+ * sequence advances between attempts.
+ *
+ * Fee doubling follows 2^(attempt+1) progression:
+ *   attempt 0 → baseFee * 2
+ *   attempt 1 → baseFee * 4
+ *   attempt 2 → baseFee * 8
  *
  * @param {import('stellar-sdk').Transaction} transaction
  * @param {object} options
@@ -144,12 +157,8 @@ async function submit({ sourceAddress, operations, signers, options = {} }) {
 async function submitWithFeeBumpRetry(transaction, options = {}) {
   let lastError;
 
-  // Acceptance criteria: Horizon tx_bad_seq triggers a sequence refresh and one retry.
-  let didRefreshSequenceRetry = false;
-
   const submitContext = {
     sourceAddress: options?.sourceAddress,
-    transaction,
     operations: options?.operations,
     signers: options?.signers,
     feeSourceSecret: options?.feeSourceSecret,
@@ -158,61 +167,162 @@ async function submitWithFeeBumpRetry(transaction, options = {}) {
     txType: options?.txType,
   };
 
-  for (let attempt = 0; attempt <= MAX_FEE_BUMP_ATTEMPTS; attempt++) {
+<<<<<<< HEAD
+  // Initial submission attempt (not a fee-bump attempt).
+  try {
+    const horizonResult = await submitHorizonTransaction(transaction, {
+      options,
+      didRefreshSequenceRetry,
+      refreshSequenceAndRebuildOnce: async () => {
+        if (didRefreshSequenceRetry) return null;
+        didRefreshSequenceRetry = true;
+        return refreshAndRebuildTransaction(submitContext);
+      },
+=======
+  // First, attempt the normal submission flow (which may refresh once on tx_bad_seq)
+  try {
+    const horizonResult = await submitHorizonTransaction(transaction, {
+      // allow submitHorizonTransaction to handle an internal one-time tx_bad_seq refresh
+      refreshSequenceAndRebuildOnce: async () => refreshAndRebuildTransaction({
+        sourceAddress: submitContext.sourceAddress,
+        operations: submitContext.operations,
+        signers: submitContext.signers,
+        memo: submitContext.memo,
+        timeout: submitContext.timeout,
+      }),
+>>>>>>> b06e47e (fix: refresh sequence before fee-bump attempts; enforce MAX_FEE_BUMP_ATTEMPTS; add tests for fee-bump retry paths)
+    });
+
+    return {
+      txHash: horizonResult.hash,
+      ledger: horizonResult.ledger,
+      status: 'submitted',
+      resultXdr: horizonResult.result_xdr,
+      _raw: horizonResult,
+    };
+  } catch (err) {
+    lastError = err;
+
+    const resultCodes = extractResultCodes(err);
+<<<<<<< HEAD
+    // Also check err.code — submitHorizonTransaction re-throws Horizon errors
+    // as typed errors with .code set to the original Horizon result code.
+    const allCodes = resultCodes.length ? resultCodes : (err.code ? [err.code] : []);
+    // Only tx_insufficient_fee and tx_too_late trigger the fee-bump path.
+    // tx_bad_seq is already handled (rebuild once) inside submitHorizonTransaction.
+    const FEE_BUMP_CODES = STUCK_RESULT_CODES.filter((c) => c !== 'tx_bad_seq');
+    const isFeeBumpCandidate = FEE_BUMP_CODES.some((code) => allCodes.includes(code));
+
+    if (!isFeeBumpCandidate) {
+      // Not a fee-bump candidate — propagate immediately.
+      throw err;
+    }
+  }
+
+  // Fee-bump retry loop: exactly MAX_FEE_BUMP_ATTEMPTS iterations (0, 1, 2).
+  for (let attempt = 0; attempt < MAX_FEE_BUMP_ATTEMPTS; attempt++) {
     try {
-      const horizonResult = await submitHorizonTransaction(transaction, {
-        options,
-        didRefreshSequenceRetry,
-        refreshSequenceAndRebuildOnce: async () => {
-          if (didRefreshSequenceRetry) return null;
-          didRefreshSequenceRetry = true;
-          return refreshAndRebuildTransaction(submitContext);
-        },
-      });
-
-      return {
-        txHash: horizonResult.hash,
-        ledger: horizonResult.ledger,
-        status: 'submitted',
-        resultXdr: horizonResult.result_xdr,
-        _raw: horizonResult,
-      };
-    } catch (err) {
-      lastError = err;
-
-      const resultCodes = extractResultCodes(err);
-      const isStuck = STUCK_RESULT_CODES.some((code) => resultCodes.includes(code));
-
-      if (!isStuck || attempt >= MAX_FEE_BUMP_ATTEMPTS) {
-        break;
-      }
-
-      // Keep existing fee-bump retry behavior for stuck tx_insufficient_fee/tx_too_late.
       const feeSourceSecret =
         options.feeSourceSecret || getRequiredConfig('FEE_SOURCE_SECRET');
       const feeSourceKeypair = Keypair.fromSecret(feeSourceSecret);
-      const bumpedFee = String(
-        parseInt(transaction.fee, 10) * FEE_BUMP_MULTIPLIER * (attempt + 1),
+
+      // Re-fetch the sequence number before each fee-bump attempt so that the
+      // inner transaction carries a fresh sequence even if the account advanced
+      // between attempts.
+      const rebuiltInnerTx = await refreshAndRebuildTransaction(submitContext);
+      const innerTx = rebuiltInnerTx || transaction;
+
+      // Fee doubles on every attempt from the canonical base fee:
+      // attempt 0 -> BASE_FEE * 2, attempt 1 -> BASE_FEE * 4, attempt 2 -> BASE_FEE * 8
+      const baseFee = parseInt(BASE_FEE, 10);
+      const bumpedFee = String(baseFee * Math.pow(FEE_BUMP_MULTIPLIER, attempt + 1));
+=======
+    const isStuck = STUCK_RESULT_CODES.some((code) => resultCodes.includes(code));
+
+    if (!isStuck) {
+      const resultCodes = extractResultCodes(lastError);
+      throw createError(
+        `Transaction submission failed: ${resultCodes.join(', ') || lastError.message}`,
+        400,
+        'tx_submission_failed',
       );
+    }
+  }
+
+  // If we reach here the transaction is considered "stuck" and we'll attempt
+  // up to MAX_FEE_BUMP_ATTEMPTS fee-bump submissions. Before each fee-bump
+  // attempt we must refresh the sequence number and rebuild the inner tx.
+  for (let attempt = 1; attempt <= MAX_FEE_BUMP_ATTEMPTS; attempt++) {
+    try {
+      // Re-fetch sequence number and rebuild the inner transaction to avoid
+      // reusing an outdated sequence across attempts.
+      const rebuiltInner = await refreshAndRebuildTransaction({
+        sourceAddress: submitContext.sourceAddress,
+        operations: submitContext.operations,
+        signers: submitContext.signers,
+        memo: submitContext.memo,
+        timeout: submitContext.timeout,
+      });
+
+      if (rebuiltInner) {
+        transaction = rebuiltInner;
+      }
+
+      const feeSourceSecret = options.feeSourceSecret || getRequiredConfig('FEE_SOURCE_SECRET');
+      const feeSourceKeypair = Keypair.fromSecret(feeSourceSecret);
+
+      // Double the fee on each attempt: attempt=1 => *2, attempt=2 => *4, etc.
+      const baseFee = parseInt(transaction.fee, 10) || parseInt(BASE_FEE, 10);
+      const bumpedFee = String(baseFee * Math.pow(FEE_BUMP_MULTIPLIER, attempt));
+>>>>>>> b06e47e (fix: refresh sequence before fee-bump attempts; enforce MAX_FEE_BUMP_ATTEMPTS; add tests for fee-bump retry paths)
 
       const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
         feeSourceKeypair,
         bumpedFee,
-        transaction,
+        innerTx,
         NETWORK_PASSPHRASE,
       );
       feeBumpTx.sign(feeSourceKeypair);
 
       const feeBumpResult = await submitFeeBumpTransaction(feeBumpTx);
       return feeBumpResult;
+<<<<<<< HEAD
+    } catch (err) {
+      lastError = err;
+      // Continue to next attempt unless this was the last one.
     }
   }
 
+  // All fee-bump attempts exhausted — throw a typed error.
   const resultCodes = extractResultCodes(lastError);
   throw createError(
-    `Transaction submission failed: ${resultCodes.join(', ') || lastError.message}`,
+    `Fee-bump retry exhausted after ${MAX_FEE_BUMP_ATTEMPTS} attempts: ${resultCodes.join(', ') || lastError.message}`,
+    503,
+    'fee_bump_exhausted',
+=======
+    } catch (feeErr) {
+      lastError = feeErr;
+
+      const codes = extractResultCodes(feeErr);
+      const stillStuck = STUCK_RESULT_CODES.some((c) => codes.includes(c));
+
+      // If this attempt exhausted allowed attempts or error is not a stuck code,
+      // stop retrying and throw a typed error below.
+      if (attempt >= MAX_FEE_BUMP_ATTEMPTS || !stillStuck) {
+        break;
+      }
+
+      // Otherwise continue to next attempt (loop will refresh sequence again).
+      continue;
+    }
+  }
+
+  const finalCodes = extractResultCodes(lastError);
+  throw createError(
+    `Transaction submission failed: ${finalCodes.join(', ') || lastError.message}`,
     400,
     'tx_submission_failed',
+>>>>>>> b06e47e (fix: refresh sequence before fee-bump attempts; enforce MAX_FEE_BUMP_ATTEMPTS; add tests for fee-bump retry paths)
   );
 }
 
@@ -226,8 +336,30 @@ async function submitWithFeeBumpRetry(transaction, options = {}) {
  * @returns {Promise<{ txHash: string, ledger: number, status: string, resultXdr: string }>}
  */
 async function submitFeeBumpTransaction(feeBumpTx) {
+  let lastError;
+
+  const submitContext = {
+    sourceAddress: options?.sourceAddress,
+    operations: options?.operations,
+    signers: options?.signers,
+    feeSourceSecret: options?.feeSourceSecret,
+    timeout: options?.timeout,
+    memo: options?.memo,
+    txType: options?.txType,
+  };
+
+  // First, attempt the normal submission flow (which may refresh once on tx_bad_seq)
   try {
-    const horizonResult = await server.submitTransaction(feeBumpTx);
+    const horizonResult = await submitHorizonTransaction(transaction, {
+      // allow submitHorizonTransaction to handle an internal one-time tx_bad_seq refresh
+      refreshSequenceAndRebuildOnce: async () => refreshAndRebuildTransaction({
+        sourceAddress: submitContext.sourceAddress,
+        operations: submitContext.operations,
+        signers: submitContext.signers,
+        memo: submitContext.memo,
+        timeout: submitContext.timeout,
+      }),
+    });
 
     return {
       txHash: horizonResult.hash,
@@ -237,102 +369,80 @@ async function submitFeeBumpTransaction(feeBumpTx) {
       _raw: horizonResult,
     };
   } catch (err) {
+    lastError = err;
+
     const resultCodes = extractResultCodes(err);
-    throw createError(
-      `Fee-bump submission failed: ${resultCodes.join(', ') || err.message}`,
-      400,
-      'tx_fee_bump_failed',
-    );
-  }
-}
+    const isStuck = STUCK_RESULT_CODES.some((code) => resultCodes.includes(code));
 
-/**
- * Explicitly submits a fee-bump for a previously submitted stuck transaction.
- *
- * @param {object} params
- * @param {string} params.innerTxXDR - The XDR of the original (stuck) transaction
- * @param {string} params.feeSourceSecret - Secret key of the account paying the fee
- * @param {string} [params.baseFee] - Base fee for the fee-bump (default: 2x current fee)
- * @returns {Promise<{ txHash: string, ledger: number, status: string, resultXdr: string }>}
- */
-async function submitFeeBump({ innerTxXDR, feeSourceSecret, baseFee }) {
-  if (!innerTxXDR) {
-    throw createError('innerTxXDR is required', 400, 'validation_error');
+    if (!isStuck) {
+      const resultCodes = extractResultCodes(lastError);
+      throw createError(
+        `Transaction submission failed: ${resultCodes.join(', ') || lastError.message}`,
+        400,
+        'tx_submission_failed',
+      );
+    }
   }
 
-  if (!feeSourceSecret) {
-    throw createError('feeSourceSecret is required', 400, 'validation_error');
+  // If we reach here the transaction is considered "stuck" and we'll attempt
+  // up to MAX_FEE_BUMP_ATTEMPTS fee-bump submissions. Before each fee-bump
+  // attempt we must refresh the sequence number and rebuild the inner tx.
+  for (let attempt = 1; attempt <= MAX_FEE_BUMP_ATTEMPTS; attempt++) {
+    try {
+      // Re-fetch sequence number and rebuild the inner transaction to avoid
+      // reusing an outdated sequence across attempts.
+      const rebuiltInner = await refreshAndRebuildTransaction({
+        sourceAddress: submitContext.sourceAddress,
+        operations: submitContext.operations,
+        signers: submitContext.signers,
+        memo: submitContext.memo,
+        timeout: submitContext.timeout,
+      });
+
+      if (rebuiltInner) {
+        transaction = rebuiltInner;
+      }
+
+      const feeSourceSecret = options.feeSourceSecret || getRequiredConfig('FEE_SOURCE_SECRET');
+      const feeSourceKeypair = Keypair.fromSecret(feeSourceSecret);
+
+      // Double the fee on each attempt: attempt=1 => *2, attempt=2 => *4, etc.
+      const baseFee = parseInt(transaction.fee, 10) || parseInt(BASE_FEE, 10);
+      const bumpedFee = String(baseFee * Math.pow(FEE_BUMP_MULTIPLIER, attempt));
+
+      const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
+        feeSourceKeypair,
+        bumpedFee,
+        transaction,
+        NETWORK_PASSPHRASE,
+      );
+      feeBumpTx.sign(feeSourceKeypair);
+
+      const feeBumpResult = await submitFeeBumpTransaction(feeBumpTx);
+      return feeBumpResult;
+    } catch (feeErr) {
+      lastError = feeErr;
+
+      const codes = extractResultCodes(feeErr);
+      const stillStuck = STUCK_RESULT_CODES.some((c) => codes.includes(c));
+
+      // If this attempt exhausted allowed attempts or error is not a stuck code,
+      // stop retrying and throw a typed error below.
+      if (attempt >= MAX_FEE_BUMP_ATTEMPTS || !stillStuck) {
+        break;
+      }
+
+      // Otherwise continue to next attempt (loop will refresh sequence again).
+      continue;
+    }
   }
 
-  const feeSourceKeypair = Keypair.fromSecret(feeSourceSecret);
-  const innerTx = TransactionBuilder.fromXDR(innerTxXDR, NETWORK_PASSPHRASE);
-
-  const effectiveBaseFee = baseFee || String(parseInt(BASE_FEE, 10) * FEE_BUMP_MULTIPLIER);
-
-  const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
-    feeSourceKeypair,
-    effectiveBaseFee,
-    innerTx,
-    NETWORK_PASSPHRASE,
+  const finalCodes = extractResultCodes(lastError);
+  throw createError(
+    `Transaction submission failed: ${finalCodes.join(', ') || lastError.message}`,
+    400,
+    'tx_submission_failed',
   );
-  feeBumpTx.sign(feeSourceKeypair);
-
-  return submitFeeBumpTransaction(feeBumpTx);
-}
-
-// ---------------------------------------------------------------------------
-// Result parsing and DB storage
-// ---------------------------------------------------------------------------
-
-/**
- * Extracts Horizon result codes from a submission error.
- *
- * @param {Error} err
- * @returns {string[]}
- */
-function extractResultCodes(err) {
-  try {
-    const extras = err?.response?.data?.extras;
-    if (!extras) return [];
-
-    const codes = extras.result_codes || {};
-    const allCodes = [];
-
-    if (Array.isArray(codes.transaction)) allCodes.push(...codes.transaction);
-    if (Array.isArray(codes.operations)) allCodes.push(...codes.operations);
-
-    // Some Horizon variants may return a flat transaction error code.
-    if (typeof extras.result_code === 'string') allCodes.push(extras.result_code);
-
-    return allCodes;
-  } catch {
-    return [];
-  }
-}
-
-function extractHorizonResponseBody(err) {
-  try {
-    return err?.response?.data ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function isHorizonTimeout(err) {
-  const msg = `${err?.message || ''}`.toLowerCase();
-  const code = `${err?.code || ''}`.toLowerCase();
-
-  return (
-    msg.includes('timeout') ||
-    msg.includes('timed out') ||
-    code.includes('etimedout') ||
-    code.includes('timeout')
-  );
-}
-
-function isInsufficientBalance(err) {
-  const codes = extractResultCodes(err);
-  return codes.some((c) => c === 'insufficient_balance' || c === 'tx_insufficient_balance');
 }
 
 function findPrimaryHorizonCode(err) {
