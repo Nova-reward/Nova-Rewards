@@ -174,6 +174,10 @@ function DashboardContent() {
   );
 }
 
+export async function getServerSideProps() {
+  return { props: {} };
+}
+
 export default function Dashboard() {
   return (
     <ErrorBoundary>
