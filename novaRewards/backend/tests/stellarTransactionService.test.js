@@ -477,6 +477,126 @@ describe('stellarTransactionService — submit', () => {
     expect(result.txHash).toBe('abc');
     expect(result.status).toBe('submitted');
   });
+
+  it('submits a fee-bump when initial tx is stuck and fee-bump succeeds', async () => {
+    const sourceKp = Keypair.random();
+    const destKp = Keypair.random();
+
+    // loadAccount called for initial build, then for tx_bad_seq refresh, then for fee-bump rebuild
+    server.loadAccount
+      .mockResolvedValueOnce(mockAccount(sourceKp.publicKey(), '111'))
+      .mockResolvedValueOnce(mockAccount(sourceKp.publicKey(), '222'))
+      .mockResolvedValueOnce(mockAccount(sourceKp.publicKey(), '333'));
+
+    const badSeqErr = new Error('tx_bad_seq');
+    badSeqErr.response = { data: { extras: { result_codes: { transaction: ['tx_bad_seq'] } } } };
+
+    const insufficientFeeErr = new Error('tx_insufficient_fee');
+    insufficientFeeErr.response = { data: { extras: { result_codes: { transaction: ['tx_insufficient_fee'] } } } };
+
+    // Sequence: initial submit -> tx_bad_seq, retry -> tx_insufficient_fee, then fee-bump -> success
+    server.submitTransaction
+      .mockRejectedValueOnce(badSeqErr)
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockResolvedValueOnce({ hash: 'bumpSuccess', ledger: 123, result_xdr: 'ZZZZ==' });
+
+    recordTransaction.mockResolvedValue({ id: 5 });
+
+    const result = await stellarTxService.submit({
+      sourceAddress: sourceKp.publicKey(),
+      operations: [
+        Operation.payment({
+          destination: destKp.publicKey(),
+          asset: Asset.native(),
+          amount: '7',
+        }),
+      ],
+      signers: [sourceKp],
+      options: {},
+    });
+
+    expect(result.txHash).toBe('bumpSuccess');
+    // loadAccount called for initial build, refresh, and fee-bump rebuild
+    expect(server.loadAccount).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects with typed error after exhausting MAX_FEE_BUMP_ATTEMPTS', async () => {
+    const sourceKp = Keypair.random();
+
+    server.loadAccount
+      .mockResolvedValueOnce(mockAccount(sourceKp.publicKey(), '111'))
+      .mockResolvedValueOnce(mockAccount(sourceKp.publicKey(), '222'));
+
+    const badSeqErr = new Error('tx_bad_seq');
+    badSeqErr.response = { data: { extras: { result_codes: { transaction: ['tx_bad_seq'] } } } };
+
+    const insufficientFeeErr = new Error('tx_insufficient_fee');
+    insufficientFeeErr.response = { data: { extras: { result_codes: { transaction: ['tx_insufficient_fee'] } } } };
+
+    // initial -> tx_bad_seq, retry -> tx_insufficient_fee, then three fee-bump attempts all fail
+    server.submitTransaction
+      .mockRejectedValueOnce(badSeqErr)
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockRejectedValueOnce(insufficientFeeErr);
+
+    await expect(
+      stellarTxService.submit({
+        sourceAddress: sourceKp.publicKey(),
+        operations: [
+          Operation.payment({
+            destination: Keypair.random().publicKey(),
+            asset: Asset.native(),
+            amount: '3',
+          }),
+        ],
+        signers: [sourceKp],
+        options: {},
+      }),
+    ).rejects.toMatchObject({ code: 'tx_submission_failed', status: 400 });
+  });
+
+  it('doubles fee on each fee-bump attempt (FEE_BUMP_MULTIPLIER = 2)', async () => {
+    const sourceKp = Keypair.random();
+
+    server.loadAccount.mockResolvedValue(mockAccount(sourceKp.publicKey(), '111'));
+
+    const insufficientFeeErr = new Error('tx_insufficient_fee');
+    insufficientFeeErr.response = { data: { extras: { result_codes: { transaction: ['tx_insufficient_fee'] } } } };
+
+    // initial submit fails, first fee-bump fails, second fee-bump succeeds
+    server.submitTransaction
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockResolvedValueOnce({ hash: 'bumpOk', ledger: 77, result_xdr: 'FFFF==' });
+
+    const spy = jest.spyOn(TransactionBuilder, 'buildFeeBumpTransaction');
+
+    const result = await stellarTxService.submit({
+      sourceAddress: sourceKp.publicKey(),
+      operations: [
+        Operation.payment({
+          destination: Keypair.random().publicKey(),
+          asset: Asset.native(),
+          amount: '4',
+        }),
+      ],
+      signers: [sourceKp],
+      options: {},
+    });
+
+    expect(result.txHash).toBe('bumpOk');
+    // Two fee-bump attempts => spy called twice
+    expect(spy).toHaveBeenCalledTimes(2);
+
+    const firstFee = parseInt(spy.mock.calls[0][1], 10);
+    const secondFee = parseInt(spy.mock.calls[1][1], 10);
+
+    expect(secondFee).toBe(firstFee * 2);
+
+    spy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------
