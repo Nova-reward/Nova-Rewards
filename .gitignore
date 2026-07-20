@@ -1,8 +1,48 @@
 node_modules/
 coverage/
 novaRewards/backend/coverage/
+
+# Environment files
 .env
 .env.local
+.env.*.local
+.env.production
+.env.staging
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build output
 dist/
 build/
+.next/
+out/
+
+# Rust / Cargo build artifacts
+target/
+**/*.wasm
+
+# IDE
+.idea/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Sentry
+.sentryclirc
+sentry.properties
+*.sentry-*
+
+# Terraform
+infra/terraform.tfvars
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfplan
+
+# Soroban test snapshots
+contracts/**/test_snapshots/

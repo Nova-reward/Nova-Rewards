@@ -1,6 +1,6 @@
 // Feature: Rate Limiter middleware
-// Validates: Requirements #187
-// Asserts 429 + Retry-After on (n+1)th request for both global and auth limiters.
+// Validates: Requirements #187, Issue #861
+// Asserts 429 + Retry-After on (n+1)th request for all limiters.
 
 const request = require('supertest');
 const express = require('express');
@@ -10,7 +10,7 @@ const express = require('express');
 // We override the store with the in-memory default by NOT passing a store,
 // which is what express-rate-limit uses when no store is provided.
 // ---------------------------------------------------------------------------
-function buildApp({ globalMax, authMax }) {
+function buildApp({ globalMax, authMax, loginMax, refreshMax }) {
   const rateLimit = require('express-rate-limit');
 
   const globalLimiter = rateLimit({
@@ -35,14 +35,39 @@ function buildApp({ globalMax, authMax }) {
     },
   });
 
+  const loginLimiterInstance = loginMax != null ? rateLimit({
+    windowMs: 900_000, // 15 minutes
+    max: loginMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+      res.setHeader('Retry-After', '900');
+      res.status(429).json({ success: false, error: 'too_many_requests' });
+    },
+  }) : null;
+
+  const refreshLimiterInstance = refreshMax != null ? rateLimit({
+    windowMs: 900_000, // 15 minutes
+    max: refreshMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+      res.setHeader('Retry-After', '900');
+      res.status(429).json({ success: false, error: 'too_many_requests' });
+    },
+  }) : null;
+
   const app = express();
   app.use(globalLimiter);
+  if (loginLimiterInstance) app.use('/api/auth/login', loginLimiterInstance);
+  if (refreshLimiterInstance) app.use('/api/auth/refresh', refreshLimiterInstance);
   app.use('/api/auth/login', authLimiter);
   app.use('/api/auth/forgot-password', authLimiter);
 
   app.get('/api/health', (req, res) => res.json({ ok: true }));
   app.post('/api/auth/login', (req, res) => res.json({ ok: true }));
   app.post('/api/auth/forgot-password', (req, res) => res.json({ ok: true }));
+  app.post('/api/auth/refresh', (req, res) => res.json({ ok: true }));
 
   return app;
 }
@@ -144,6 +169,106 @@ describe('Auth rate limiter (5 req / 60 s)', () => {
       await request(app).post('/api/auth/login');
     }
     // Non-auth route should still be reachable (global limit not hit)
+    const res = await request(app).get('/api/health');
+    expect(res.status).toBe(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Login limiter — 10 req / 15 min per IP (Issue #861)
+// ---------------------------------------------------------------------------
+describe('Login rate limiter (10 req / 15 min per IP)', () => {
+  const LOGIN_MAX = 3; // small cap for speed
+  let app;
+
+  beforeEach(() => {
+    jest.resetModules();
+    app = buildApp({ globalMax: 100, authMax: 100, loginMax: LOGIN_MAX });
+  });
+
+  test('allows exactly LOGIN_MAX requests to /api/auth/login', async () => {
+    for (let i = 0; i < LOGIN_MAX; i++) {
+      const res = await request(app).post('/api/auth/login');
+      expect(res.status).toBe(200);
+    }
+  });
+
+  test('returns 429 on (LOGIN_MAX+1)th request to /api/auth/login', async () => {
+    for (let i = 0; i < LOGIN_MAX; i++) {
+      await request(app).post('/api/auth/login');
+    }
+    const res = await request(app).post('/api/auth/login');
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe('too_many_requests');
+    expect(res.body.success).toBe(false);
+  });
+
+  test('login 429 includes Retry-After header set to 15-minute window', async () => {
+    for (let i = 0; i <= LOGIN_MAX; i++) {
+      await request(app).post('/api/auth/login');
+    }
+    const res = await request(app).post('/api/auth/login');
+    expect(res.headers['retry-after']).toBe('900');
+  });
+
+  test('login limiter does not affect /api/auth/refresh', async () => {
+    for (let i = 0; i < LOGIN_MAX + 2; i++) {
+      await request(app).post('/api/auth/login');
+    }
+    const res = await request(app).post('/api/auth/refresh');
+    expect(res.status).toBe(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Refresh limiter — 30 req / 15 min per IP (Issue #861)
+// ---------------------------------------------------------------------------
+describe('Token refresh rate limiter (30 req / 15 min per IP)', () => {
+  const REFRESH_MAX = 3; // small cap for speed
+  let app;
+
+  beforeEach(() => {
+    jest.resetModules();
+    app = buildApp({ globalMax: 100, authMax: 100, refreshMax: REFRESH_MAX });
+  });
+
+  test('allows exactly REFRESH_MAX requests to /api/auth/refresh', async () => {
+    for (let i = 0; i < REFRESH_MAX; i++) {
+      const res = await request(app).post('/api/auth/refresh');
+      expect(res.status).toBe(200);
+    }
+  });
+
+  test('returns 429 on (REFRESH_MAX+1)th request to /api/auth/refresh', async () => {
+    for (let i = 0; i < REFRESH_MAX; i++) {
+      await request(app).post('/api/auth/refresh');
+    }
+    const res = await request(app).post('/api/auth/refresh');
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe('too_many_requests');
+    expect(res.body.success).toBe(false);
+  });
+
+  test('refresh 429 includes Retry-After header set to 15-minute window', async () => {
+    for (let i = 0; i <= REFRESH_MAX; i++) {
+      await request(app).post('/api/auth/refresh');
+    }
+    const res = await request(app).post('/api/auth/refresh');
+    expect(res.headers['retry-after']).toBe('900');
+  });
+
+  test('refresh limiter does not affect /api/auth/login', async () => {
+    for (let i = 0; i < REFRESH_MAX + 2; i++) {
+      await request(app).post('/api/auth/refresh');
+    }
+    const res = await request(app).post('/api/auth/login');
+    expect(res.status).toBe(200);
+  });
+
+  test('refresh limiter does not affect non-auth routes', async () => {
+    for (let i = 0; i < REFRESH_MAX + 2; i++) {
+      await request(app).post('/api/auth/refresh');
+    }
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
   });

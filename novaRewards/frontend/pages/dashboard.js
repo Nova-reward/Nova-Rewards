@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "../context/WalletContext";
-import DashboardLayout from "../components/DashboardLayout";
 import TrustlineButton from "../components/TrustlineButton";
 import TransferForm from "../components/TransferForm";
 import RedeemForm from "../components/RedeemForm";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
+import Navbar from "../components/Navbar";
 import { truncateAddress } from "../lib/truncateAddress";
 
 /**
@@ -47,8 +47,25 @@ function DashboardContent() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="dashboard-content">
+    <>
+      <nav className="nav">
+        <span className="nav-brand">⭐ NovaRewards</span>
+        <div className="nav-links">
+          <span style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
+            {shortKey}
+          </span>
+          <a href="/monitoring" style={{ fontSize: "0.9rem" }}>Monitoring</a>
+          <button
+            className="btn btn-secondary"
+            onClick={disconnect}
+            style={{ padding: "0.4rem 1rem" }}
+          >
+            Disconnect
+          </button>
+        </div>
+      </nav>
+
+      <div className="container">
         {loading ? (
           <LoadingSkeleton />
         ) : (
@@ -152,7 +169,7 @@ function DashboardContent() {
           </>
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 }
 

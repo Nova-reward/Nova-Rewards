@@ -1,4 +1,6 @@
-const { query } = require('./index');
+'use strict';
+
+const { query, pool } = require('./index');
 
 /**
  * Records a contract event for audit logging.
@@ -27,6 +29,69 @@ async function recordContractEvent({
     [contractId, eventType, JSON.stringify(eventData), transactionHash, ledgerSequence]
   );
   return result.rows[0];
+}
+
+/**
+ * Atomically records a contract event AND advances the Horizon cursor in a
+ * single PostgreSQL transaction.
+ *
+ * Why this matters: if the process crashes after the event INSERT but before
+ * the cursor UPDATE (or vice versa), we end up with either a lost event or a
+ * double-replay.  Wrapping both writes in one BEGIN/COMMIT block ensures
+ * they either both commit or both roll back — giving us exactly-once
+ * semantics on crash-restart.
+ *
+ * Isolation level: READ COMMITTED (PostgreSQL default) is sufficient here
+ * because both writes target different rows/tables and there is no
+ * read-modify-write on the event row itself.
+ *
+ * @param {object} params
+ * @param {string} params.contractId
+ * @param {string} params.eventType
+ * @param {object} params.eventData
+ * @param {string} [params.transactionHash]
+ * @param {number} [params.ledgerSequence]
+ * @param {string} params.cursor - The Horizon paging_token to persist
+ * @returns {Promise<object>} The inserted contract_event row
+ */
+async function recordEventAndUpdateCursor({
+  contractId,
+  eventType,
+  eventData,
+  transactionHash,
+  ledgerSequence,
+  cursor,
+}) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Insert the event row
+    const { rows } = await client.query(
+      `INSERT INTO contract_events
+         (contract_id, event_type, event_data, transaction_hash, ledger_sequence)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [contractId, eventType, JSON.stringify(eventData), transactionHash, ledgerSequence]
+    );
+
+    // 2. Advance the cursor atomically in the same transaction
+    await client.query(
+      `INSERT INTO contract_event_cursors (contract_id, cursor, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (contract_id) DO UPDATE
+         SET cursor = EXCLUDED.cursor, updated_at = NOW()`,
+      [contractId, cursor]
+    );
+
+    await client.query('COMMIT');
+    return rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -154,11 +219,46 @@ async function getContractEventById(eventId) {
   return result.rows[0] || null;
 }
 
+/**
+ * Gets the last persisted Horizon cursor for a contract stream.
+ * @param {string} contractId
+ * @returns {Promise<string|null>}
+ */
+async function getStreamCursor(contractId) {
+  const result = await query(
+    `SELECT cursor FROM contract_event_cursors WHERE contract_id = $1`,
+    [contractId]
+  );
+  return result.rows[0]?.cursor || null;
+}
+
+/**
+ * Upserts the Horizon cursor for a contract stream.
+ * Prefer recordEventAndUpdateCursor() when also inserting an event so that
+ * both writes are atomic.
+ *
+ * @param {string} contractId
+ * @param {string} cursor
+ * @returns {Promise<void>}
+ */
+async function saveStreamCursor(contractId, cursor) {
+  await query(
+    `INSERT INTO contract_event_cursors (contract_id, cursor, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (contract_id) DO UPDATE
+       SET cursor = EXCLUDED.cursor, updated_at = NOW()`,
+    [contractId, cursor]
+  );
+}
+
 module.exports = {
   recordContractEvent,
+  recordEventAndUpdateCursor,
   markEventProcessed,
   markEventFailed,
   getPendingEvents,
   getContractEvents,
   getContractEventById,
+  getStreamCursor,
+  saveStreamCursor,
 };

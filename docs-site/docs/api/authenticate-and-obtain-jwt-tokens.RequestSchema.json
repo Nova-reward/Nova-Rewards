@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["email","password"],"properties":{"email":{"type":"string","format":"email","example":"alice@example.com"},"password":{"type":"string","example":"S3cur3P@ss!"}}}}}}}

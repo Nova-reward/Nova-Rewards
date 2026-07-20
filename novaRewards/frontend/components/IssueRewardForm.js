@@ -1,7 +1,7 @@
-"use client";
-import { useState } from "react";
-import { StrKey } from "stellar-sdk";
-import api from "../lib/api";
+'use client';
+import { useState } from 'react';
+import { StrKey } from 'stellar-sdk';
+import api from '../lib/api';
 import TransactionLink from './TransactionLink';
 
 /**

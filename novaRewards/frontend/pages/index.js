@@ -1,6 +1,7 @@
 import { useWallet } from '../context/WalletContext';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
+import Navbar from '../components/Navbar';
 
 export default function Home() {
   const { publicKey, connect, loading, error, freighterInstalled, disconnect } = useWallet();
@@ -21,6 +22,7 @@ export default function Home() {
         <span className="nav-brand">⭐ NovaRewards</span>
         <div className="nav-links">
           <a href="/merchant">Merchant Portal</a>
+          <a href="/monitoring">Monitoring</a>
           {publicKey && (
             <button
               className="btn btn-secondary"

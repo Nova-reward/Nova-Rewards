@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "start": "node dist/main",
+    "start:dev": "nest start --watch",
+    "build": "nest build",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "generate-env": "ts-node scripts/generate-env-example.ts"
+  }
+}

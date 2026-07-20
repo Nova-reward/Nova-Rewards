@@ -8,11 +8,38 @@
     "frontend",
     "blockchain"
   ],
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@bull-board/api": "^8.1.2",
+    "@bull-board/express": "^8.1.2",
+    "eslint": "^8.57.0"
+  },
   "scripts": {
-    "test": "npm test -w backend",
+    "test": "npm test -w backend && npm test -w frontend",
+    "test:backend": "npm test -w backend",
+    "test:frontend": "npm test -w frontend",
+    "lint": "npm run lint -w backend && npm run lint -w frontend",
+    "lint:fix": "npm run lint:fix -w backend && npm run lint:fix -w frontend",
+    "format": "npm run format -w frontend",
+    "format:check": "npm run format:check -w frontend",
+    "build": "npm run build -w frontend",
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
     "migrate": "node database/migrate.js",
-    "reset-testnet": "node scripts/reset-testnet.js"
+
+    "deploy": "node deploy/deploy.js",
+    "deploy:testnet": "node deploy/deploy.js --network testnet",
+    "deploy:mainnet": "node deploy/deploy.js --network mainnet",
+    "deploy:dry-run": "node deploy/deploy.js --dry-run",
+
+    "verify": "node deploy/verify.js",
+    "verify:testnet": "node deploy/verify.js --network testnet",
+    "verify:mainnet": "node deploy/verify.js --network mainnet",
+
+    "rollback": "node deploy/rollback.js",
+    "rollback:testnet": "node deploy/rollback.js --network testnet",
+    "rollback:mainnet": "node deploy/rollback.js --network mainnet",
+
+    "init-contract": "node deploy/init-contract.js"
   }
 }

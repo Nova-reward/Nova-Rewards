@@ -1,4 +1,6 @@
 const { query } = require('../db/index');
+const { DEFAULT_DAILY_BONUS_POINTS } = require('../config/constants');
+const logger = require('../lib/logger');
 
 /**
  * Finds users who logged in during the previous calendar day (UTC)
@@ -11,7 +13,7 @@ const { query } = require('../db/index');
  * @returns {Promise<{ credited: number, failed: number }>}
  */
 async function runDailyLoginBonus(now = new Date()) {
-  const bonusPoints = Number(process.env.DAILY_BONUS_POINTS) || 10;
+  const bonusPoints = Number(process.env.DAILY_BONUS_POINTS) || DEFAULT_DAILY_BONUS_POINTS;
 
   // Midnight UTC today and yesterday
   const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -42,12 +44,12 @@ async function runDailyLoginBonus(now = new Date()) {
       );
       credited++;
     } catch (err) {
-      console.error(`[dailyLoginBonus] failed for user ${user.id}:`, err.message);
+      logger.error('[dailyLoginBonus] failed for user', { userId: user.id, error: err.message });
       failed++;
     }
   }
 
-  console.log(`[dailyLoginBonus] credited=${credited} failed=${failed}`);
+  logger.info('[dailyLoginBonus] run complete', { credited, failed });
   return { credited, failed };
 }
 
@@ -68,7 +70,7 @@ function startDailyLoginBonusJob() {
       scheduleNext(); // reschedule for the following midnight
     }, msUntilMidnight);
 
-    console.log(`[dailyLoginBonus] next run in ${Math.round(msUntilMidnight / 1000)}s`);
+    logger.info('[dailyLoginBonus] scheduled', { nextRunInSec: Math.round(msUntilMidnight / 1000) });
   }
 
   scheduleNext();

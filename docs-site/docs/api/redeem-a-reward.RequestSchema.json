@@ -1,0 +1,1 @@
+{"title":"Body","body":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["userId","rewardId"],"properties":{"userId":{"type":"integer","example":42},"rewardId":{"type":"integer","example":12}}}}}}}
