@@ -14,7 +14,7 @@ import {
   CardTitle,
   CardContent,
   CardFooter,
-} from '../../components/ui/Card';
+} from '../components/ui/Card';
 
 describe('Card snapshots', () => {
   it('renders bare Card', () => {

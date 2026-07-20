@@ -36,7 +36,7 @@ jest.mock('recharts', () => {
 });
 
 // ── Theme mock ─────────────────────────────────────────────────────────────────
-jest.mock('../../components/analytics/useChartTheme', () => ({
+jest.mock('../components/analytics/useChartTheme', () => ({
   useChartTheme: () => ({
     text: '#64748b',
     grid: '#e2e8f0',
@@ -47,13 +47,13 @@ jest.mock('../../components/analytics/useChartTheme', () => ({
 }));
 
 // ── ChartEmptyState mock ───────────────────────────────────────────────────────
-jest.mock('../../components/charts/ChartEmptyState', () =>
+jest.mock('../components/charts/ChartEmptyState', () =>
   function ChartEmptyState({ type, message }) {
     return <div data-testid={`empty-${type}`}>{message}</div>;
   }
 );
 
-import RewardsLineChart from '../../components/charts/RewardsLineChart';
+import RewardsLineChart from '../components/charts/RewardsLineChart';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 const DATA = [

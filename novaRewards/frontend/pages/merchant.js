@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
-import CampaignForm from "../components/CampaignForm";
-import IssueRewardForm from "../components/IssueRewardForm";
+import dynamic from "next/dynamic";
+
+const CampaignForm = dynamic(() => import("../components/CampaignForm"), {
+  loading: () => <p style={{ color: "#94a3b8" }}>Loading...</p>,
+});
+const IssueRewardForm = dynamic(() => import("../components/IssueRewardForm"), {
+  loading: () => <p style={{ color: "#94a3b8" }}>Loading...</p>,
+});
 import Navbar from "../components/Navbar";
 import api from "../lib/api";
 

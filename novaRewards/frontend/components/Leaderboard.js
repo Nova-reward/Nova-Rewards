@@ -141,6 +141,8 @@ export default function Leaderboard() {
                             borderRadius: '50%',
                             objectFit: 'cover'
                           }}
+                          loading="lazy"
+                          decoding="async"
                         />
                       )}
                       <div>

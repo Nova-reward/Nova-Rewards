@@ -157,7 +157,7 @@ export default function TokenTransferForm({ onSuccess }) {
    * Step 1: Client-side validation, then show confirmation modal.
    */
   const onSubmitToConfirmation = useCallback(
-    async (data: TransferFormData) => {
+    async (data) => {
       const balanceError = getBalanceError();
       if (balanceError) {
         addToast(balanceError, 'error');
