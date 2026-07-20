@@ -1,0 +1,4 @@
+License report for frontend
+==========================
+└─ UNLICENSED: 1
+

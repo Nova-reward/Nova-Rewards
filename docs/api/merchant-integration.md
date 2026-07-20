@@ -552,6 +552,122 @@ Every webhook POST has this shape:
 
 The `x-nova-signature` header contains the HMAC-SHA256 hex digest of the raw request body, signed with your webhook secret.
 
+### Idempotency and deduplication
+
+Every webhook delivery includes a stable `x-nova-delivery-id` header containing a UUID. This ID is unique per delivery attempt and persists across retries for the same event. Use this header to deduplicate webhook processing on your end and prevent double-crediting users when retries occur.
+
+**How it works:**
+
+1. Nova generates a UUID when creating a delivery attempt and stores it in the `webhook_deliveries` table.
+2. The same `delivery_id` is reused for all retries of that delivery (exponential backoff: 1m, 5m, 30m, 2h, 8h).
+3. The `delivery_id` is included in the HMAC signature, so tampering with either the ID or the payload invalidates the signature.
+4. Your endpoint should record processed `delivery_id` values and reject duplicates.
+
+**Node.js example with deduplication:**
+
+```javascript
+const crypto = require('crypto');
+const express = require('express');
+const app = express();
+
+// Use raw-body middleware to access unparsed bytes
+app.use('/webhooks/nova', express.raw({ type: 'application/json' }));
+
+// In-memory store for processed delivery IDs (use Redis/DB in production)
+const processedDeliveries = new Set();
+
+function verifyNovaSignature(rawBody, signatureHeader, secret, deliveryId) {
+  const timestamp = rawBody.toString().match(/\{"timestamp":"([^"]+)"}/)?.[1];
+  if (!timestamp) return false;
+
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}.${deliveryId}.${rawBody}`)
+    .digest('hex');
+
+  const provided = signatureHeader.replace(/^sha256=/, '');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(expected, 'hex'),
+    Buffer.from(provided, 'hex')
+  );
+}
+
+app.post('/webhooks/nova', (req, res) => {
+  const signature   = req.headers['x-nova-signature'];
+  const timestamp   = req.headers['x-nova-timestamp'];
+  const deliveryId  = req.headers['x-nova-delivery-id'];
+  const secret      = process.env.NOVA_WEBHOOK_SECRET;
+
+  if (!signature || !timestamp || !deliveryId) {
+    return res.status(401).json({ error: 'Missing required headers' });
+  }
+
+  // Check for duplicate delivery
+  if (processedDeliveries.has(deliveryId)) {
+    console.log(`Duplicate delivery ${deliveryId} — ignoring`);
+    return res.status(200).json({ received: true, duplicate: true });
+  }
+
+  // Verify signature (includes delivery_id in signed payload)
+  if (!verifyNovaSignature(req.body, signature, secret, deliveryId)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  // Record this delivery as processed
+  processedDeliveries.add(deliveryId);
+
+  // Optional: Clean up old entries to prevent memory growth
+  // In production, use a TTL cache like Redis with EXPIRE
+  if (processedDeliveries.size > 10000) {
+    const iterator = processedDeliveries.values();
+    for (let i = 0; i < 1000; i++) {
+      iterator.next().value && processedDeliveries.delete(iterator.next().value);
+    }
+  }
+
+  const event = JSON.parse(req.body.toString());
+
+  switch (event.type) {
+    case 'reward.issued':
+      // event.data: { reward_id, user_id, campaign_id, nova_amount, tx_hash, status }
+      console.log(`Reward ${event.data.reward_id}: ${event.data.nova_amount} NOVA → user ${event.data.user_id}`);
+      // Process reward (e.g., update user balance, send notification)
+      // This will only execute once per delivery_id
+      break;
+
+    case 'campaign.expired':
+      // event.data: { campaign_id, name, total_distributed }
+      console.log(`Campaign ${event.data.campaign_id} ("${event.data.name}") expired`);
+      break;
+
+    case 'campaign.balance_low':
+      // event.data: { campaign_id, balance_remaining, threshold_percent }
+      console.warn(`Campaign ${event.data.campaign_id} balance low: ${event.data.balance_remaining} NOVA remaining`);
+      break;
+
+    case 'redemption.completed':
+      // event.data: { redemption_id, user_id, campaign_id, nova_amount, redeemed_at }
+      console.log(`Redemption ${event.data.redemption_id}: user ${event.data.user_id} redeemed ${event.data.nova_amount} NOVA`);
+      break;
+
+    default:
+      // Unknown event type — acknowledge and ignore to stay forward-compatible
+      break;
+  }
+
+  // Respond 200 quickly. Nova retries on non-2xx responses.
+  res.status(200).json({ received: true });
+});
+```
+
+**Important notes:**
+
+- Always verify the `x-nova-delivery-id` header exists before processing.
+- Store processed delivery IDs in a persistent store (Redis, database) with a TTL of at least 24 hours to cover the full retry window (8 hours for the final retry).
+- The signature is computed as `HMAC-SHA256(secret, `${timestamp}.${deliveryId}.${rawBody}`)`, so changing any of these values invalidates the signature.
+- If your endpoint is unavailable for more than 8 hours, deliveries may be retried with the same `delivery_id` after the retry window resets. Design your deduplication store accordingly.
+
 ### Verify the signature
 
 **Always verify the signature before processing a webhook.** Skipping this check allows anyone to send fake events to your endpoint.

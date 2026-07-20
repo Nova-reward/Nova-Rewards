@@ -22,10 +22,15 @@ export const useAuthStore = create(
           set({ user, token, isAuthenticated: true }, false, 'auth/login'),
 
         /**
-         * Clears all auth data from state and persistence.
+         * Clears all auth data from state and persistence atomically.
+         * Ensures no stale token residue remains after logout.
          */
-        logout: () => 
-          set({ user: null, token: null, isAuthenticated: false }, false, 'auth/logout'),
+        logout: () => {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('nova-auth-storage');
+          }
+          return set({ user: null, token: null, isAuthenticated: false }, false, 'auth/logout');
+        },
 
         /**
          * Updates user profile data.

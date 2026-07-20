@@ -65,8 +65,6 @@ const transferSchema = z.object({
     .transform((val) => String(Number(val))), // Normalize to prevent edge cases
 });
 
-type TransferFormData = z.infer<typeof transferSchema>;
-
 /**
  * TokenTransferForm — Send NOVA tokens to another Stellar wallet
  *

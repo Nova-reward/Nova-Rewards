@@ -1,5 +1,5 @@
 'use strict';
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 
 const { sendEmail } = require('./emailService');
 const { getConfig } = require('./configService');

@@ -7,10 +7,10 @@ export const Header: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/80">
+    <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/80">\n  <a href="#main-content" className="sr-only focus-visible:not-sr-only focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">Skip to main content</a>
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
-        <Link href="/" className="text-xl font-bold text-green-600 dark:text-green-400">
+        <Link href="/" className="text-xl font-bold text-primary-600 dark:text-primary-400">
           Nova Rewards
         </Link>
 
@@ -37,8 +37,10 @@ export const Header: React.FC = () => {
             </>
           ) : (
             <button
+              type="button"
+              aria-label="Sign out"
               onClick={() => {/* logout logic */}}
-              className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400"
+              className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               Sign Out
             </button>

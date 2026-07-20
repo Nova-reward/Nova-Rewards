@@ -8,8 +8,8 @@
 const TEST_KEY = 'a'.repeat(64);
 
 // Mock the pg query so we can inspect what gets written to the DB
-const mockQuery = jest.fn();
-jest.mock('../db/index', () => ({ query: mockQuery }));
+const mockQuery = vi.fn();
+vi.mock('../db/index', () => ({ query: mockQuery }));
 
 // Provide a real encryption key
 process.env.FIELD_ENCRYPTION_KEY = TEST_KEY;
@@ -22,11 +22,20 @@ const {
   getDueRetries,
 } = require('../db/webhookRepository');
 
+const {
+  signPayload,
+  verifySignature,
+  SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
+  DELIVERY_ID_HEADER,
+} = require('../services/webhookService');
+
 const PLAINTEXT_SECRET = 'abc123plaintextsecret';
 
 describe('webhookRepository — field-level encryption', () => {
   beforeEach(() => {
     mockQuery.mockReset();
+    vi.clearAllMocks();
   });
 
   test('createWebhook stores an encrypted secret, not plaintext', async () => {
@@ -40,6 +49,19 @@ describe('webhookRepository — field-level encryption', () => {
     expect(storedSecret).not.toBe(PLAINTEXT_SECRET);
     expect(isEncrypted(storedSecret)).toBe(true);
     expect(decrypt(storedSecret)).toBe(PLAINTEXT_SECRET);
+  });
+
+  test('createDelivery generates a UUID delivery_id', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: 1, webhook_id: 1, event_type: 'reward.issued', payload: '{}', delivery_id: '123e4567-e89b-12d3-a456-426614174000' }],
+    });
+
+    const delivery = await createDelivery({ webhookId: 1, eventType: 'reward.issued', payload: {} });
+    expect(delivery.delivery_id).toBe('123e4567-e89b-12d3-a456-426614174000');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO webhook_deliveries'),
+      expect.arrayContaining([expect.any(String)]) // delivery_id should be a UUID string
+    );
   });
 
   test('getWebhookById decrypts the secret on read', async () => {
@@ -87,5 +109,24 @@ describe('webhookRepository — field-level encryption', () => {
     const { getWebhooksByMerchant } = require('../db/webhookRepository');
     const webhooks = await getWebhooksByMerchant(1);
     expect(webhooks[0].secret).toBeUndefined();
+  });
+
+  test('verifySignature rejects a replayed request with the same delivery ID but tampered payload', () => {
+    const secret     = 'whsec_0123456789abcdef0123456789abcdef0123456789abcdef';
+    const deliveryId = '123e4567-e89b-12d3-a456-426614174000';
+    const timestamp  = String(Date.now());
+    const rawBody    = JSON.stringify({ event: 'reward.issued', data: { reward_id: 1 } });
+    const signature  = signPayload(secret, timestamp, deliveryId, rawBody);
+
+    // Original request should verify
+    expect(verifySignature(secret, signature, timestamp, deliveryId, rawBody)).toBe(true);
+
+    // Tampered payload with the same delivery ID should fail
+    const tamperedBody = JSON.stringify({ event: 'reward.issued', data: { reward_id: 2 } });
+    expect(verifySignature(secret, signature, timestamp, deliveryId, tamperedBody)).toBe(false);
+
+    // Tampered delivery ID with the same payload should fail
+    const tamperedDeliveryId = '123e4567-e89b-12d3-a456-426614174001';
+    expect(verifySignature(secret, signature, timestamp, tamperedDeliveryId, rawBody)).toBe(false);
   });
 });

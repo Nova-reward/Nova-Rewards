@@ -5,9 +5,15 @@ const createJestConfig = nextJest({
 });
 
 const customJestConfig = {
+  setupFiles: ['<rootDir>/jest.env-setup.js'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  testEnvironment: 'jsdom',
-  testMatch: ['<rootDir>/__tests__/**/*.test.js', '<rootDir>/components/**/*.test.jsx'],
+  testEnvironment: 'jest-environment-jsdom',
+  testMatch: [
+    '<rootDir>/__tests__/**/*.test.{js,ts,tsx}',
+    '<rootDir>/components/**/*.test.{jsx,tsx}',
+    '<rootDir>/lib/**/*.test.{js,ts,tsx}',
+  ],
+  moduleFileExtensions: ['ts', 'tsx', 'jsx', 'js', 'json'],
   collectCoverageFrom: [
     'components/**/*.{js,jsx,ts,tsx}',
     'app/**/*.{js,jsx,ts,tsx}',
@@ -29,36 +35,6 @@ const customJestConfig = {
       outputDirectory: 'coverage',
       outputName: 'junit.xml',
     }],
-  ],
-  projects: [
-    {
-      displayName: 'unit',
-      testEnvironment: 'jest-environment-jsdom',
-      testMatch: ['<rootDir>/__tests__/**/*.test.js', '<rootDir>/components/**/*.test.jsx'],
-      setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-      moduleFileExtensions: ['jsx', 'js', 'ts', 'tsx', 'json'],
-      transform: {
-        '^.+\\.(js|jsx|ts|tsx)$': ['@swc/jest', {
-          jsc: {
-            parser: { syntax: 'ecmascript', jsx: true },
-            transform: { react: { runtime: 'automatic' } },
-          },
-        }],
-      },
-    },
-    {
-      displayName: 'pact',
-      testEnvironment: 'node',
-      testMatch: ['<rootDir>/pact/**/*.pact.test.js'],
-      transform: {
-        '^.+\\.(js|jsx)$': ['@swc/jest', {
-          jsc: {
-            parser: { syntax: 'ecmascript', jsx: true },
-            transform: { react: { runtime: 'automatic' } },
-          },
-        }],
-      },
-    },
   ],
 };
 

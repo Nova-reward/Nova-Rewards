@@ -1,68 +1,111 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+/**
+ * Playwright Configuration for Nova Rewards E2E Tests
+ * 
+ * Supports both desktop and mobile testing
+ * Can run against local dev server or staging environment
+ * 
+ * Environment variables:
+ *   - CI: Set to true in CI/CD pipeline
+ *   - BASE_URL: Override base URL (default: http://localhost:3000)
+ *   - STAGING_URL: When set, tests run against this URL instead of starting a local server
+ *   - TESTNET_MODE: Set to true to test against testnet
+ */
+
+const stagingUrl = process.env.STAGING_URL;
+const baseURL = stagingUrl || process.env.BASE_URL || 'http://localhost:3000';
+const isCI = !!process.env.CI;
+const isTestnet = !!process.env.TESTNET_MODE;
+const useRemote = !!(stagingUrl || isTestnet);
+
 module.exports = defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
-  retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? 'github' : 'html',
+  
+  // Run tests sequentially for reward issuance (state-dependent tests)
+  fullyParallel: false,
+  
+  // Allow one retry in CI to handle flaky startup timing
+  retries: isCI ? 1 : 0,
+  
+  // Set test timeout to 60s for slow testnet interactions
+  timeout: 60_000,
+  
+  // Expect timeout for assertions
+  expect: {
+    timeout: 10_000,
+  },
+  
+  // HTML reporter with screenshots
+  reporter: [
+    ['html', { outputFolder: './playwright-report' }],
+    ['junit', { outputFile: './test-results/junit.xml' }],
+    ['json', { outputFile: './test-results/results.json' }],
+  ],
+  
+  // Global test settings
   use: {
-    baseURL: process.env.STAGING_URL || 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
-  expect: {
-    toHaveScreenshot: {
-      // Allow up to 2% pixel difference to tolerate minor anti-aliasing changes
-      maxDiffPixelRatio: 0.02,
-      // Wait for fonts and images to fully load before snapshotting
-      animations: 'disabled',
-    },
-  },
+  
+  // Browser projects
+  // Names must match the project names used in the CI matrix: chromium, firefox, webkit
   projects: [
-    // Desktop browsers
+    // Chromium (Desktop Chrome) — primary project used by e2e.yml CI matrix
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-      testIgnore: '**/accessibility.spec.js',
+      use: {
+        ...devices['Desktop Chrome'],
+      },
     },
+
+    // Firefox (Desktop Firefox) — used by e2e.yml CI matrix
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-      testIgnore: '**/accessibility.spec.js',
+      use: {
+        ...devices['Desktop Firefox'],
+      },
     },
+
+    // WebKit (Desktop Safari) — used by e2e.yml CI matrix
     {
       name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-      testIgnore: '**/accessibility.spec.js',
+      use: {
+        ...devices['Desktop Safari'],
+      },
     },
-    // Mobile browsers
+
+    // Legacy alias kept for ci.yml (--project=chromium-desktop)
     {
-      name: 'chromium-mobile',
-      use: { ...devices['Pixel 5'] },
-      testMatch: '**/mobile-overflow.spec.js',
+      name: 'chromium-desktop',
+      use: {
+        ...devices['Desktop Chrome'],
+      },
     },
-    {
-      name: 'webkit-mobile',
-      use: { ...devices['iPhone 12'] },
-      testMatch: '**/mobile-overflow.spec.js',
-    },
-    // Accessibility — axe-core scans on Chromium only (Issue #956)
-    {
-      name: 'accessibility',
-      use: { ...devices['Desktop Chrome'] },
-      testMatch: '**/accessibility.spec.js',
-    },
+
+    // Mobile — optional (out of scope per issue #1145)
+    // Uncomment to enable:
+    // {
+    //   name: 'chromium-mobile',
+    //   use: { ...devices['Pixel 5'] },
+    // },
   ],
-  // Skip local webServer when running against staging in CI
-  ...(process.env.STAGING_URL
-    ? {}
+  
+  // Web server configuration — only started when not hitting a remote URL
+  webServer: useRemote
+    ? undefined // Don't start a local server when testing remote staging/testnet
     : {
-        webServer: {
-          command: 'npm run dev',
-          url: 'http://localhost:3000',
-          reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
-        },
-      }),
+        command: 'npm run dev',
+        url: 'http://localhost:3000',
+        reuseExistingServer: !isCI,
+        timeout: 120_000,
+      },
+  
+  // Global setup/teardown hooks (only for testnet flows)
+  globalSetup: isTestnet ? require.resolve('./e2e/global-setup.js') : undefined,
+  globalTeardown: isTestnet ? require.resolve('./e2e/global-teardown.js') : undefined,
 });

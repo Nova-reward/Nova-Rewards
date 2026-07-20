@@ -129,7 +129,13 @@ export default function MerchantDashboard() {
 
   return (
     <>
-      <Navbar />
+      <nav className="nav">
+        <span className="nav-brand">⭐ NovaRewards</span>
+        <div className="nav-links">
+          <a href="/">Customer Portal</a>
+          <a href="/monitoring">Monitoring</a>
+        </div>
+      </nav>
 
       <div className="container">
         <h1

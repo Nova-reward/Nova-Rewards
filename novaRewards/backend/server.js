@@ -6,32 +6,9 @@ validateEnv();
 
 require("./db/index");
 
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const { connectRedis } = require("./lib/redis");
-const {
-  startLeaderboardCacheWarmer,
-} = require("./jobs/leaderboardCacheWarmer");
-const { startDailyLoginBonusJob } = require("./jobs/dailyLoginBonus");
-const { startWebhookRetryJob } = require("./jobs/webhookRetry");
-const { globalLimiter, authLimiter, loginLimiter, refreshLimiter } = require("./middleware/rateLimiter");
-const {
-  metricsMiddleware,
-  registry,
-} = require("./middleware/metricsMiddleware");
-const { tracingMiddleware } = require("./middleware/tracingMiddleware");
-const { globalErrorHandler, notFoundHandler } = require('./middleware/errorHandler');
-const {
-  legacyApi,
-  migrationGuideHandler,
-  versionedApi,
-  versionsHandler,
-} = require('./middleware/apiVersioning');
-
-// Import health check module
-const healthCheck = require('./health/healthCheck');
-const { getPoolStatus } = require('./db');
+const express = require('express');
+const cors = require('cors');
+const { requestMonitor, errorMonitor } = require('./monitoring/requestMonitor');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -83,37 +60,35 @@ app.use("/api/v1/auth/refresh",      refreshLimiter);
 app.use("/api/auth/forgot-password", authLimiter);
 app.use("/api/v1/auth/forgot-password", authLimiter);
 
-// Health / readiness checks — /health, /health/detailed, /ready
-app.use('/health', require('./routes/health'));
-app.get('/ready', require('./routes/health').readyHandler);
+// ── Monitoring middleware ──────────────────────────────────────────────────────
+// Mount before all routes so every request is timed and counted.
+app.use(requestMonitor);
 
-// Custom enhanced health check endpoint (overrides the basic one)
-app.get('/health/detailed', async (req, res) => {
-  try {
-    const health = await healthCheck.runAllChecks();
-    const statusCode = health.status === 'ok' ? 200 : 503;
-    res.status(statusCode).json(health);
-  } catch (error) {
-    logger.error('[Health] Error running checks:', error);
-    res.status(503).json({
-      status: 'degraded',
-      error: error.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ success: true, data: { status: 'ok' } });
 });
 
-// Pool status endpoint (for monitoring)
-app.get('/pool-status', (req, res) => {
-  try {
-    const status = getPoolStatus();
-    res.json({
-      ...status,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to get pool status' });
-  }
+// Routes (wired in as they are implemented)
+app.use('/api/merchants', require('./routes/merchants'));
+app.use('/api/campaigns', require('./routes/campaigns'));
+app.use('/api/rewards', require('./routes/rewards'));
+app.use('/api/transactions', require('./routes/transactions'));
+app.use('/api/trustline', require('./routes/trustline'));
+app.use('/api/monitoring', require('./routes/monitoring'));
+
+// ── Error monitoring middleware ───────────────────────────────────────────────
+// Captures errors into the events logger before the global handler responds.
+app.use(errorMonitor);
+
+// Global error handler — returns consistent error envelope
+app.use((err, req, res, _next) => {
+  console.error(err);
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.code || 'internal_error',
+    message: err.message || 'An unexpected error occurred',
+  });
 });
 
 // Prometheus metrics scrape endpoint

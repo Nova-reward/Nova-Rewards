@@ -19,6 +19,13 @@ const { validateLoginDto } = require('../dtos/loginDto');
 const { checkIpBlock, recordFailedLogin } = require('../middleware/abuseDetection');
 const { logAudit } = require('../db/auditLogRepository');
 const { authenticateUser } = require('../middleware/authenticateUser');
+const { encrypt, decrypt } = require('../lib/encryption');
+const { sendEmail } = require('../services/emailService');
+const {
+  createResetToken,
+  validateResetToken,
+  consumeResetToken,
+} = require('../services/passwordResetService');
 
 const SALT_ROUNDS = 12;
 
@@ -71,8 +78,9 @@ router.post('/register', async (req, res, next) => {
     }
 
     const { email, password, firstName, lastName } = req.body;
-    const normalizedEmail = email.trim().toLowerCase();
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const normalizedEmail  = email.trim().toLowerCase();
+    const encryptedEmail   = encrypt(normalizedEmail);
+    const passwordHash     = await bcrypt.hash(password, SALT_ROUNDS);
 
     let result;
     try {
@@ -342,6 +350,196 @@ router.post('/logout-all', authenticateUser, async (req, res, next) => {
     ]);
 
     return res.json({ success: true, message: 'All sessions revoked' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+/**
+ * @openapi
+ * /auth/forgot-password:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Request a password reset email
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Reset email sent (always 200 to prevent user enumeration).
+ */
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'validation_error',
+        message: 'email is required',
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const encryptedEmail  = encrypt(normalizedEmail);
+
+    const result = await query(
+      `SELECT id, email FROM users WHERE email = $1 AND is_deleted = FALSE`,
+      [encryptedEmail]
+    );
+
+    // Always respond 200 — prevents user enumeration
+    if (!result.rows[0]) {
+      return res.json({ success: true, message: 'If that email is registered you will receive a reset link shortly.' });
+    }
+
+    const user     = result.rows[0];
+    const rawToken = await createResetToken(user.id);
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/reset-password?token=${rawToken}`;
+
+    await sendEmail({
+      to:        normalizedEmail,
+      subject:   'Reset your Nova Rewards password',
+      emailType: 'password_reset',
+      html: `
+        <p>You requested a password reset for your Nova Rewards account.</p>
+        <p><a href="${resetUrl}">Click here to reset your password</a></p>
+        <p>This link expires in 1 hour. If you did not request a reset, ignore this email.</p>
+        <p>Reset link: ${resetUrl}</p>
+      `,
+    });
+
+    logAudit({
+      entityType: 'auth',
+      entityId:   user.id,
+      action:     'forgot_password',
+      performedBy: user.id,
+      actorType:  'user',
+      details:    { email: normalizedEmail },
+      source:     'POST /api/auth/forgot-password',
+    }).catch((err) => logger.error('[audit] forgot_password:', err.message));
+
+    return res.json({ success: true, message: 'If that email is registered you will receive a reset link shortly.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /auth/reset-password:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Reset password using a token from the reset email
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, newPassword]
+ *             properties:
+ *               token:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Password updated.
+ *       400:
+ *         description: Validation error or invalid/expired token.
+ */
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'token is required' });
+    }
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ success: false, error: 'validation_error', message: 'newPassword must be at least 8 characters' });
+    }
+
+    let tokenId, userId;
+    try {
+      ({ tokenId, userId } = await validateResetToken(token));
+    } catch (err) {
+      if (err.code === 'invalid_token') {
+        return res.status(400).json({ success: false, error: 'invalid_token', message: 'Invalid or expired reset token' });
+      }
+      throw err;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [passwordHash, userId]
+    );
+
+    await consumeResetToken(tokenId);
+
+    // Revoke all active sessions so stolen credentials cannot be used
+    await revokeAllDbRefreshTokens(userId);
+
+    logAudit({
+      entityType: 'auth',
+      entityId:   userId,
+      action:     'password_reset',
+      performedBy: userId,
+      actorType:  'user',
+      details:    {},
+      source:     'POST /api/auth/reset-password',
+    }).catch((err) => logger.error('[audit] password_reset:', err.message));
+
+    return res.json({ success: true, message: 'Password updated. Please log in with your new password.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @openapi
+ * /auth/sessions:
+ *   get:
+ *     tags: [Auth]
+ *     summary: List active refresh token sessions for the authenticated user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of active sessions.
+ */
+router.get('/sessions', authenticateUser, async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT id, created_at, expires_at, revoked_at
+       FROM refresh_tokens
+       WHERE user_id = $1
+         AND revoked_at IS NULL
+         AND expires_at > NOW()
+       ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+
+    return res.json({
+      success: true,
+      data: result.rows.map((row) => ({
+        id:         row.id,
+        created_at: row.created_at,
+        expires_at: row.expires_at,
+        active:     true,
+      })),
+    });
   } catch (err) {
     next(err);
   }

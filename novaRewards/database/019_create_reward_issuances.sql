@@ -20,3 +20,8 @@ CREATE TABLE IF NOT EXISTS reward_issuances (
 CREATE INDEX IF NOT EXISTS idx_reward_issuances_campaign ON reward_issuances(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_reward_issuances_user     ON reward_issuances(user_id);
 CREATE INDEX IF NOT EXISTS idx_reward_issuances_status   ON reward_issuances(status);
+
+-- Explicit named unique index on idempotency_key for startup-time assertion
+-- and to guarantee deduplication at the DB level (backs the UNIQUE column constraint).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_reward_issuances_idempotency_key
+  ON reward_issuances(idempotency_key);

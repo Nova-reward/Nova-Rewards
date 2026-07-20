@@ -1,32 +1,44 @@
 'use strict';
-const logger = require('./lib/logger');
 
 /**
  * Horizon SSE event streaming and indexing service.
  * Connects to Horizon's /events endpoint, parses XDR contract events,
  * persists them to PostgreSQL, and manages cursor + reconnection.
  * Requirements: #657
+ *
+ * Crash-safety guarantee
+ * ----------------------
+ * Every event insert and its matching cursor advance are wrapped in a single
+ * PostgreSQL transaction via recordEventAndUpdateCursor().  If the process
+ * crashes at any point during handleRawEvent() the database rolls back to the
+ * last committed cursor, so on restart Horizon replays from exactly that
+ * cursor.  contract_events has a unique index on (contract_id, transaction_hash,
+ * ledger_sequence) so any replayed duplicate is rejected with a PG unique-
+ * violation, caught here, and silently skipped — giving exactly-once delivery.
  */
 
 const { StellarSdk } = require('stellar-sdk');
 const {
-  recordContractEvent,
+  recordEventAndUpdateCursor,
   markEventProcessed,
   markEventFailed,
   getPendingEvents,
   getStreamCursor,
-  saveStreamCursor,
 } = require('../db/contractEventRepository');
 const {
   HORIZON_URL,
   NOVA_TOKEN_CONTRACT_ID,
   REWARD_POOL_CONTRACT_ID,
 } = require('./configService');
+const {
+  HORIZON_RECONNECT_BASE_MS,
+  HORIZON_RECONNECT_MAX_MS,
+  CONTRACT_EVENT_RETRY_LOOP_INTERVAL_MS,
+  CONTRACT_EVENT_MAX_RETRIES,
+  CONTRACT_EVENT_BATCH_SIZE,
+} = require('../config/constants');
 
-const RECONNECT_BASE_MS = 1_000;
-const RECONNECT_MAX_MS = 60_000;
-const RETRY_LOOP_INTERVAL_MS = 60_000;
-const MAX_RETRIES = 5;
+const logger = require('./lib/logger');
 
 /** Active EventSource handles keyed by contractId */
 const activeStreams = new Map();
@@ -52,7 +64,7 @@ async function connectStream(contractId, attempt) {
   // Load persisted cursor so we resume from where we left off
   const cursor = (await getStreamCursor(contractId)) || 'now';
 
-  const url = `${HORIZON_URL}/events?contract_id=${contractId}&cursor=${cursor}&limit=200`;
+  const url = `${HORIZON_URL}/events?contract_id=${contractId}&cursor=${cursor}&limit=${CONTRACT_EVENT_BATCH_SIZE}`;
 
   logger.info(`[horizon-stream] Connecting to ${url} (attempt ${attempt})`);
 
@@ -72,10 +84,6 @@ async function connectStream(contractId, attempt) {
     try {
       const raw = JSON.parse(event.data);
       await handleRawEvent(contractId, raw);
-      // Persist cursor after each successful event
-      if (raw.paging_token) {
-        await saveStreamCursor(contractId, raw.paging_token);
-      }
     } catch (err) {
       logger.error(`[horizon-stream] Error handling event for ${contractId}:`, err.message);
     }
@@ -103,9 +111,6 @@ function createNodeSSE(url, contractId, attempt) {
       onmessage: async (record) => {
         try {
           await handleRawEvent(contractId, record);
-          if (record.paging_token) {
-            await saveStreamCursor(contractId, record.paging_token);
-          }
         } catch (err) {
           logger.error(`[horizon-stream] Error handling record for ${contractId}:`, err.message);
         }
@@ -128,13 +133,29 @@ function createNodeSSE(url, contractId, attempt) {
  * @param {number} attempt
  */
 function scheduleReconnect(contractId, attempt) {
-  const delay = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
+  const delay = Math.min(HORIZON_RECONNECT_BASE_MS * 2 ** attempt, HORIZON_RECONNECT_MAX_MS);
   logger.info(`[horizon-stream] Reconnecting ${contractId} in ${delay}ms (attempt ${attempt})`);
   setTimeout(() => connectStream(contractId, attempt), delay);
 }
 
 /**
  * Parses a raw Horizon event record and stores it in the DB.
+ *
+ * The event INSERT and cursor UPDATE are performed inside a single PostgreSQL
+ * transaction (via recordEventAndUpdateCursor).  This ensures atomicity:
+ *
+ *   - If the INSERT succeeds but the process crashes before COMMIT  → both
+ *     writes are rolled back.  On restart Horizon replays from the previous
+ *     cursor and the event is re-inserted.
+ *
+ *   - If the COMMIT succeeds but the process crashes before the next event is
+ *     received  → on restart Horizon replays from the committed cursor, so no
+ *     event is lost or double-processed.
+ *
+ *   - Duplicate paging_tokens (replay after restart) are silently skipped via
+ *     a PG unique-constraint violation catch on (contract_id, transaction_hash,
+ *     ledger_sequence).
+ *
  * @param {string} contractId
  * @param {object} raw - raw record from Horizon SSE
  */
@@ -142,13 +163,31 @@ async function handleRawEvent(contractId, raw) {
   const eventType = extractEventType(raw);
   if (!eventType) return; // skip unknown event types
 
-  const recorded = await recordContractEvent({
-    contractId,
-    eventType,
-    eventData: raw,
-    transactionHash: raw.transaction_hash || raw.tx_hash,
-    ledgerSequence: raw.ledger || raw.ledger_sequence,
-  });
+  const cursor = raw.paging_token;
+
+  let recorded;
+  try {
+    // Atomically insert event + advance cursor in one transaction
+    recorded = await recordEventAndUpdateCursor({
+      contractId,
+      eventType,
+      eventData: raw,
+      transactionHash: raw.transaction_hash || raw.tx_hash,
+      ledgerSequence: raw.ledger || raw.ledger_sequence,
+      cursor: cursor || 'now',
+    });
+  } catch (err) {
+    // PG unique_violation (23505) means this event was already persisted on a
+    // previous run — skip it to honour exactly-once delivery.
+    if (err.code === '23505') {
+      logger.info(
+        `[horizon-stream] Duplicate event skipped — contract=${contractId} ` +
+        `tx=${raw.transaction_hash || raw.tx_hash} ledger=${raw.ledger || raw.ledger_sequence}`
+      );
+      return;
+    }
+    throw err;
+  }
 
   try {
     await dispatchEvent(contractId, eventType, raw, recorded.id);
@@ -340,12 +379,12 @@ async function handleStateEvent(contractId, eventType, event, eventId) {
 }
 
 /**
- * Retry loop: re-processes failed events up to MAX_RETRIES times.
+ * Retry loop: re-processes failed events up to CONTRACT_EVENT_MAX_RETRIES times.
  */
 function startRetryLoop() {
   setInterval(async () => {
     try {
-      const pending = await getPendingEvents(MAX_RETRIES);
+      const pending = await getPendingEvents(CONTRACT_EVENT_MAX_RETRIES);
       for (const ev of pending) {
         try {
           await dispatchEvent(ev.contract_id, ev.event_type, ev.event_data, ev.id);
@@ -357,7 +396,7 @@ function startRetryLoop() {
     } catch (err) {
       logger.error('[horizon-stream] Retry loop error:', err.message);
     }
-  }, RETRY_LOOP_INTERVAL_MS);
+  }, CONTRACT_EVENT_RETRY_LOOP_INTERVAL_MS);
 }
 
 /**
