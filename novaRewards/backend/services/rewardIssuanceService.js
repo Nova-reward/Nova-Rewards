@@ -20,6 +20,7 @@ const {
 } = require('../db/rewardIssuanceRepository');
 const { getActiveCampaign } = require('../db/campaignRepository');
 const { distributeRewards } = require('../../blockchain/sendRewards');
+const cacheService = require('./cacheService');
 
 // ---------------------------------------------------------------------------
 // Enqueue a reward issuance job
@@ -89,6 +90,10 @@ async function processRewardIssuance(job) {
   try {
     const { txHash } = await distributeRewards({ recipient: walletAddress, amount, campaignId });
     await markConfirmed(issuanceId, txHash);
+
+    // Invalidate balance cache for the beneficiary wallet
+    await cacheService.invalidateBalanceCache(walletAddress);
+
     return { confirmed: true, txHash };
   } catch (err) {
     // On the final attempt, mark as failed; otherwise let BullMQ retry

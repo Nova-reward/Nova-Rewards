@@ -9,6 +9,7 @@ const { slidingRewards } = require('../middleware/rateLimiter');
 const { enqueueRewardIssuance } = require('../services/rewardIssuanceService');
 const { checkRewardFarming, recordRewardClaim } = require('../middleware/abuseDetection');
 const { validateIssueReward, validateDistributeReward } = require('../dtos/middleware');
+const cacheService = require('../services/cacheService');
 
 /**
  * @openapi
@@ -182,6 +183,9 @@ router.post('/distribute', slidingRewards, authenticateMerchant, checkRewardFarm
     });
 
     await recordRewardClaim(recipientWallet, campaignId);
+
+    // Invalidate balance cache for the recipient
+    await cacheService.invalidateBalanceCache(recipientWallet);
 
     res.json({ success: true, txHash: result.txHash, transaction: result.tx });
   } catch (err) {
