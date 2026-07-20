@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { leaderboardService } from '../lib/leaderboardService';
 import { truncateAddress } from '../lib/truncateAddress';
+import { formatTokenAmount } from '../lib/formatting';
 
 export default function Leaderboard() {
   const { publicKey } = useWallet();
@@ -156,7 +157,7 @@ export default function Leaderboard() {
                     </div>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: '600', color: '#7c3aed' }}>
-                    {parseFloat(entry.totalPoints).toLocaleString()}
+                    {formatTokenAmount(entry.totalPoints)}
                   </td>
                 </tr>
               );

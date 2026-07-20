@@ -28,7 +28,7 @@
     "next": "^15.5.15",
     "next-i18next": "^14.0.3",
     "next-themes": "^0.4.6",
-    "react": "^19.2.7",
+    "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.52.0",
     "react-joyride": "^3.1.0",
@@ -41,8 +41,8 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.2.7",
     "@axe-core/playwright": "^4.9.1",
+    "@next/bundle-analyzer": "^16.2.7",
     "@playwright/test": "^1.61.1",
     "@storybook/addon-a11y": "^10.4.1",
     "@storybook/addon-essentials": "^8.1.0",

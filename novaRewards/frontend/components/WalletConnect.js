@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { truncateAddress } from '../lib/truncateAddress';
+import { formatTokenAmount } from '../lib/formatting';
 
 const WALLETS = [
   { id: 'freighter', label: 'Freighter', icon: '🔑', description: 'Browser extension' },
@@ -42,7 +43,7 @@ export default function WalletConnect() {
         <div style={{ flex: 1 }}>
           <p style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Connected Wallet</p>
           <p style={{ fontFamily: 'monospace', fontWeight: 600 }}>{truncateAddress(publicKey)}</p>
-          <p style={{ color: 'var(--accent)', fontWeight: 700 }}>{parseFloat(balance).toFixed(4)} NOVA</p>
+          <p style={{ color: 'var(--accent)', fontWeight: 700 }}>{formatTokenAmount(balance)} NOVA</p>
         </div>
         <button className="btn btn-secondary" onClick={handleDisconnect}>Disconnect</button>
       </div>

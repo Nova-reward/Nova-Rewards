@@ -4,6 +4,7 @@ import CampaignForm from "../components/CampaignForm";
 import IssueRewardForm from "../components/IssueRewardForm";
 import Navbar from "../components/Navbar";
 import api from "../lib/api";
+import { formatTokenAmount } from "../lib/formatting";
 
 function getCampaignStatus(c) {
   const now = new Date();
@@ -246,7 +247,7 @@ export default function MerchantDashboard() {
                       color: "#7c3aed",
                     }}
                   >
-                    {parseFloat(totals.totalDistributed).toFixed(2)}
+                    {formatTokenAmount(totals.totalDistributed)}
                   </p>
                   <p style={{ color: "#94a3b8", fontSize: "0.8rem" }}>NOVA</p>
                 </div>
@@ -261,7 +262,7 @@ export default function MerchantDashboard() {
                       color: "#34d399",
                     }}
                   >
-                    {parseFloat(totals.totalRedeemed).toFixed(2)}
+                    {formatTokenAmount(totals.totalRedeemed)}
                   </p>
                   <p style={{ color: "#94a3b8", fontSize: "0.8rem" }}>NOVA</p>
                 </div>

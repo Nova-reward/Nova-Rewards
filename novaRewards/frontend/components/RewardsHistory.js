@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTransactions } from '../lib/useApi';
 import DataTable from './DataTable';
+import { formatTokenAmount } from '../lib/formatting';
 
 const PAGE_SIZE = 25;
 const TRANSACTION_TYPES = ['all', 'issuance', 'redemption', 'transfer'];
@@ -63,7 +64,7 @@ const COLUMNS = [
     label: 'Amount',
     render: (v) => (
       <span className="font-semibold text-brand-purple">
-        {v != null ? `${parseFloat(v).toFixed(4)} NOVA` : '—'}
+        {v != null ? `${formatTokenAmount(v)} NOVA` : '—'}
       </span>
     ),
   },

@@ -19,6 +19,7 @@ import { useToast } from './Toast';
 import FormField from './ui/FormField';
 import TransactionLink from './TransactionLink';
 import TransferConfirmationModal from './TransferConfirmationModal';
+import { formatTokenAmount } from '../lib/formatting';
 
 // =====================================================================
 // Configuration
@@ -36,7 +37,7 @@ const NETWORK_NAME =
 
 // Base fee: 100 stroops per operation (standard Stellar network fee)
 const BASE_FEE_STROOPS = BASE_FEE; // 100 stroops
-const FEE_IN_NOVA = (BASE_FEE_STROOPS / 10_000_000).toFixed(7); // Convert stroops to NOVA
+const FEE_IN_NOVA = formatTokenAmount(BASE_FEE_STROOPS / 10_000_000); // Convert stroops to NOVA
 
 // =====================================================================
 // Validation Schema
@@ -143,7 +144,7 @@ export default function TokenTransferForm({ onSuccess }) {
     const numBalance = Number(senderBalance);
 
     if (numAmount > numBalance) {
-      return `Insufficient balance. Available: ${senderBalance} NOVA`;
+      return `Insufficient balance. Available: ${formatTokenAmount(senderBalance)} NOVA`;
     }
 
     return null;
@@ -401,14 +402,14 @@ export default function TokenTransferForm({ onSuccess }) {
             disabled={isLoading}
             error={insufficientBalance ? balanceError : errors.amount?.message}
             touched={!!errors.amount || insufficientBalance}
-            hint={`Available balance: ${senderBalance} NOVA | Network fee: ≈ ${FEE_IN_NOVA} NOVA`}
+            hint={`Available balance: ${formatTokenAmount(senderBalance)} NOVA | Network fee: ≈ ${FEE_IN_NOVA} NOVA`}
             {...register('amount')}
           />
 
           {/* Available Balance Info */}
           <div className="rounded-md bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
             <p>
-              <strong>Your Balance:</strong> {senderBalance} NOVA
+              <strong>Your Balance:</strong> {formatTokenAmount(senderBalance)} NOVA
             </p>
             <p className="text-xs opacity-75 mt-1">
               Estimated fee: {FEE_IN_NOVA} NOVA per operation

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../lib/api';
+import { formatTokenAmount } from '../lib/formatting';
 
 const POLL_INTERVAL = 15000;
 
@@ -96,8 +97,8 @@ export default function CampaignAnalytics({ merchantId, apiKey }) {
       {/* Metrics */}
       {analytics && (
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-          <Metric label="Total Distributed" value={analytics.totalDistributed != null ? `${parseFloat(analytics.totalDistributed).toFixed(2)} NOVA` : null} />
-          <Metric label="Total Redeemed" value={analytics.totalRedeemed != null ? `${parseFloat(analytics.totalRedeemed).toFixed(2)} NOVA` : null} />
+          <Metric label="Total Distributed" value={analytics.totalDistributed != null ? `${formatTokenAmount(analytics.totalDistributed)} NOVA` : null} />
+          <Metric label="Total Redeemed" value={analytics.totalRedeemed != null ? `${formatTokenAmount(analytics.totalRedeemed)} NOVA` : null} />
           <Metric label="Participants" value={analytics.participantCount ?? participants.length} />
           <Metric label="Transactions" value={analytics.transactionCount} />
           <Metric label="Redemption Rate" value={analytics.redemptionRate != null ? `${parseFloat(analytics.redemptionRate).toFixed(1)}%` : null} />
@@ -118,7 +119,7 @@ export default function CampaignAnalytics({ merchantId, apiKey }) {
             }} />
           </div>
           <p style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.4rem' }}>
-            {parseFloat(analytics.totalRedeemed).toFixed(2)} / {parseFloat(analytics.totalDistributed).toFixed(2)} NOVA redeemed
+            {formatTokenAmount(analytics.totalRedeemed)} / {formatTokenAmount(analytics.totalDistributed)} NOVA redeemed
           </p>
         </div>
       )}
@@ -155,8 +156,8 @@ export default function CampaignAnalytics({ merchantId, apiKey }) {
                     <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
                       {p.wallet_address ? `${p.wallet_address.slice(0, 8)}…${p.wallet_address.slice(-4)}` : p.email || '—'}
                     </td>
-                    <td style={{ color: 'var(--accent)', fontWeight: 600 }}>{parseFloat(p.earned || 0).toFixed(4)}</td>
-                    <td>{parseFloat(p.redeemed || 0).toFixed(4)}</td>
+                    <td style={{ color: 'var(--accent)', fontWeight: 600 }}>{formatTokenAmount(p.earned || 0)}</td>
+                    <td>{formatTokenAmount(p.redeemed || 0)}</td>
                     <td>{p.joined_at ? new Date(p.joined_at).toLocaleDateString() : '—'}</td>
                   </tr>
                 ))}
