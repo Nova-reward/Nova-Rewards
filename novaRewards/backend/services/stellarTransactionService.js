@@ -134,8 +134,21 @@ async function submit({ sourceAddress, operations, signers, options = {} }) {
 // ---------------------------------------------------------------------------
 
 /**
- * Submits a transaction, and if it's stuck (bad_seq, insufficient_fee, too_late),
+ * Submits a transaction, and if it's stuck (insufficient_fee, too_late),
  * retries with a fee-bump transaction up to MAX_FEE_BUMP_ATTEMPTS times.
+ *
+ * tx_bad_seq is handled separately inside submitHorizonTransaction (sequence
+ * refresh + rebuild once) and does NOT trigger the fee-bump path.
+ *
+ * Before each fee-bump attempt the source account sequence number is re-fetched
+ * from Horizon so that the rebuilt inner transaction carries a fresh sequence.
+ * This prevents infinite retries under high-load conditions where the account
+ * sequence advances between attempts.
+ *
+ * Fee doubling follows 2^(attempt+1) progression:
+ *   attempt 0 → baseFee * 2
+ *   attempt 1 → baseFee * 4
+ *   attempt 2 → baseFee * 8
  *
  * @param {import('stellar-sdk').Transaction} transaction
  * @param {object} options
@@ -158,61 +171,83 @@ async function submitWithFeeBumpRetry(transaction, options = {}) {
     txType: options?.txType,
   };
 
-  for (let attempt = 0; attempt <= MAX_FEE_BUMP_ATTEMPTS; attempt++) {
+  // Initial submission attempt (not a fee-bump attempt).
+  try {
+    const horizonResult = await submitHorizonTransaction(transaction, {
+      options,
+      didRefreshSequenceRetry,
+      refreshSequenceAndRebuildOnce: async () => {
+        if (didRefreshSequenceRetry) return null;
+        didRefreshSequenceRetry = true;
+        return refreshAndRebuildTransaction(submitContext);
+      },
+    });
+
+    return {
+      txHash: horizonResult.hash,
+      ledger: horizonResult.ledger,
+      status: 'submitted',
+      resultXdr: horizonResult.result_xdr,
+      _raw: horizonResult,
+    };
+  } catch (err) {
+    lastError = err;
+
+    const resultCodes = extractResultCodes(err);
+    // Also check err.code — submitHorizonTransaction re-throws Horizon errors
+    // as typed errors with .code set to the original Horizon result code.
+    const allCodes = resultCodes.length ? resultCodes : (err.code ? [err.code] : []);
+    // Only tx_insufficient_fee and tx_too_late trigger the fee-bump path.
+    // tx_bad_seq is already handled (rebuild once) inside submitHorizonTransaction.
+    const FEE_BUMP_CODES = STUCK_RESULT_CODES.filter((c) => c !== 'tx_bad_seq');
+    const isFeeBumpCandidate = FEE_BUMP_CODES.some((code) => allCodes.includes(code));
+
+    if (!isFeeBumpCandidate) {
+      // Not a fee-bump candidate — propagate immediately.
+      throw err;
+    }
+  }
+
+  // Fee-bump retry loop: exactly MAX_FEE_BUMP_ATTEMPTS iterations (0, 1, 2).
+  for (let attempt = 0; attempt < MAX_FEE_BUMP_ATTEMPTS; attempt++) {
     try {
-      const horizonResult = await submitHorizonTransaction(transaction, {
-        options,
-        didRefreshSequenceRetry,
-        refreshSequenceAndRebuildOnce: async () => {
-          if (didRefreshSequenceRetry) return null;
-          didRefreshSequenceRetry = true;
-          return refreshAndRebuildTransaction(submitContext);
-        },
-      });
-
-      return {
-        txHash: horizonResult.hash,
-        ledger: horizonResult.ledger,
-        status: 'submitted',
-        resultXdr: horizonResult.result_xdr,
-        _raw: horizonResult,
-      };
-    } catch (err) {
-      lastError = err;
-
-      const resultCodes = extractResultCodes(err);
-      const isStuck = STUCK_RESULT_CODES.some((code) => resultCodes.includes(code));
-
-      if (!isStuck || attempt >= MAX_FEE_BUMP_ATTEMPTS) {
-        break;
-      }
-
-      // Keep existing fee-bump retry behavior for stuck tx_insufficient_fee/tx_too_late.
       const feeSourceSecret =
         options.feeSourceSecret || getRequiredConfig('FEE_SOURCE_SECRET');
       const feeSourceKeypair = Keypair.fromSecret(feeSourceSecret);
-      const bumpedFee = String(
-        parseInt(transaction.fee, 10) * FEE_BUMP_MULTIPLIER * (attempt + 1),
-      );
+
+      // Re-fetch the sequence number before each fee-bump attempt so that the
+      // inner transaction carries a fresh sequence even if the account advanced
+      // between attempts.
+      const rebuiltInnerTx = await refreshAndRebuildTransaction(submitContext);
+      const innerTx = rebuiltInnerTx || transaction;
+
+      // Fee doubles on every attempt from the canonical base fee:
+      // attempt 0 -> BASE_FEE * 2, attempt 1 -> BASE_FEE * 4, attempt 2 -> BASE_FEE * 8
+      const baseFee = parseInt(BASE_FEE, 10);
+      const bumpedFee = String(baseFee * Math.pow(FEE_BUMP_MULTIPLIER, attempt + 1));
 
       const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
         feeSourceKeypair,
         bumpedFee,
-        transaction,
+        innerTx,
         NETWORK_PASSPHRASE,
       );
       feeBumpTx.sign(feeSourceKeypair);
 
       const feeBumpResult = await submitFeeBumpTransaction(feeBumpTx);
       return feeBumpResult;
+    } catch (err) {
+      lastError = err;
+      // Continue to next attempt unless this was the last one.
     }
   }
 
+  // All fee-bump attempts exhausted — throw a typed error.
   const resultCodes = extractResultCodes(lastError);
   throw createError(
-    `Transaction submission failed: ${resultCodes.join(', ') || lastError.message}`,
-    400,
-    'tx_submission_failed',
+    `Fee-bump retry exhausted after ${MAX_FEE_BUMP_ATTEMPTS} attempts: ${resultCodes.join(', ') || lastError.message}`,
+    503,
+    'fee_bump_exhausted',
   );
 }
 
