@@ -6,6 +6,7 @@ import { useWalletStore } from '../store/walletStore';
 import api from '../lib/api';
 import TransactionLink from './TransactionLink';
 import ConfirmationModal from './ConfirmationModal';
+import { formatTokenAmount } from '../lib/formatting';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -42,7 +43,7 @@ export default function RedeemForm({ onSuccess }) {
       return false;
     }
     if (numValue > Number(senderBalance)) {
-      setAmountError(`Insufficient balance. Available: ${senderBalance} NOVA`);
+      setAmountError(`Insufficient balance. Available: ${formatTokenAmount(senderBalance)} NOVA`);
       return false;
     }
     setAmountError('');

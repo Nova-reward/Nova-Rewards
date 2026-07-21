@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useWallet } from '../../context/WalletContext';
+import { formatTokenAmount } from '../../lib/formatting';
 
 export default function StakeForm({ balance, onStake, isLoading }) {
   const [amount, setAmount] = useState('');
@@ -74,7 +75,7 @@ export default function StakeForm({ balance, onStake, isLoading }) {
           </button>
         </div>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Available: {balance.toFixed(2)} NOVA
+          Available: {formatTokenAmount(balance)} NOVA
         </p>
         {error && (
           <p className="mt-2 text-sm text-red-600 dark:text-red-400">

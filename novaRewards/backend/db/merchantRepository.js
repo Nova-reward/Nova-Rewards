@@ -1,5 +1,10 @@
 'use strict';
-const { PrismaClient } = require('@prisma/client');
+let PrismaClient;
+try {
+  ({ PrismaClient } = require('@prisma/client'));
+} catch {
+  PrismaClient = class {};
+}
 const { encryptionMiddleware } = require('../lib/prismaEncryptionMiddleware');
 
 // In test environments Prisma v7 requires an adapter; skip real init.

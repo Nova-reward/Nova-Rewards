@@ -2,10 +2,11 @@
 
 import { SkeletonBlock } from '../Skeleton';
 import AnimatedCounter from '../ui/AnimatedCounter';
+import { formatTokenAmount } from '../../lib/formatting';
 
 const CARDS = [
-  { key: 'totalIssued',   label: 'Total Issued',   icon: '🎁', fmt: (v) => `${Math.round(v).toLocaleString()} NOVA` },
-  { key: 'totalRedeemed', label: 'Total Redeemed', icon: '✅', fmt: (v) => `${Math.round(v).toLocaleString()} NOVA` },
+  { key: 'totalIssued',   label: 'Total Issued',   icon: '🎁', fmt: (v) => `${formatTokenAmount(v)} NOVA` },
+  { key: 'totalRedeemed', label: 'Total Redeemed', icon: '✅', fmt: (v) => `${formatTokenAmount(v)} NOVA` },
   { key: 'activeUsers',   label: 'Active Users',   icon: '👥', fmt: (v) => Math.round(v).toLocaleString() },
   { key: 'campaignCount', label: 'Campaigns',      icon: '🚀', fmt: (v) => String(Math.round(v)) },
 ];

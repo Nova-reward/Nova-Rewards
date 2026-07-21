@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { formatTokenAmount } from '../lib/formatting';
 
 /**
  * VestingSchedule Component
@@ -78,19 +79,19 @@ export default function VestingSchedule({ userId }) {
       <div className="vesting-amounts">
         <div className="amount-box">
           <span className="amount-label">Total Tokens</span>
-          <span className="amount-value">{total.toLocaleString()}</span>
+          <span className="amount-value">{formatTokenAmount(total)}</span>
         </div>
         <div className="amount-box">
           <span className="amount-label">Vested</span>
-          <span className="amount-value vested">{vested.toLocaleString()}</span>
+          <span className="amount-value vested">{formatTokenAmount(vested)}</span>
         </div>
         <div className="amount-box">
           <span className="amount-label">Unvested</span>
-          <span className="amount-value unvested">{unvested.toLocaleString()}</span>
+          <span className="amount-value unvested">{formatTokenAmount(unvested)}</span>
         </div>
         <div className="amount-box">
           <span className="amount-label">Claimable</span>
-          <span className="amount-value claimable">{claimable.toLocaleString()}</span>
+          <span className="amount-value claimable">{formatTokenAmount(claimable)}</span>
         </div>
       </div>
 
@@ -125,7 +126,7 @@ export default function VestingSchedule({ userId }) {
                       {cliffDate.toLocaleDateString()} - {unlockDate.toLocaleDateString()}
                     </div>
                     <div className="timeline-amount">
-                      {item.amount.toLocaleString()} tokens
+                      {formatTokenAmount(item.amount)} tokens
                     </div>
                     {isPast && <span className="timeline-badge">Unlocked</span>}
                     {isCurrent && <span className="timeline-badge current">In Progress</span>}
@@ -146,7 +147,7 @@ export default function VestingSchedule({ userId }) {
           disabled={claiming || claimable <= 0}
           aria-label="Claim vested tokens"
         >
-          {claiming ? 'Claiming...' : `Claim ${claimable.toLocaleString()} Tokens`}
+          {claiming ? 'Claiming...' : `Claim ${formatTokenAmount(claimable)} Tokens`}
         </button>
         {claimable <= 0 && (
           <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.5rem' }}>

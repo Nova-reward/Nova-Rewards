@@ -1,9 +1,10 @@
 import AnimatedCounter from '../ui/AnimatedCounter';
+import { formatTokenAmount } from '../../lib/formatting';
 
 const fmtCompact = (v) => {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
   if (v >= 1_000) return `${(v / 1_000).toFixed(2)}K`;
-  return v.toFixed(2);
+  return formatTokenAmount(v);
 };
 
 export default function StakingStats({ apy, tvl, totalStakers, isLoading }) {
@@ -63,7 +64,7 @@ export default function StakingStats({ apy, tvl, totalStakers, isLoading }) {
           <div className="flex justify-between type-caption">
             <span className="text-neutral-600 dark:text-neutral-400">Exact:</span>
             <span className="font-mono font-semibold text-neutral-900 dark:text-white">
-              {tvl.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              {formatTokenAmount(tvl)}
             </span>
           </div>
         </div>
@@ -85,7 +86,7 @@ export default function StakingStats({ apy, tvl, totalStakers, isLoading }) {
           <div className="flex justify-between type-caption">
             <span className="text-neutral-600 dark:text-neutral-400">Avg. stake:</span>
             <span className="font-semibold text-neutral-900 dark:text-white">
-              {totalStakers > 0 ? fmtCompact(tvl / totalStakers) : '0'} NOVA
+              {totalStakers > 0 ? formatTokenAmount(tvl / totalStakers) : formatTokenAmount(0)} NOVA
             </span>
           </div>
         </div>
