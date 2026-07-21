@@ -10,6 +10,8 @@ const {
   softDeleteCampaign,
 } = require('../db/campaignRepository');
 const { log } = require('../monitoring/eventsLogger');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { validateCreateCampaign, validateUpdateCampaign, validateCampaignId } = require('../dtos/middleware');
 
 /**
  * Cache helpers with hit/miss metric tracking.

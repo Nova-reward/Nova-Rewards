@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const { Queue, Worker, QueueEvents } = require('bullmq');
 const bcrypt = require('bcryptjs');
 const { recordPointTransaction } = require('../db/pointTransactionRepository');

@@ -2,6 +2,7 @@
 
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const logger = require('../lib/logger');
+const cacheService = require('../services/cacheService');
 
 const BATCH_SIZE = 50;
 const MAX_RECIPIENT_RETRIES = 3;
@@ -65,6 +66,9 @@ async function processCampaignDistribution({ campaignId, recipients, defaultAmou
         try {
           const result = await transferWithRetry(recipient.walletAddress, amount, campaignId);
           succeeded.push(result);
+
+          // Invalidate balance cache for the recipient after successful distribution
+          await cacheService.invalidateBalanceCache(recipient.walletAddress);
         } catch (err) {
           logger.error('[Distribution] recipient permanently failed', {
             campaignId,

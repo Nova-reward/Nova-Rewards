@@ -366,8 +366,35 @@ impl RewardPoolContract {
     pub fn get_locked_until(env: Env) -> u64 {
         env.storage()
             .instance()
-            .get(&DataKey::LockedUntil)
-            .unwrap_or(0)
+            .set(&DataKey::Balance, &(balance - amount));
+
+        env.events().publish(
+            (symbol_short!("rwd_pool"), symbol_short!("withdrawn")),
+            (to, amount),
+        );
+
+        Ok(())
+    }
+
+    /// Updates the per-wallet daily withdrawal cap. Admin only.
+    ///
+    /// # Parameters
+    /// - `limit` – New daily cap in base units (must be > 0).
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"limit must be positive"` if `limit <= 0`.
+    pub fn set_daily_limit(env: Env, limit: i128) {
+        Self::admin(&env).require_auth();
+        assert!(limit > 0, "limit must be positive");
+        env.storage().instance().set(&DataKey::DailyLimit, &limit);
+    }
+
+    /// Returns the total funds currently held by the reward pool (internal accounting).
+    pub fn get_balance(env: Env) -> i128 {
+        env.storage().instance().get(&DataKey::Balance).unwrap_or(0)
     }
 
     /// Returns the current fee rate in basis points (0 = no fee).
