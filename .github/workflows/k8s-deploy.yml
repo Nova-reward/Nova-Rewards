@@ -43,7 +43,7 @@ jobs:
         uses: azure/setup-kubectl@v5
 
       - name: Set up Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@v5
 
       - name: Configure kubeconfig
         run: |
