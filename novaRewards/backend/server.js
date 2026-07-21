@@ -45,6 +45,10 @@ const corsOptions =
     ? { origin: process.env.ALLOWED_ORIGIN }
     : {};
 
+const { compressionMiddleware } = require('./middleware/compressionMiddleware');
+
+app.use(compressionMiddleware);
+
 app.use(cors(corsOptions));
 
 // Security headers (OWASP standards via Helmet)

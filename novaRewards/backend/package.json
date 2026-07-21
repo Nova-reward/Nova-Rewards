@@ -28,6 +28,7 @@
     "@elastic/elasticsearch": "^9.4.2",
     "@prisma/client": "^7.8.0",
     "bcryptjs": "^3.0.3",
+    "compression": "1.8.0",
     "bullmq": "^5.80.2",
     "class-validator": "^0.15.1",
     "cors": "^2.8.5",
