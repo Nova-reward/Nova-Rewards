@@ -9,6 +9,7 @@ const {
 } = require('../db/userRepository');
 const { recordPointTransaction } = require('../db/pointTransactionRepository');
 const { REFERRAL_BONUS_POINTS } = require('./configService');
+const cacheService = require('./cacheService');
 
 /**
  * Processes a referral bonus for a referred user.
@@ -67,6 +68,9 @@ async function processReferralBonus(referrerId, referredUserId) {
 
     // Mark the referral bonus as claimed
     await markReferralBonusClaimed(referredUserId);
+
+    // Invalidate balance cache for the referrer
+    await cacheService.invalidateUserBalance(referrerId);
 
     return {
       success: true,

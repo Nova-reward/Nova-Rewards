@@ -18,6 +18,7 @@ const { getRequiredConfig, getConfig } = require("./configService");
 const { getUserByWallet, createUser } = require("../db/userRepository");
 const { recordTransaction } = require("../db/transactionRepository");
 const { query } = require("../db/index");
+const cacheService = require("./cacheService");
 
 const HORIZON_URL = getRequiredConfig("HORIZON_URL");
 const NETWORK_PASSPHRASE =
@@ -202,6 +203,16 @@ class WalletService {
       // Record transaction in database
       if (metadata.recordInDb !== false) {
         await this.recordTransactionSubmission(result, metadata);
+      }
+
+      // Invalidate balance cache for source and destination wallets
+      const sourceWallet = metadata?.fromWallet || transaction.source;
+      const destWallet = metadata?.toWallet;
+      if (sourceWallet || destWallet) {
+        cacheService.invalidateBalanceCache(sourceWallet).catch(() => {});
+        if (destWallet && destWallet !== sourceWallet) {
+          cacheService.invalidateBalanceCache(destWallet).catch(() => {});
+        }
       }
 
       // Start transaction confirmation tracking
