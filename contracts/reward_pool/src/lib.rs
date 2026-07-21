@@ -286,6 +286,8 @@ impl RewardPoolContract {
             (symbol_short!("rwd_pool"), symbol_short!("withdrawn")),
             (to, amount),
         );
+
+        Ok(())
     }
 
     /// Updates the per-wallet daily withdrawal cap. Admin only.
