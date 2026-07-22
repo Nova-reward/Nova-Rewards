@@ -50,7 +50,7 @@
 require('dotenv').config();
 
 const { Pool }      = require('pg');
-const { loadKey, encryptWithKey, isEncrypted } = require('../backend/lib/encryption');
+const { loadKey, encryptWithKey, isEncrypted, tryDecryptWith } = require('../backend/lib/encryption');
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -134,35 +134,6 @@ function parseKeyHex(label, hex) {
     fatal(`${label} must be a 64-character hex string (32 bytes).`);
   }
   return Buffer.from(hex, 'hex');
-}
-
-// ---------------------------------------------------------------------------
-// Decryption helper
-// ---------------------------------------------------------------------------
-
-/**
- * Attempts to decrypt a base64 blob with the given key.
- * Returns the plaintext string on success, or null if the auth tag fails.
- *
- * @param {string} ciphertextBase64
- * @param {Buffer} key
- * @returns {string|null}
- */
-function tryDecryptWith(ciphertextBase64, key) {
-  const crypto = require('crypto');
-  const IV_BYTES  = 12;
-  const TAG_BYTES = 16;
-  try {
-    const blob       = Buffer.from(ciphertextBase64, 'base64');
-    const iv         = blob.subarray(0, IV_BYTES);
-    const authTag    = blob.subarray(IV_BYTES, IV_BYTES + TAG_BYTES);
-    const ciphertext = blob.subarray(IV_BYTES + TAG_BYTES);
-    const decipher   = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
-  } catch {
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------
