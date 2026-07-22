@@ -83,10 +83,13 @@ fn test_upgrade_v1_to_v2_migrate_and_verify() {
     });
     assert!(upgraded_event.is_some(), "upgraded event not emitted");
 
-    // Verify event data contains the correct hash and migration version
+    // Verify event data contains the correct hash and migration version.
+    // Payload is (schema_version, wasm_hash, migration_version) — see
+    // events::emit_upgraded and the schema table in utils/events.rs.
     let (_, _, data) = upgraded_event.unwrap();
-    let (emitted_hash, emitted_version): (BytesN<32>, u32) =
+    let (emitted_schema_version, emitted_hash, emitted_version): (u32, BytesN<32>, u32) =
         data.into_val(&env);
+    assert_eq!(emitted_schema_version, 1u32);
     assert_eq!(emitted_hash, v2_hash);
     assert_eq!(emitted_version, 1u32);
 }

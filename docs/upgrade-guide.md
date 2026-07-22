@@ -122,7 +122,7 @@ soroban contract invoke --network testnet --id <CONTRACT_ID> -- get_migrated_ver
 
 Confirm the `upgraded` event appears in the transaction record on the Stellar explorer.
 
-1. Invoke `get_migrated_version` and confirm it matches `CONTRACT_VERSION` in [`contracts/nova-rewards/src/lib.rs`](../contracts/nova-rewards/src/lib.rs).
+1. Invoke `get_migrated_version` and confirm it matches `get_migration_version` (both counters equal means the migration for this upgrade completed).
 2. Query representative balances with `get_balance` to confirm state survived the code swap.
 3. Re-run [`contracts/nova-rewards/tests/upgrade.rs`](../contracts/nova-rewards/tests/upgrade.rs).
 4. If the release touched swaps or staking, also run the swap and staking test suites.
