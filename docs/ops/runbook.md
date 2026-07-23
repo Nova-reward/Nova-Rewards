@@ -55,6 +55,56 @@ aws rds failover-db-cluster \
   --db-cluster-identifier <placeholder-db-cluster-id>
 ```
 
+### Database Migrations
+
+**⚠️ CRITICAL: Zero-Downtime Migration Requirements**
+
+All database migrations must follow zero-downtime patterns to avoid production outages. See the comprehensive guide: **[docs/ops/migration-guide.md](migration-guide.md)**
+
+**Pre-Migration Checklist:**
+- [ ] Run safety audit: `node database/migrate.js --audit`
+- [ ] Test on staging with production-like data volume
+- [ ] Verify rollback procedure works
+- [ ] Check current database load and active connections
+
+**Safe Migration Execution:**
+```bash
+# 1. Audit for unsafe patterns
+cd novaRewards/database
+node migrate.js --audit
+
+# 2. Check migration status  
+node migrate.js --status
+
+# 3. Apply migrations (will block if unsafe patterns detected)
+node migrate.js
+
+# 4. Force apply (only in emergency, NOT recommended)
+node migrate.js --force
+```
+
+**Critical Guidelines:**
+- ✅ Use `CREATE INDEX CONCURRENTLY` (never `CREATE INDEX`)
+- ✅ Use three-phase pattern for `ADD COLUMN NOT NULL`
+- ✅ Use new-column approach for `ALTER COLUMN TYPE` 
+- ❌ Never use `REINDEX` (use DROP + CREATE INDEX CONCURRENTLY)
+- ❌ Never use unbatched large UPDATEs
+
+**Emergency Migration Rollback:**
+```bash
+# Rollback the most recent migration
+node migrate.js --rollback
+
+# Check for blocking locks if issues persist
+psql $DATABASE_URL -c "SELECT * FROM pg_locks WHERE NOT granted;"
+```
+
+**Documentation References:**
+- **[Migration Guide](migration-guide.md)** - Complete zero-downtime migration procedures
+- **[PostgreSQL Lock Analysis](postgresql-lock-analysis.md)** - Detailed lock behavior explanation  
+- **[Migration Audit](migration-audit.md)** - Full audit results of existing migrations
+- **[Concurrent Index Guide](concurrent-index-conversion-guide.md)** - Index creation best practices
+
 ---
 
 ## Backup Strategy

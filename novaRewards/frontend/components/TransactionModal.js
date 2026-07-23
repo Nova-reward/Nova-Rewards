@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { useFocusTrap } from '../lib/focusTrap';
+import { formatTokenAmount } from '../lib/formatting';
 
 /**
  * TransactionModal — reusable modal for the full on-chain transaction flow.
@@ -69,13 +70,14 @@ export default function TransactionModal({
 /* ── Sub-steps ─────────────────────────────────────────────────────────── */
 
 function ConfirmStep({ action, amount, asset, feeEstimate, walletAddress, irreversible, onConfirm, onClose }) {
+  const formattedAmount = asset === 'NOVA' ? formatTokenAmount(amount) : amount;
   return (
     <>
       <h2 id="tx-modal-title" className="tx-modal-title">Confirm {action}</h2>
 
       <dl className="tx-modal-details">
         <div><dt>Action</dt><dd>{action}</dd></div>
-        {amount       && <div><dt>Amount</dt><dd>{amount} {asset}</dd></div>}
+        {amount       && <div><dt>Amount</dt><dd>{formattedAmount} {asset}</dd></div>}
         {feeEstimate  && <div><dt>Network fee</dt><dd>{feeEstimate}</dd></div>}
         {walletAddress && <div><dt>Wallet</dt><dd className="tx-modal-address">{walletAddress}</dd></div>}
       </dl>

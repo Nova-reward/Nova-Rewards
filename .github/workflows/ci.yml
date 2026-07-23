@@ -274,7 +274,7 @@ jobs:
           path: novaRewards/backend/coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: novaRewards/backend/coverage/lcov.info
           flags: backend
@@ -451,7 +451,7 @@ jobs:
             novaRewards/frontend/test-results/
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: novaRewards/frontend/coverage/lcov.info
           flags: frontend

@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { query } = require('../db/index');

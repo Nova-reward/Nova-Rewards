@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const { createNotification } = require('../db/notificationRepository');
 const { sendEmail } = require('./emailService');
 const { query } = require('../db/index');

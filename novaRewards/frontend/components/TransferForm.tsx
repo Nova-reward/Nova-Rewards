@@ -16,9 +16,11 @@ import { validateStellarAddress } from '../lib/validation';
 import api from '../lib/api';
 import { useWalletStore } from '../store/walletStore';
 import { useToast } from './Toast';
-import FormField from './ui/FormField';
+import FormFieldRaw from './ui/FormField';
+const FormField = FormFieldRaw as any;
 import TransactionLink from './TransactionLink';
 import TransferConfirmationModal from './TransferConfirmationModal';
+import { formatTokenAmount } from '../lib/formatting';
 
 // =====================================================================
 // Configuration
@@ -35,8 +37,8 @@ const NETWORK_NAME =
   process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
 
 // Base fee: 100 stroops per operation (standard Stellar network fee)
-const BASE_FEE_STROOPS = BASE_FEE; // 100 stroops
-const FEE_IN_NOVA = (BASE_FEE_STROOPS / 10_000_000).toFixed(7); // Convert stroops to NOVA
+const BASE_FEE_STROOPS = Number(BASE_FEE) || 100; // 100 stroops
+const FEE_IN_NOVA = formatTokenAmount(BASE_FEE_STROOPS / 10_000_000); // Convert stroops to NOVA
 
 // =====================================================================
 // Validation Schema
@@ -65,6 +67,12 @@ const transferSchema = z.object({
     .transform((val) => String(Number(val))), // Normalize to prevent edge cases
 });
 
+export type TransferFormData = z.infer<typeof transferSchema>;
+
+export interface TokenTransferFormProps {
+  onSuccess?: () => void;
+}
+
 /**
  * TokenTransferForm — Send NOVA tokens to another Stellar wallet
  *
@@ -85,13 +93,13 @@ const transferSchema = z.object({
  * ✓ 5.4 - Successful transfer shows success toast with Stellar Explorer link
  * ✓ 5.5 - Form resets after successful transfer
  */
-export default function TokenTransferForm({ onSuccess }) {
+export default function TokenTransferForm({ onSuccess }: TokenTransferFormProps) {
   // =====================================================================
   // State Management
   // =====================================================================
 
   const { publicKey: senderPublicKey, balance: senderBalance } = useWalletStore();
-  const { addToast } = useToast();
+  const { addToast } = useToast() as any;
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [txHash, setTxHash] = useState('');
@@ -143,7 +151,7 @@ export default function TokenTransferForm({ onSuccess }) {
     const numBalance = Number(senderBalance);
 
     if (numAmount > numBalance) {
-      return `Insufficient balance. Available: ${senderBalance} NOVA`;
+      return `Insufficient balance. Available: ${formatTokenAmount(senderBalance)} NOVA`;
     }
 
     return null;
@@ -207,7 +215,7 @@ export default function TokenTransferForm({ onSuccess }) {
               'Recipient does not have a NOVA trustline'
           );
         }
-      } catch (trustlineErr) {
+      } catch (trustlineErr: any) {
         const message =
           trustlineErr.response?.data?.message ||
           'Recipient does not have a NOVA trustline. They must create one first.';
@@ -222,12 +230,12 @@ export default function TokenTransferForm({ onSuccess }) {
 
       addToast('Building transaction...', 'info');
 
-      const server = new Horizon.Server(HORIZON_URL, { timeout: 15000 });
+      const server = new Horizon.Server(HORIZON_URL);
       const account = await server.loadAccount(senderPublicKey);
       const novaAsset = new Asset('NOVA', ISSUER_PUBLIC);
 
       const tx = new TransactionBuilder(account, {
-        fee: BASE_FEE_STROOPS,
+        fee: String(BASE_FEE_STROOPS),
         networkPassphrase: NETWORK_PASSPHRASE,
       })
         .addOperation(
@@ -249,25 +257,7 @@ export default function TokenTransferForm({ onSuccess }) {
 
       const result = await signAndSubmit(tx.toXDR());
       setTxHash(result.txHash);
-
-      // Record in backend
-      await api.post('/api/transactions/record', {
-        txHash: result.txHash,
-        txType: 'transfer',
-        amount,
-        fromWallet: senderPublicKey,
-        toWallet: recipient,
-      });
-
-      // Refresh balance from API after successful transaction
-      await fetchBalanceFromAPI();
-
-      setStatus('done');
-      setMessage('Transfer successful!');
-      setRecipient('');
-      setAmount('');
       const hash = result.txHash;
-      setTxHash(hash);
 
       // ---------------------------------------------------------------
       // 4. Record transaction in backend
@@ -281,7 +271,7 @@ export default function TokenTransferForm({ onSuccess }) {
           fromWallet: senderPublicKey,
           toWallet: recipientValue,
         });
-      } catch (recordErr) {
+      } catch (recordErr: any) {
         // Log backend recording errors but don't fail the transfer
         console.error('Failed to record transaction in backend:', recordErr);
         // Transaction was successful on-chain even if recording failed
@@ -314,7 +304,7 @@ export default function TokenTransferForm({ onSuccess }) {
 
       // Call optional success callback
       onSuccess?.();
-    } catch (err) {
+    } catch (err: any) {
       // ---------------------------------------------------------------
       // Error Handling — all cases
       // ---------------------------------------------------------------
@@ -401,14 +391,14 @@ export default function TokenTransferForm({ onSuccess }) {
             disabled={isLoading}
             error={insufficientBalance ? balanceError : errors.amount?.message}
             touched={!!errors.amount || insufficientBalance}
-            hint={`Available balance: ${senderBalance} NOVA | Network fee: ≈ ${FEE_IN_NOVA} NOVA`}
+            hint={`Available balance: ${formatTokenAmount(senderBalance)} NOVA | Network fee: ≈ ${FEE_IN_NOVA} NOVA`}
             {...register('amount')}
           />
 
           {/* Available Balance Info */}
           <div className="rounded-md bg-blue-50 p-3 text-sm text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
             <p>
-              <strong>Your Balance:</strong> {senderBalance} NOVA
+              <strong>Your Balance:</strong> {formatTokenAmount(senderBalance)} NOVA
             </p>
             <p className="text-xs opacity-75 mt-1">
               Estimated fee: {FEE_IN_NOVA} NOVA per operation

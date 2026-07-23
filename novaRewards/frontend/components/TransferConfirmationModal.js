@@ -1,6 +1,7 @@
 'use client';
 import { useMemo } from 'react';
 import Modal from './ui/Modal';
+import { formatTokenAmount } from '../lib/formatting';
 
 /**
  * TransferConfirmationModal — Shows transaction details before broadcasting
@@ -39,9 +40,9 @@ export default function TransferConfirmationModal({
     try {
       const amountNum = Number(amount) || 0;
       const feeNum = Number(fee) || 0;
-      return (amountNum + feeNum).toFixed(7);
+      return formatTokenAmount(amountNum + feeNum);
     } catch {
-      return '0';
+      return formatTokenAmount(0);
     }
   }, [amount, fee]);
 
@@ -90,7 +91,7 @@ export default function TransferConfirmationModal({
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-2xl font-semibold text-gray-900 dark:text-white">
-                {amount}
+                {formatTokenAmount(amount)}
               </span>
               <span className="text-lg font-medium text-gray-600 dark:text-gray-400">
                 NOVA
