@@ -130,6 +130,7 @@ function buildApiRouter() {
   router.use("/redemptions", require("./routes/redemptions"));
   router.use("/transactions", require("./routes/transactions"));
   router.use("/transactions", require("./routes/stellarTransaction"));
+  router.use("/transactions", require("./routes/transactionExport"));
   router.use("/fee-estimate", require("./routes/feeEstimate"));
   router.use("/trustline", require("./routes/trustline"));
   router.use("/users", require("./routes/users"));
