@@ -127,6 +127,7 @@ function buildApiRouter() {
   router.use('/redemptions', require('./routes/redemptions'));
   router.use('/transactions', require('./routes/transactions'));
   router.use('/transactions', require('./routes/stellarTransaction'));
+  router.use('/tokens', require('./routes/tokens'));
   router.use('/trustline', require('./routes/trustline'));
   router.use('/fee-estimate', require('./routes/feeEstimate'));
   router.use('/users', require('./routes/users'));
