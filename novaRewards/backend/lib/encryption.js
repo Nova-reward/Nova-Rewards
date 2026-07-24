@@ -284,11 +284,29 @@ function isEncrypted(value) {
   return /^[A-Za-z0-9+/]+=*$/.test(value) && value.length >= 40;
 }
 
+/**
+ * Public wrapper around _tryDecrypt for use in scripts that need to attempt
+ * decryption with an explicit key buffer (e.g. encrypt-existing-rows.js).
+ *
+ * @param {string} ciphertextBase64
+ * @param {Buffer} keyBuffer  32-byte AES key
+ * @returns {string|null}  plaintext on success, null on auth-tag mismatch
+ */
+function tryDecryptWith(ciphertextBase64, keyBuffer) {
+  if (!isEncrypted(ciphertextBase64)) return ciphertextBase64; // plaintext passthrough
+  const blob       = Buffer.from(ciphertextBase64, 'base64');
+  const iv         = blob.subarray(0, IV_BYTES);
+  const authTag    = blob.subarray(IV_BYTES, IV_BYTES + TAG_BYTES);
+  const ciphertext = blob.subarray(IV_BYTES + TAG_BYTES);
+  return _tryDecrypt(keyBuffer, iv, authTag, ciphertext);
+}
+
 module.exports = {
   encrypt,
   encryptWithKey,
   decrypt,
   decryptWithKeyInfo,
+  tryDecryptWith,
   isEncrypted,
   loadKey,
   getPrimaryKey,

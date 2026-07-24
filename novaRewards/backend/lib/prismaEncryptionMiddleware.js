@@ -41,6 +41,8 @@ const { encrypt, decryptWithKeyInfo } = require('./encryption');
 const ENCRYPTED_FIELDS = {
   // webhooks.secret is used at runtime to sign HMAC payloads → must be decryptable
   webhooks: ['secret'],
+  // users.email is PII encrypted per migration 019_field_level_encryption.sql
+  users: ['email'],
 };
 
 // ---------------------------------------------------------------------------
