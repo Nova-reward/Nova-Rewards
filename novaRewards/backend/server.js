@@ -138,6 +138,7 @@ function buildApiRouter() {
   router.use('/admin', require('./routes/admin'));
   router.use('/drops', require('./routes/drops'));
   router.use('/analytics', require('./routes/analytics'));
+  router.use('/analytics/campaigns', require('./routes/campaignAggregateAnalytics'));
   router.use('/notifications', require('./routes/notifications'));
   router.use('/search', require('./routes/search'));
   router.use('/webhooks', require('./routes/webhooks'));
