@@ -67,7 +67,7 @@ jobs:
 
       - name: Notify Slack on failure
         if: steps.regression.outcome == 'failure'
-        uses: slackapi/slack-github-action@v3.0.3
+        uses: slackapi/slack-github-action@v4.0.0
         with:
           payload: |
             {
