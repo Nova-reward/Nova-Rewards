@@ -3,5 +3,17 @@
     "licenses": "UNLICENSED",
     "private": true,
     "path": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend"
+  },
+  "react-dom@19.2.7": {
+    "licenses": "MIT",
+    "repository": "https://github.com/facebook/react",
+    "path": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend/node_modules/react-dom",
+    "licenseFile": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend/node_modules/react-dom/LICENSE"
+  },
+  "scheduler@0.27.0": {
+    "licenses": "MIT",
+    "repository": "https://github.com/facebook/react",
+    "path": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend/node_modules/scheduler",
+    "licenseFile": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend/node_modules/scheduler/LICENSE"
   }
 }
