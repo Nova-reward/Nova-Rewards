@@ -740,6 +740,7 @@ dependencies = [
 name = "governance"
 version = "0.1.0"
 dependencies = [
+ "nova_token",
  "soroban-sdk",
 ]
 
@@ -887,7 +888,10 @@ checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 name = "integration_tests"
 version = "0.1.0"
 dependencies = [
+ "campaign",
+ "distribution",
  "escrow",
+ "governance",
  "nova-rewards",
  "nova_token",
  "reward_pool",

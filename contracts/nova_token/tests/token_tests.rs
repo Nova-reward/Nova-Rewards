@@ -171,7 +171,12 @@ fn approve_sets_allowance() {
     let (env, _admin, client) = setup();
     let owner = Address::generate(&env);
     let spender = Address::generate(&env);
-    client.approve(&owner, &spender, &2_000);
+    client.approve(
+        &owner,
+        &spender,
+        &2_000,
+        &(env.ledger().sequence() + 10_000),
+    );
     assert_eq!(client.allowance(&owner, &spender), 2_000);
 }
 
@@ -188,8 +193,13 @@ fn approve_overwrites_previous_allowance() {
     let (env, _admin, client) = setup();
     let owner = Address::generate(&env);
     let spender = Address::generate(&env);
-    client.approve(&owner, &spender, &500);
-    client.approve(&owner, &spender, &1_500);
+    client.approve(&owner, &spender, &500, &(env.ledger().sequence() + 10_000));
+    client.approve(
+        &owner,
+        &spender,
+        &1_500,
+        &(env.ledger().sequence() + 10_000),
+    );
     assert_eq!(client.allowance(&owner, &spender), 1_500);
 }
 
@@ -198,8 +208,13 @@ fn approve_zero_clears_allowance() {
     let (env, _admin, client) = setup();
     let owner = Address::generate(&env);
     let spender = Address::generate(&env);
-    client.approve(&owner, &spender, &1_000);
-    client.approve(&owner, &spender, &0);
+    client.approve(
+        &owner,
+        &spender,
+        &1_000,
+        &(env.ledger().sequence() + 10_000),
+    );
+    client.approve(&owner, &spender, &0, &0);
     assert_eq!(client.allowance(&owner, &spender), 0);
 }
 
@@ -212,7 +227,7 @@ fn transfer_from_insufficient_allowance_panics() {
     let recipient = Address::generate(&env);
 
     client.mint(&owner, &500);
-    client.approve(&owner, &spender, &100);
+    client.approve(&owner, &spender, &100, &(env.ledger().sequence() + 10_000));
     client.transfer_from(&spender, &owner, &recipient, &150);
 }
 

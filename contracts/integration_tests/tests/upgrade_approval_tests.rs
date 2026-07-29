@@ -480,17 +480,21 @@ fn distribution_three_of_five_accumulates_then_upgrades() {
 // Governance contract upgrade tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-use governance::{GovernanceContract, GovernanceContractClient};
+use governance::{GovernanceContract, GovernanceContractClient, Quorum};
+use nova_token::{NovaToken, NovaTokenClient};
 
 fn deploy_governance<'a>(
     env: &'a Env,
     signers: &soroban_sdk::Vec<Address>,
     threshold: u32,
 ) -> GovernanceContractClient<'a> {
+    let token_id = env.register(NovaToken, ());
+    let token = NovaTokenClient::new(env, &token_id);
     let contract_id = env.register(GovernanceContract, ());
     let client = GovernanceContractClient::new(env, &contract_id);
     let admin = Address::generate(env);
-    client.initialize(&admin, signers, &threshold);
+    token.initialize(&admin);
+    client.initialize(&admin, &token_id, &Quorum::Absolute(1), signers, &threshold);
     client
 }
 
