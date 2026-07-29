@@ -140,7 +140,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: ./novaRewards/frontend/playwright-report/
@@ -148,7 +148,7 @@ jobs:
 
       - name: Upload test results (JSON)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-json
           path: ./novaRewards/frontend/test-results/
@@ -233,7 +233,7 @@ jobs:
 
       - name: Upload testnet test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: testnet-playwright-report
           path: ./novaRewards/frontend/playwright-report/
@@ -289,7 +289,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.browser }}
           path: novaRewards/frontend/playwright-report/
@@ -297,7 +297,7 @@ jobs:
 
       - name: Upload visual snapshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-snapshots-${{ matrix.browser }}
           path: novaRewards/frontend/e2e/**/*.png

@@ -267,7 +267,7 @@ jobs:
       - run: npm test --workspace=backend -- --maxWorkers=2
         working-directory: novaRewards
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-coverage
@@ -339,7 +339,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://nova:test_password@localhost:5432/nova_rewards_test
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: integration-test-results
@@ -403,7 +403,7 @@ jobs:
         run: npm run security
         working-directory: novaRewards/backend
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: security-test-results
@@ -442,7 +442,7 @@ jobs:
       - name: Run frontend unit and component tests
         run: npm run test:ci
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: frontend-unit-results
@@ -583,7 +583,7 @@ jobs:
         run: npx playwright test --project=chromium --project=accessibility
         working-directory: novaRewards/frontend
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
@@ -741,7 +741,7 @@ jobs:
         working-directory: novaRewards/backend
 
       - name: Upload load test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: load-test-results
