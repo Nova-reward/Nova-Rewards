@@ -18,7 +18,7 @@
     "build-storybook": "storybook build -o storybook-static"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.2.2",
+    "@hookform/resolvers": "^5.5.7",
     "@sentry/nextjs": "^10.50.0",
     "@stellar/freighter-api": "^2.0.0",
     "axios": "^1.7.2",
