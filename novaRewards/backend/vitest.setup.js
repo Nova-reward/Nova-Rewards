@@ -7,18 +7,24 @@ try {
   // Silently skip if test utils cannot be loaded in this environment
 }
 
+// ---------------------------------------------------------------------------
+// Jest compatibility shim
+// ---------------------------------------------------------------------------
 // Expose jest as global for backwards compatibility with existing tests
-// jest.fn() returns a mock function that needs to have all mock methods
+// that were written for Jest but run under Vitest.
 global.jest = {
-  fn: (...args) => {
-    const mock = vi.fn(...args);
-    return mock;
-  },
+  fn: (...args) => vi.fn(...args),
   mock: vi.mock,
+  unmock: vi.unmock,
   clearAllMocks: vi.clearAllMocks,
   resetAllMocks: vi.resetAllMocks,
   restoreAllMocks: vi.restoreAllMocks,
   resetModules: vi.resetModules,
+  useFakeTimers: (...args) => vi.useFakeTimers(...args),
+  useRealTimers: () => vi.useRealTimers(),
+  advanceTimersByTime: (ms) => vi.advanceTimersByTime(ms),
+  runAllTimers: () => vi.runAllTimers(),
+  spyOn: (...args) => vi.spyOn(...args),
 };
 
 // Suppress console.error during tests to reduce noise from expected validation errors
