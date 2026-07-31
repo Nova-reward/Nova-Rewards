@@ -72,7 +72,6 @@ export type TransferFormData = z.infer<typeof transferSchema>;
 export interface TokenTransferFormProps {
   onSuccess?: () => void;
 }
-
 /**
  * TokenTransferForm — Send NOVA tokens to another Stellar wallet
  *
