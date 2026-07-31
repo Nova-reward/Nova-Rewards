@@ -8,14 +8,12 @@
 const TEST_KEY = 'a'.repeat(64);
 process.env.FIELD_ENCRYPTION_KEY = TEST_KEY;
 
-const mockQuery = jest.fn();
-jest.mock('../db/index', () => ({ query: mockQuery }));
+const mockQuery = vi.fn();
+vi.mock('../db/index', () => ({ query: mockQuery }));
 
 const { encrypt, decrypt, isEncrypted } = require('../lib/encryption');
 
 describe('auth route — email field-level encryption', () => {
-  let app;
-
   beforeAll(() => {
     // Minimal env required by server bootstrap
     process.env.ISSUER_PUBLIC       = 'G' + 'A'.repeat(55);
@@ -32,7 +30,7 @@ describe('auth route — email field-level encryption', () => {
 
   beforeEach(() => {
     mockQuery.mockReset();
-    jest.resetModules();
+    vi.resetModules();
     process.env.FIELD_ENCRYPTION_KEY = TEST_KEY;
   });
 
@@ -60,12 +58,12 @@ describe('auth route — email field-level encryption', () => {
 describe('userRepository — listUsers does not expose encrypted email in search', () => {
   beforeEach(() => {
     mockQuery.mockReset();
-    jest.resetModules();
+    vi.resetModules();
     process.env.FIELD_ENCRYPTION_KEY = TEST_KEY;
   });
 
   test('listUsers decrypts email on returned rows', async () => {
-    const { encrypt: enc, decrypt: dec } = require('../lib/encryption');
+    const { encrypt: enc } = require('../lib/encryption');
     const encryptedEmail = enc('bob@example.com');
 
     // First call: SELECT rows; second call: COUNT

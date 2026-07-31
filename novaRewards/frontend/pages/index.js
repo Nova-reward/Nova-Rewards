@@ -3,6 +3,10 @@ import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 import Navbar from '../components/Navbar';
 
+export async function getServerSideProps() {
+  return { props: {} };
+}
+
 export default function Home() {
   const { publicKey, connect, loading, error, freighterInstalled, disconnect } = useWallet();
   const router = useRouter();

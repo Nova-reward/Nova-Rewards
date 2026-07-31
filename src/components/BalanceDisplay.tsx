@@ -2,7 +2,7 @@ import React from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useBalance } from '@/hooks/useBalance';
 import { RefreshIndicator } from './RefreshIndicator';
-import { formatNumber } from '@/lib/utils';
+import { formatTokenAmount } from '@/lib/utils';
 
 interface BalanceDisplayProps {
   className?: string;
@@ -47,7 +47,7 @@ export const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
       {/* Main Balance */}
       <div className="flex items-baseline gap-2">
         <span className="text-2xl font-bold text-gray-900 dark:text-white">
-          {formatNumber(parseFloat(balance.novaBalance))} NOVA
+          {formatTokenAmount(balance.novaBalance)} NOVA
         </span>
         <span className="text-sm text-gray-500">≈ ${balance.usdValue}</span>
       </div>
@@ -57,14 +57,14 @@ export const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
         {showStaked && balance.stakedBalance && (
           <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
             <span className="font-medium">Staked:</span>
-            <span>{formatNumber(parseFloat(balance.stakedBalance))} NOVA</span>
+            <span>{formatTokenAmount(balance.stakedBalance)} NOVA</span>
           </div>
         )}
         
         {showPending && balance.pendingRewards && (
           <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
             <span className="font-medium">Pending Rewards:</span>
-            <span>{formatNumber(parseFloat(balance.pendingRewards))} NOVA</span>
+            <span>{formatTokenAmount(balance.pendingRewards)} NOVA</span>
           </div>
         )}
 

@@ -23,7 +23,7 @@ export default function NotificationBell() {
     closeDropdown,
     dismiss,
     archive,
-  } = useNotifications();
+  } = useNotifications() as any;
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -119,7 +119,7 @@ export default function NotificationBell() {
               </div>
             ) : (
               <ul className="divide-y dark:divide-brand-border">
-                {recentNotifications.map((notification) => (
+                {recentNotifications.map((notification: any) => (
                   <li
                     key={notification.id}
                     className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-brand-border/50 transition-colors ${

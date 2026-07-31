@@ -41,15 +41,18 @@ export const TypeScale: StoryObj = {
             { cls: 'type-h4', tag: 'h4', label: 'h4',       desc: '20px · weight 600 · tracking −0.005em · leading 1.3' },
             { cls: 'type-h5', tag: 'h5', label: 'h5',       desc: '18px · weight 600 · tracking 0em · leading 1.4' },
             { cls: 'type-h6', tag: 'h6', label: 'h6',       desc: '16px · weight 600 · tracking 0em · leading 1.5' },
-          ].map(({ cls, tag: Tag, label, desc }) => (
-            <div key={cls} className="flex items-baseline gap-6 border-b border-neutral-100 pb-3">
-              <span className="w-16 shrink-0 font-mono text-[11px] text-neutral-400">.{cls}</span>
-              <Tag className={`${cls} text-neutral-900 dark:text-neutral-100 flex-1`}>
-                {label} — The quick brown fox
-              </Tag>
-              <span className="shrink-0 font-mono text-[10px] text-neutral-400 hidden lg:block">{desc}</span>
-            </div>
-          ))}
+          ].map(({ cls, tag, label, desc }) => {
+            const Tag = tag as any;
+            return (
+              <div key={cls} className="flex items-baseline gap-6 border-b border-neutral-100 pb-3">
+                <span className="w-16 shrink-0 font-mono text-[11px] text-neutral-400">.{cls}</span>
+                <Tag className={`${cls} text-neutral-900 dark:text-neutral-100 flex-1`}>
+                  {label} — The quick brown fox
+                </Tag>
+                <span className="shrink-0 font-mono text-[10px] text-neutral-400 hidden lg:block">{desc}</span>
+              </div>
+            );
+          })}
         </div>
       </section>
 

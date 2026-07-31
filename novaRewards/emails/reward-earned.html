@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+  <!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+  <title>You earned NOVA tokens!</title>
+  <style>
+    /* Reset */
+    * { box-sizing: border-box; }
+    body, table, td, p, a { margin: 0; padding: 0; border: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background-color: #f1f5f9; color: #0f172a; }
+    table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { display: block; max-width: 100%; border: 0; -ms-interpolation-mode: bicubic; }
+    a { color: #7c3aed; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+      body, .email-bg    { background-color: #0f172a !important; }
+      .email-card        { background-color: #1e293b !important; }
+      .text-heading      { color: #f8fafc !important; }
+      .text-body         { color: #cbd5e1 !important; }
+      .text-muted        { color: #94a3b8 !important; }
+      .divider           { border-color: #334155 !important; }
+      .footer-bg         { background-color: #1e293b !important; }
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .email-container  { width: 100% !important; }
+      .email-padding    { padding: 24px 16px !important; }
+      .hero-padding     { padding: 32px 24px !important; }
+      .token-amount     { font-size: 40px !important; }
+    }
+  </style>
+</head>
+<body class="email-bg" style="background-color:#f1f5f9; margin:0; padding:0;">
+
+  <!-- Preview text -->
+  <div style="display:none; font-size:1px; color:#f1f5f9; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">
+    You just earned {{amount}} NOVA tokens from {{merchant_name}} 🎉
+  </div>
+
+  <!-- Outer wrapper -->
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f1f5f9;">
+    <tr>
+      <td align="center" style="padding: 40px 16px;">
+
+        <!-- Email card -->
+        <table class="email-container email-card" role="presentation" width="600" cellspacing="0" cellpadding="0" border="0"
+               style="max-width:600px; width:100%; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- Header / Brand -->
+          <tr>
+            <td align="center" style="background-color:#7c3aed; padding:24px 40px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="padding-right:10px;">
+                    <!-- NOVA token logo (inline SVG for clients that support it) -->
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <circle cx="16" cy="16" r="14" fill="rgba(255,255,255,0.2)" stroke="white" stroke-width="1.5"/>
+                      <path d="M11 22V10l10 12V10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </td>
+                  <td>
+                    <span style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:-0.02em;">Nova Rewards</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Hero — reward earned -->
+          <tr>
+            <td class="hero-padding" align="center" style="padding:48px 40px 32px; border-bottom:1px solid #e2e8f0;">
+
+              <!-- Amount badge -->
+              <div style="display:inline-block; background:#f5f3ff; border-radius:50px; padding:12px 24px; margin-bottom:24px;">
+                <span class="token-amount" style="font-size:48px; font-weight:700; color:#7c3aed; letter-spacing:-0.02em; line-height:1;">
+                  +{{amount}}
+                </span>
+                <span style="font-size:20px; font-weight:600; color:#7c3aed; margin-left:6px;">NOVA</span>
+              </div>
+
+              <h1 class="text-heading" style="font-size:24px; font-weight:700; color:#0f172a; margin-bottom:12px; letter-spacing:-0.015em;">
+                You earned rewards! 🎉
+              </h1>
+              <p class="text-body" style="font-size:16px; color:#475569; line-height:1.6; max-width:400px; margin:0 auto;">
+                Your purchase at <strong style="color:#0f172a;">{{merchant_name}}</strong>
+                earned you <strong style="color:#7c3aed;">{{amount}} NOVA tokens</strong>.
+                They're now in your wallet.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Transaction details -->
+          <tr>
+            <td class="email-padding" style="padding:32px 40px;">
+              <h2 class="text-heading" style="font-size:14px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:16px;">
+                Transaction Details
+              </h2>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="padding:12px 0; border-bottom:1px solid #e2e8f0;" class="divider">
+                    <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td class="text-muted" style="font-size:14px; color:#64748b;">Merchant</td>
+                        <td class="text-body" align="right" style="font-size:14px; color:#0f172a; font-weight:500;">{{merchant_name}}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0; border-bottom:1px solid #e2e8f0;" class="divider">
+                    <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td class="text-muted" style="font-size:14px; color:#64748b;">Amount Earned</td>
+                        <td align="right" style="font-size:14px; color:#16a34a; font-weight:600;">+{{amount}} NOVA</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0; border-bottom:1px solid #e2e8f0;" class="divider">
+                    <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td class="text-muted" style="font-size:14px; color:#64748b;">New Balance</td>
+                        <td class="text-body" align="right" style="font-size:14px; color:#0f172a; font-weight:600;">{{new_balance}} NOVA</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0; border-bottom:1px solid #e2e8f0;" class="divider">
+                    <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td class="text-muted" style="font-size:14px; color:#64748b;">Transaction ID</td>
+                        <td align="right">
+                          <a href="{{explorer_url}}" style="font-size:12px; color:#7c3aed; font-family:monospace;">
+                            {{tx_hash_short}} ↗
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 0;">
+                    <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td class="text-muted" style="font-size:14px; color:#64748b;">Date</td>
+                        <td class="text-body" align="right" style="font-size:14px; color:#0f172a;">{{date}}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td align="center" style="padding:8px 40px 40px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center" style="border-radius:10px; background-color:#7c3aed;">
+                    <a href="{{dashboard_url}}" target="_blank"
+                       style="display:inline-block; padding:14px 32px; color:#ffffff; font-size:15px; font-weight:600; text-decoration:none; border-radius:10px;">
+                      View in Dashboard →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="footer-bg" style="background-color:#f8fafc; padding:24px 40px; border-top:1px solid #e2e8f0; border-radius:0 0 16px 16px;">
+              <p class="text-muted" style="font-size:12px; color:#94a3b8; text-align:center; line-height:1.6; margin-bottom:8px;">
+                You received this email because you have a Nova Rewards account.<br>
+                <a href="{{unsubscribe_url}}" style="color:#94a3b8; text-decoration:underline;">Unsubscribe</a> ·
+                <a href="{{privacy_url}}" style="color:#94a3b8; text-decoration:underline;">Privacy Policy</a> ·
+                <a href="{{settings_url}}" style="color:#94a3b8; text-decoration:underline;">Notification Settings</a>
+              </p>
+              <p class="text-muted" style="font-size:11px; color:#cbd5e1; text-align:center;">
+                © 2026 Nova Rewards · Built on Stellar Network
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Email card -->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

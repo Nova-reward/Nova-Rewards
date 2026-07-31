@@ -1,108 +1,355 @@
 {
   "contract": "governance",
   "version": "1.0.0",
-  "description": "On-chain governance for Nova Rewards protocol parameter changes. Voting period is ~7 days (120,960 ledgers).",
+  "description": "On-chain token-weighted governance for Nova Rewards protocol parameter changes. Voting period is ~7 days (120,960 ledgers).",
   "functions": [
     {
       "name": "initialize",
-      "description": "Initializes the governance contract.",
-      "params": [{ "name": "admin", "type": "Address" }],
+      "description": "Initializes governance with a token contract, configurable quorum, and upgrade multisig.",
+      "params": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "token",
+          "type": "Address"
+        },
+        {
+          "name": "quorum",
+          "type": "Quorum"
+        },
+        {
+          "name": "signers",
+          "type": "Vec<Address>"
+        },
+        {
+          "name": "threshold",
+          "type": "u32"
+        }
+      ],
       "returns": null,
-      "errors": ["already initialized"]
+      "errors": [
+        "already initialized"
+      ]
     },
     {
       "name": "create_proposal",
       "description": "Creates a new governance proposal.",
       "params": [
-        { "name": "proposer", "type": "Address" },
-        { "name": "title", "type": "String", "description": "Short title (max 100 chars)." },
-        { "name": "description", "type": "String", "description": "Full description." }
+        {
+          "name": "proposer",
+          "type": "Address"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "description": "Short title (max 100 chars)."
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "description": "Full description."
+        }
       ],
-      "returns": { "type": "u32", "description": "Proposal ID." },
+      "returns": {
+        "type": "u32",
+        "description": "Proposal ID."
+      },
       "errors": []
     },
     {
       "name": "vote",
-      "description": "Casts a vote on an active proposal.",
+      "description": "Casts a token-weighted vote on an active proposal.",
       "params": [
-        { "name": "voter", "type": "Address" },
-        { "name": "proposal_id", "type": "u32" },
-        { "name": "support", "type": "bool", "description": "true = yes, false = no." }
+        {
+          "name": "voter",
+          "type": "Address"
+        },
+        {
+          "name": "proposal_id",
+          "type": "u32"
+        },
+        {
+          "name": "support",
+          "type": "bool",
+          "description": "true = yes, false = no."
+        }
       ],
       "returns": null,
-      "errors": ["already voted", "voting closed", "not found"]
+      "errors": [
+        "already voted",
+        "voting closed",
+        "not found"
+      ]
     },
     {
       "name": "finalise",
-      "description": "Tallies votes after the voting period ends.",
-      "params": [{ "name": "proposal_id", "type": "u32" }],
+      "description": "Tallies token-weighted votes after the voting period ends and checks configured quorum.",
+      "params": [
+        {
+          "name": "proposal_id",
+          "type": "u32"
+        }
+      ],
       "returns": null,
-      "errors": ["voting period not ended", "already finalised", "not found"]
+      "errors": [
+        "voting period not ended",
+        "already finalised",
+        "not found"
+      ]
     },
     {
       "name": "execute",
       "description": "Marks a passed proposal as executed. Admin only.",
-      "params": [{ "name": "proposal_id", "type": "u32" }],
+      "params": [
+        {
+          "name": "proposal_id",
+          "type": "u32"
+        }
+      ],
       "returns": null,
-      "errors": ["unauthorized", "not passed", "already executed", "not found"]
+      "errors": [
+        "unauthorized",
+        "not passed",
+        "already executed",
+        "not found"
+      ]
     },
     {
       "name": "get_proposal",
       "description": "Returns a proposal by ID.",
-      "params": [{ "name": "proposal_id", "type": "u32" }],
-      "returns": { "type": "Proposal" },
-      "errors": ["not found"]
+      "params": [
+        {
+          "name": "proposal_id",
+          "type": "u32"
+        }
+      ],
+      "returns": {
+        "type": "Proposal"
+      },
+      "errors": [
+        "not found"
+      ]
     },
     {
       "name": "proposal_count",
       "description": "Returns the total number of proposals.",
       "params": [],
-      "returns": { "type": "u32" },
+      "returns": {
+        "type": "u32"
+      },
       "errors": []
     },
     {
       "name": "has_voted",
       "description": "Returns whether an address has voted on a proposal.",
       "params": [
-        { "name": "voter", "type": "Address" },
-        { "name": "proposal_id", "type": "u32" }
+        {
+          "name": "voter",
+          "type": "Address"
+        },
+        {
+          "name": "proposal_id",
+          "type": "u32"
+        }
       ],
-      "returns": { "type": "bool" },
+      "returns": {
+        "type": "bool"
+      },
+      "errors": []
+    },
+    {
+      "name": "set_quorum",
+      "description": "Admin-only update of the quorum model.",
+      "params": [
+        {
+          "name": "quorum",
+          "type": "Quorum"
+        }
+      ],
+      "returns": null,
+      "errors": [
+        "unauthorized",
+        "invalid quorum"
+      ]
+    },
+    {
+      "name": "get_quorum",
+      "description": "Returns the configured quorum model.",
+      "params": [],
+      "returns": {
+        "type": "Quorum"
+      },
+      "errors": []
+    },
+    {
+      "name": "quorum_votes_required",
+      "description": "Returns the current token units required for quorum.",
+      "params": [],
+      "returns": {
+        "type": "i128"
+      },
       "errors": []
     }
   ],
   "types": {
     "ProposalStatus": {
-      "variants": ["Active", "Passed", "Rejected", "Executed"]
+      "variants": [
+        "Active",
+        "Passed",
+        "Rejected",
+        "Executed"
+      ]
     },
     "Proposal": {
       "fields": [
-        { "name": "id", "type": "u32" },
-        { "name": "proposer", "type": "Address" },
-        { "name": "title", "type": "String" },
-        { "name": "description", "type": "String" },
-        { "name": "yes_votes", "type": "u32" },
-        { "name": "no_votes", "type": "u32" },
-        { "name": "end_ledger", "type": "u32" },
-        { "name": "status", "type": "ProposalStatus" }
+        {
+          "name": "id",
+          "type": "u32"
+        },
+        {
+          "name": "proposer",
+          "type": "Address"
+        },
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        },
+        {
+          "name": "yes_votes",
+          "type": "i128"
+        },
+        {
+          "name": "no_votes",
+          "type": "i128"
+        },
+        {
+          "name": "end_ledger",
+          "type": "u32"
+        },
+        {
+          "name": "status",
+          "type": "ProposalStatus"
+        }
+      ]
+    },
+    "Quorum": {
+      "variants": [
+        {
+          "name": "Absolute",
+          "value": "i128"
+        },
+        {
+          "name": "Percent",
+          "value": "u32 basis points"
+        }
       ]
     }
   },
   "events": [
-    { "name": "proposal_created", "fields": [{ "name": "id", "type": "u32" }, { "name": "proposer", "type": "Address" }] },
-    { "name": "voted",            "fields": [{ "name": "voter", "type": "Address" }, { "name": "proposal_id", "type": "u32" }, { "name": "support", "type": "bool" }] },
-    { "name": "finalised",        "fields": [{ "name": "proposal_id", "type": "u32" }, { "name": "status", "type": "ProposalStatus" }] },
-    { "name": "executed",         "fields": [{ "name": "proposal_id", "type": "u32" }] }
+    {
+      "name": "proposal_created",
+      "fields": [
+        {
+          "name": "id",
+          "type": "u32"
+        },
+        {
+          "name": "proposer",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "name": "voted",
+      "fields": [
+        {
+          "name": "voter",
+          "type": "Address"
+        },
+        {
+          "name": "proposal_id",
+          "type": "u32"
+        },
+        {
+          "name": "support",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "finalised",
+      "fields": [
+        {
+          "name": "proposal_id",
+          "type": "u32"
+        },
+        {
+          "name": "status",
+          "type": "ProposalStatus"
+        }
+      ]
+    },
+    {
+      "name": "executed",
+      "fields": [
+        {
+          "name": "proposal_id",
+          "type": "u32"
+        }
+      ]
+    }
   ],
   "errors": [
-    { "code": 1, "name": "AlreadyInitialized",    "message": "already initialized" },
-    { "code": 2, "name": "Unauthorized",           "message": "unauthorized" },
-    { "code": 3, "name": "AlreadyVoted",           "message": "already voted" },
-    { "code": 4, "name": "VotingClosed",           "message": "voting period has ended" },
-    { "code": 5, "name": "VotingPeriodNotEnded",   "message": "voting period has not ended" },
-    { "code": 6, "name": "AlreadyFinalised",       "message": "already finalised" },
-    { "code": 7, "name": "NotPassed",              "message": "proposal did not pass" },
-    { "code": 8, "name": "AlreadyExecuted",        "message": "already executed" },
-    { "code": 9, "name": "NotFound",               "message": "proposal not found" }
+    {
+      "code": 1,
+      "name": "AlreadyInitialized",
+      "message": "already initialized"
+    },
+    {
+      "code": 2,
+      "name": "Unauthorized",
+      "message": "unauthorized"
+    },
+    {
+      "code": 3,
+      "name": "AlreadyVoted",
+      "message": "already voted"
+    },
+    {
+      "code": 4,
+      "name": "VotingClosed",
+      "message": "voting period has ended"
+    },
+    {
+      "code": 5,
+      "name": "VotingPeriodNotEnded",
+      "message": "voting period has not ended"
+    },
+    {
+      "code": 6,
+      "name": "AlreadyFinalised",
+      "message": "already finalised"
+    },
+    {
+      "code": 7,
+      "name": "NotPassed",
+      "message": "proposal did not pass"
+    },
+    {
+      "code": 8,
+      "name": "AlreadyExecuted",
+      "message": "already executed"
+    },
+    {
+      "code": 9,
+      "name": "NotFound",
+      "message": "proposal not found"
+    }
   ]
 }

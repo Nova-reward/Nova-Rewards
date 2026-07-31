@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 /**
  * Required environment variables for the NovaRewards backend.
  * Requirements: 11.1, 11.3

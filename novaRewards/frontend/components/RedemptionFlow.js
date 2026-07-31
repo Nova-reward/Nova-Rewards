@@ -4,6 +4,7 @@ import { Asset, TransactionBuilder, Operation, Networks, BASE_FEE, Horizon } fro
 import { signAndSubmit } from '../lib/freighter';
 import api from '../lib/api';
 import TransactionLink from './TransactionLink';
+import { formatTokenAmount } from '../lib/formatting';
 
 const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const ISSUER_PUBLIC = process.env.NEXT_PUBLIC_ISSUER_PUBLIC;
@@ -47,7 +48,7 @@ export default function RedemptionFlow({ walletAddress, onSuccess }) {
   function validateAmount(val) {
     const n = Number(val);
     if (!val || isNaN(n) || n <= 0) { setAmountError('Enter a positive amount.'); return false; }
-    if (n > Number(balance)) { setAmountError(`Insufficient balance. Available: ${balance} NOVA`); return false; }
+    if (n > Number(balance)) { setAmountError(`Insufficient balance. Available: ${formatTokenAmount(balance)} NOVA`); return false; }
     setAmountError('');
     return true;
   }
@@ -129,7 +130,7 @@ export default function RedemptionFlow({ walletAddress, onSuccess }) {
       <div className="redemption-flow">
         <h2 className="redemption-title">Enter Amount</h2>
         <p className="muted">Campaign: <strong>{selectedCampaign.name}</strong></p>
-        <p className="muted">Balance: <strong>{balance} NOVA</strong></p>
+        <p className="muted">Balance: <strong>{formatTokenAmount(balance)} NOVA</strong></p>
         <label className="label" htmlFor="redeem-amount">Amount to Redeem (NOVA)</label>
         <input
           id="redeem-amount"
@@ -164,7 +165,7 @@ export default function RedemptionFlow({ walletAddress, onSuccess }) {
         {error && <p className="error">{error}</p>}
         <dl className="confirm-details">
           <dt>Campaign</dt><dd>{selectedCampaign.name}</dd>
-          <dt>Tokens to burn</dt><dd>{amount} NOVA</dd>
+          <dt>Tokens to burn</dt><dd>{formatTokenAmount(amount)} NOVA</dd>
           <dt>Perk value received</dt><dd>{perkValue}</dd>
           <dt>Exchange rate</dt><dd>{selectedCampaign.reward_rate} per NOVA</dd>
         </dl>
@@ -193,7 +194,7 @@ export default function RedemptionFlow({ walletAddress, onSuccess }) {
     <div className="redemption-flow redemption-success">
       <div className="success-icon" aria-hidden="true">✅</div>
       <h2 className="redemption-title">Redemption Successful!</h2>
-      <p>You redeemed <strong>{amount} NOVA</strong> via <strong>{selectedCampaign.name}</strong>.</p>
+      <p>You redeemed <strong>{formatTokenAmount(amount)} NOVA</strong> via <strong>{selectedCampaign.name}</strong>.</p>
       <p>
         Transaction:{' '}
         <TransactionLink

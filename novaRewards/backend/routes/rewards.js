@@ -5,6 +5,10 @@ const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { log } = require('../monitoring/eventsLogger');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { slidingRewards } = require('../middleware/rateLimiter');
+const { checkRewardFarming } = require('../middleware/abuseDetection');
+const { validateIssueReward, validateDistributeReward } = require('../dtos/middleware');
 
 /**
  * @openapi

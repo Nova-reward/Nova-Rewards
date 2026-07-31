@@ -1,5 +1,5 @@
 'use strict';
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 
 const { SorobanRpc, xdr } = require('stellar-sdk');
 const { getConfig } = require('./configService');

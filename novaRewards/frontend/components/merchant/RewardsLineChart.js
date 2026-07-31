@@ -6,6 +6,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { useChartTheme } from '../analytics/useChartTheme';
+import { formatTokenAmount } from '../../lib/formatting';
 
 /**
  * Line chart showing daily reward issuance.
@@ -31,7 +32,7 @@ export default function RewardsLineChart({ data }) {
         <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
         <XAxis dataKey="date" tick={{ fill: c.text, fontSize: 11 }} />
         <YAxis tick={{ fill: c.text, fontSize: 11 }} />
-        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [v.toLocaleString(), 'NOVA Issued']} />
+        <Tooltip contentStyle={tooltipStyle} formatter={(v) => [formatTokenAmount(v), 'NOVA Issued']} />
         <Line type="monotone" dataKey="issued" stroke={c.accent} strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>

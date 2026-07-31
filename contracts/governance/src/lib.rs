@@ -24,15 +24,16 @@
 //! | `("gov", "upgraded")`       | `(v, new_wasm_hash)`                                    |
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String, Vec,
+    contract, contractclient, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
+    String, Vec,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /// Voting period in ledgers (~7 days at 5 s/ledger).
 const VOTING_PERIOD: u32 = 120_960;
-/// Minimum yes-votes required for a proposal to pass.
-const QUORUM: u32 = 1;
+/// One hundred percent expressed in basis points.
+const BPS_DENOMINATOR: u32 = 10_000;
 
 /// Schema version for all events emitted by this contract.
 pub const EVENT_SCHEMA_VERSION: u32 = 1;
@@ -40,7 +41,7 @@ pub const EVENT_SCHEMA_VERSION: u32 = 1;
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 #[contracttype]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ProposalStatus {
     Active,
     Passed,
@@ -55,10 +56,25 @@ pub struct Proposal {
     pub proposer: Address,
     pub title: String,
     pub description: String,
-    pub yes_votes: u32,
-    pub no_votes: u32,
+    pub yes_votes: i128,
+    pub no_votes: i128,
     pub end_ledger: u32,
     pub status: ProposalStatus,
+}
+
+#[contracttype]
+#[derive(Clone, PartialEq, Debug)]
+pub enum Quorum {
+    /// Require this many yes-vote token units.
+    Absolute(i128),
+    /// Require this percentage of current total supply, in basis points.
+    Percent(u32),
+}
+
+#[contractclient(name = "TokenClient")]
+pub trait Token {
+    fn balance(env: Env, addr: Address) -> i128;
+    fn total_supply(env: Env) -> i128;
 }
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
@@ -76,6 +92,8 @@ pub enum DataKey {
     Threshold,
     /// Pending upgrade approvals: wasm_hash -> Vec<Address>
     UpgradeApprovals(BytesN<32>),
+    Token,
+    Quorum,
 }
 
 // ── Event helpers ─────────────────────────────────────────────────────────────
@@ -122,7 +140,7 @@ pub struct GovernanceContract;
 
 #[contractimpl]
 impl GovernanceContract {
-    /// Initialise with an admin address and upgrade multisig config.
+    /// Initialise with an admin address, token contract, quorum, and upgrade multisig config.
     ///
     /// # Parameters
     /// - `admin` – Address authorized to call [`execute`](GovernanceContract::execute).
@@ -131,7 +149,14 @@ impl GovernanceContract {
     ///
     /// # Panics
     /// - `"already initialised"` if called more than once.
-    pub fn initialize(env: Env, admin: Address, signers: Vec<Address>, threshold: u32) {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        token: Address,
+        quorum: Quorum,
+        signers: Vec<Address>,
+        threshold: u32,
+    ) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialised");
         }
@@ -141,9 +166,16 @@ impl GovernanceContract {
             "signers count must be >= threshold"
         );
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::ProposalCount, &0_u32);
+        Self::validate_quorum(&quorum);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposalCount, &0_u32);
+        env.storage().instance().set(&DataKey::Token, &token);
+        env.storage().instance().set(&DataKey::Quorum, &quorum);
         env.storage().instance().set(&DataKey::Signers, &signers);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -152,8 +184,41 @@ impl GovernanceContract {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
+    fn validate_quorum(quorum: &Quorum) {
+        match quorum {
+            Quorum::Absolute(amount) => assert!(*amount > 0, "quorum must be positive"),
+            Quorum::Percent(bps) => assert!(
+                *bps > 0 && *bps <= BPS_DENOMINATOR,
+                "quorum percent must be 1..=10000"
+            ),
+        }
+    }
+
+    fn quorum(env: &Env) -> Quorum {
+        env.storage().instance().get(&DataKey::Quorum).unwrap()
+    }
+
+    fn token_client(env: &Env) -> TokenClient<'_> {
+        let token: Address = env.storage().instance().get(&DataKey::Token).unwrap();
+        TokenClient::new(env, &token)
+    }
+
+    fn quorum_votes(env: &Env) -> i128 {
+        match Self::quorum(env) {
+            Quorum::Absolute(amount) => amount,
+            Quorum::Percent(bps) => {
+                let supply = Self::token_client(env).total_supply();
+                (supply.saturating_mul(bps as i128) + (BPS_DENOMINATOR as i128 - 1))
+                    / BPS_DENOMINATOR as i128
+            }
+        }
+    }
+
     fn proposal_count_val(env: &Env) -> u32 {
-        env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::ProposalCount)
+            .unwrap_or(0)
     }
 
     fn load_proposal(env: &Env, id: u32) -> Proposal {
@@ -167,9 +232,11 @@ impl GovernanceContract {
         env.storage()
             .persistent()
             .set(&DataKey::Proposal(proposal.id), proposal);
-        env.storage()
-            .persistent()
-            .extend_ttl(&DataKey::Proposal(proposal.id), 2_678_400, 2_678_400);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Proposal(proposal.id),
+            2_678_400,
+            2_678_400,
+        );
     }
 
     // ── Proposal creation ─────────────────────────────────────────────────────
@@ -178,12 +245,7 @@ impl GovernanceContract {
     ///
     /// # Events
     /// Emits `("gov", "proposed")` with `(schema_version, id, proposer, title)`.
-    pub fn create_proposal(
-        env: Env,
-        proposer: Address,
-        title: String,
-        description: String,
-    ) -> u32 {
+    pub fn create_proposal(env: Env, proposer: Address, title: String, description: String) -> u32 {
         proposer.require_auth();
 
         let id = Self::proposal_count_val(&env) + 1;
@@ -238,9 +300,13 @@ impl GovernanceContract {
         );
 
         if support {
-            proposal.yes_votes += 1;
+            proposal.yes_votes = proposal
+                .yes_votes
+                .saturating_add(Self::token_client(&env).balance(&voter));
         } else {
-            proposal.no_votes += 1;
+            proposal.no_votes = proposal
+                .no_votes
+                .saturating_add(Self::token_client(&env).balance(&voter));
         }
 
         Self::save_proposal(&env, &proposal);
@@ -270,8 +336,8 @@ impl GovernanceContract {
             "voting period not ended"
         );
 
-        let passed =
-            proposal.yes_votes >= QUORUM && proposal.yes_votes > proposal.no_votes;
+        let passed = proposal.yes_votes >= Self::quorum_votes(&env)
+            && proposal.yes_votes > proposal.no_votes;
         proposal.status = if passed {
             ProposalStatus::Passed
         } else {
@@ -312,6 +378,20 @@ impl GovernanceContract {
 
     pub fn proposal_count(env: Env) -> u32 {
         Self::proposal_count_val(&env)
+    }
+
+    pub fn set_quorum(env: Env, quorum: Quorum) {
+        Self::admin(&env).require_auth();
+        Self::validate_quorum(&quorum);
+        env.storage().instance().set(&DataKey::Quorum, &quorum);
+    }
+
+    pub fn get_quorum(env: Env) -> Quorum {
+        Self::quorum(&env)
+    }
+
+    pub fn quorum_votes_required(env: Env) -> i128 {
+        Self::quorum_votes(&env)
     }
 
     pub fn has_voted(env: Env, proposal_id: u32, voter: Address) -> bool {
@@ -398,19 +478,39 @@ impl GovernanceContract {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nova_token::{NovaToken, NovaTokenClient};
     use soroban_sdk::{
         testutils::{Address as _, Events, Ledger},
         vec, BytesN, Env, String,
     };
 
-    fn setup() -> (Env, Address, GovernanceContractClient<'static>) {
+    fn setup() -> (
+        Env,
+        Address,
+        GovernanceContractClient<'static>,
+        NovaTokenClient<'static>,
+    ) {
+        setup_with_quorum(Quorum::Absolute(1))
+    }
+
+    fn setup_with_quorum(
+        quorum: Quorum,
+    ) -> (
+        Env,
+        Address,
+        GovernanceContractClient<'static>,
+        NovaTokenClient<'static>,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
+        let token_id = env.register(NovaToken, ());
+        let token = NovaTokenClient::new(&env, &token_id);
         let id = env.register(GovernanceContract, ());
         let client = GovernanceContractClient::new(&env, &id);
         let admin = Address::generate(&env);
-        client.initialize(&admin, &vec![&env, admin.clone()], &1);
-        (env, admin, client)
+        token.initialize(&admin);
+        client.initialize(&admin, &token_id, &quorum, &vec![&env, admin.clone()], &1);
+        (env, admin, client, token)
     }
 
     fn make_proposal(env: &Env, client: &GovernanceContractClient) -> (u32, Address) {
@@ -425,7 +525,7 @@ mod tests {
 
     #[test]
     fn test_create_proposal() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, proposer) = make_proposal(&env, &client);
 
         assert_eq!(id, 1);
@@ -441,14 +541,14 @@ mod tests {
 
     #[test]
     fn test_create_proposal_emits_event() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         make_proposal(&env, &client);
-        assert!(env.events().all().len() >= 1);
+        assert!(!env.events().all().events().is_empty());
     }
 
     #[test]
     fn test_multiple_proposals_increment_id() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id1, _) = make_proposal(&env, &client);
         let (id2, _) = make_proposal(&env, &client);
         assert_eq!(id1, 1);
@@ -458,9 +558,10 @@ mod tests {
 
     #[test]
     fn test_vote_yes() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
+        token.mint(&voter, &1);
 
         client.vote(&voter, &id, &true);
 
@@ -472,9 +573,10 @@ mod tests {
 
     #[test]
     fn test_vote_no() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
+        token.mint(&voter, &1);
 
         client.vote(&voter, &id, &false);
 
@@ -485,30 +587,35 @@ mod tests {
 
     #[test]
     fn test_vote_emits_event() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
+        token.mint(&voter, &1);
         client.vote(&voter, &id, &true);
-        assert!(env.events().all().len() >= 1);
+        assert!(!env.events().all().events().is_empty());
     }
 
     #[test]
     #[should_panic(expected = "already voted")]
     fn test_double_vote_rejected() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
+        token.mint(&voter, &1);
         client.vote(&voter, &id, &true);
         client.vote(&voter, &id, &false);
     }
 
     #[test]
     fn test_multiple_voters() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let v1 = Address::generate(&env);
         let v2 = Address::generate(&env);
         let v3 = Address::generate(&env);
+        token.mint(&v1, &1);
+        token.mint(&v2, &1);
+        token.mint(&v3, &1);
 
         client.vote(&v1, &id, &true);
         client.vote(&v2, &id, &true);
@@ -521,12 +628,14 @@ mod tests {
 
     #[test]
     fn test_finalise_passed() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
+        token.mint(&voter, &1);
         client.vote(&voter, &id, &true);
 
-        env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
 
         assert_eq!(client.get_proposal(&id).status, ProposalStatus::Passed);
@@ -534,10 +643,11 @@ mod tests {
 
     #[test]
     fn test_finalise_rejected_no_quorum() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
 
-        env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
 
         assert_eq!(client.get_proposal(&id).status, ProposalStatus::Rejected);
@@ -545,16 +655,20 @@ mod tests {
 
     #[test]
     fn test_finalise_rejected_more_no_than_yes() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let v1 = Address::generate(&env);
         let v2 = Address::generate(&env);
         let v3 = Address::generate(&env);
+        token.mint(&v1, &1);
+        token.mint(&v2, &1);
+        token.mint(&v3, &1);
         client.vote(&v1, &id, &true);
         client.vote(&v2, &id, &false);
         client.vote(&v3, &id, &false);
 
-        env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
 
         assert_eq!(client.get_proposal(&id).status, ProposalStatus::Rejected);
@@ -562,30 +676,34 @@ mod tests {
 
     #[test]
     fn test_finalise_emits_event() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
+        token.mint(&voter, &1);
         client.vote(&voter, &id, &true);
-        env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
-        assert!(env.events().all().len() >= 1);
+        assert!(!env.events().all().events().is_empty());
     }
 
     #[test]
     #[should_panic(expected = "voting period not ended")]
     fn test_finalise_before_period_ends_panics() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         client.finalise(&id);
     }
 
     #[test]
     fn test_execute_passed_proposal() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
+        token.mint(&voter, &1);
         client.vote(&voter, &id, &true);
-        env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
         client.execute(&id);
 
@@ -594,22 +712,25 @@ mod tests {
 
     #[test]
     fn test_execute_emits_event() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         let voter = Address::generate(&env);
+        token.mint(&voter, &1);
         client.vote(&voter, &id, &true);
-        env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
         client.execute(&id);
-        assert!(env.events().all().len() >= 1);
+        assert!(!env.events().all().events().is_empty());
     }
 
     #[test]
     #[should_panic(expected = "proposal not passed")]
     fn test_execute_rejected_proposal_panics() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
-        env.ledger().with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
         client.finalise(&id);
         client.execute(&id);
     }
@@ -617,9 +738,59 @@ mod tests {
     #[test]
     #[should_panic(expected = "proposal not passed")]
     fn test_execute_active_proposal_panics() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let (id, _) = make_proposal(&env, &client);
         client.execute(&id);
+    }
+
+    #[test]
+    fn test_absolute_quorum_passes_at_exact_quorum() {
+        let (env, _, client, token) = setup_with_quorum(Quorum::Absolute(10));
+        let (id, _) = make_proposal(&env, &client);
+        let voter = Address::generate(&env);
+        token.mint(&voter, &10);
+        client.vote(&voter, &id, &true);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        client.finalise(&id);
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Passed);
+    }
+
+    #[test]
+    fn test_absolute_quorum_fails_one_below() {
+        let (env, _, client, token) = setup_with_quorum(Quorum::Absolute(10));
+        let (id, _) = make_proposal(&env, &client);
+        let voter = Address::generate(&env);
+        token.mint(&voter, &9);
+        client.vote(&voter, &id, &true);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        client.finalise(&id);
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Rejected);
+    }
+
+    #[test]
+    fn test_percent_quorum_uses_token_supply() {
+        let (env, _, client, token) = setup_with_quorum(Quorum::Percent(2_500));
+        let (id, _) = make_proposal(&env, &client);
+        let voter = Address::generate(&env);
+        let passive = Address::generate(&env);
+        token.mint(&voter, &25);
+        token.mint(&passive, &75);
+        assert_eq!(client.quorum_votes_required(), 25);
+        client.vote(&voter, &id, &true);
+        env.ledger()
+            .with_mut(|l| l.sequence_number += VOTING_PERIOD + 1);
+        client.finalise(&id);
+        assert_eq!(client.get_proposal(&id).status, ProposalStatus::Passed);
+    }
+
+    #[test]
+    fn test_admin_can_update_quorum() {
+        let (env, admin, client, _token) = setup();
+        client.set_quorum(&Quorum::Absolute(7));
+        assert_eq!(client.get_quorum(), Quorum::Absolute(7));
+        let _ = admin;
     }
 
     // ── Upgrade tests ─────────────────────────────────────────────────────────
@@ -628,11 +799,20 @@ mod tests {
     fn test_upgrade_approval_accumulates() {
         let env = Env::default();
         env.mock_all_auths();
+        let token_id = env.register(NovaToken, ());
+        let token = NovaTokenClient::new(&env, &token_id);
         let id = env.register(GovernanceContract, ());
         let client = GovernanceContractClient::new(&env, &id);
         let s1 = Address::generate(&env);
         let s2 = Address::generate(&env);
-        client.initialize(&s1, &vec![&env, s1.clone(), s2.clone()], &2);
+        token.initialize(&s1);
+        client.initialize(
+            &s1,
+            &token_id,
+            &Quorum::Absolute(1),
+            &vec![&env, s1.clone(), s2.clone()],
+            &2,
+        );
 
         let fake_hash = BytesN::from_array(&env, &[0u8; 32]);
         client.approve_upgrade(&s1, &fake_hash);
@@ -643,7 +823,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "not an authorized signer")]
     fn test_unauthorized_upgrade_rejected() {
-        let (env, _, client) = setup();
+        let (env, _, client, token) = setup();
         let outsider = Address::generate(&env);
         let fake_hash = BytesN::from_array(&env, &[1u8; 32]);
         client.approve_upgrade(&outsider, &fake_hash);
@@ -654,11 +834,20 @@ mod tests {
     fn test_duplicate_approval_rejected() {
         let env = Env::default();
         env.mock_all_auths();
+        let token_id = env.register(NovaToken, ());
+        let token = NovaTokenClient::new(&env, &token_id);
         let id = env.register(GovernanceContract, ());
         let client = GovernanceContractClient::new(&env, &id);
         let s1 = Address::generate(&env);
         let s2 = Address::generate(&env);
-        client.initialize(&s1, &vec![&env, s1.clone(), s2.clone()], &2);
+        token.initialize(&s1);
+        client.initialize(
+            &s1,
+            &token_id,
+            &Quorum::Absolute(1),
+            &vec![&env, s1.clone(), s2.clone()],
+            &2,
+        );
 
         let fake_hash = BytesN::from_array(&env, &[2u8; 32]);
         client.approve_upgrade(&s1, &fake_hash);

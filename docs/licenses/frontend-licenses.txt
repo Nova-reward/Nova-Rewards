@@ -1,4 +1,5 @@
 License report for frontend
 ==========================
+├─ MIT: 2
 └─ UNLICENSED: 1
 

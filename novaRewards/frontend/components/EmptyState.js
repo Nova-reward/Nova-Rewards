@@ -1,3 +1,13 @@
+/** Preset configs for common empty states. */
+export const EMPTY_STATE_VARIANTS = {
+  'no-rewards':      { icon: 'rewards',      title: 'No rewards earned yet',       description: 'Browse partner campaigns to start earning NOVA tokens.',  actionLabel: 'Browse Campaigns' },
+  'no-transactions': { icon: 'transactions', title: 'No activity yet',             description: 'Earn or redeem NOVA tokens to see your transaction history.', actionLabel: 'Start Earning' },
+  'no-campaigns':    { icon: 'campaigns',    title: 'No active campaigns',         description: 'Check back soon — new merchant campaigns are added regularly.', actionLabel: null },
+  'no-wallet':       { icon: 'inbox',        title: 'Connect your wallet',         description: 'Connect a Stellar wallet to see your NOVA balance and transactions.', actionLabel: 'Connect Wallet' },
+  'loading-error':   { icon: 'search',       title: 'Something went wrong',        description: 'We couldn\'t load this content. Please try again.',        actionLabel: 'Try Again' },
+  'search-empty':    { icon: 'search',       title: 'No results found',            description: 'Try a different search term or browse all campaigns.',     actionLabel: 'Clear Search' },
+};
+
 /**
  * EmptyState — reusable empty state with illustration, headline, description, and CTA.
  * Includes SVG illustrations optimized for web (<5KB each).
@@ -13,14 +23,21 @@
  * }} props
  */
 export default function EmptyState({
-  icon = 'inbox',
+  icon,
   illustration,
-  title = 'Nothing here yet',
-  description = 'Get started by taking an action below.',
+  title,
+  description,
   actionLabel,
   onAction,
   variant = 'default',
+  emptyVariant,        // 'no-rewards' | 'no-transactions' | 'no-campaigns' | 'no-wallet' | 'loading-error' | 'search-empty'
 }) {
+  // Merge preset config with caller overrides
+  const preset = emptyVariant ? EMPTY_STATE_VARIANTS[emptyVariant] ?? {} : {};
+  icon        = icon        ?? preset.icon        ?? 'inbox';
+  title       = title       ?? preset.title       ?? 'Nothing here yet';
+  description = description ?? preset.description ?? 'Get started by taking an action below.';
+  actionLabel = actionLabel ?? preset.actionLabel ?? undefined;
   // Optimized SVG illustrations (~2-4KB each)
   const illustrations = {
     inbox: (

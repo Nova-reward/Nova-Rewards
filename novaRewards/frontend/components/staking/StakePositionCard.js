@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { formatTokenAmount } from '../../lib/formatting';
 
 export default function StakePositionCard({ 
   stakePosition, 
@@ -84,7 +85,7 @@ export default function StakePositionCard({
         <div className="bg-white dark:bg-neutral-800 rounded-lg p-4">
           <p className="type-body-sm text-neutral-600 dark:text-neutral-400 mb-1">Staked Amount</p>
           <p className="type-h3 text-neutral-900 dark:text-white">
-            {stakedAmount.toFixed(2)}
+            {formatTokenAmount(stakedAmount)}
           </p>
           <p className="type-caption text-neutral-500 dark:text-neutral-400 mt-1">NOVA</p>
         </div>
@@ -93,7 +94,7 @@ export default function StakePositionCard({
         <div className="bg-white dark:bg-neutral-800 rounded-lg p-4">
           <p className="type-body-sm text-neutral-600 dark:text-neutral-400 mb-1">Accrued Rewards</p>
           <p className="type-h3 text-primary-600 dark:text-primary-400">
-            +{accruedRewards.toFixed(4)}
+            +{formatTokenAmount(accruedRewards)}
           </p>
           <p className="type-caption text-neutral-500 dark:text-neutral-400 mt-1">NOVA</p>
         </div>
@@ -102,7 +103,7 @@ export default function StakePositionCard({
         <div className="bg-white dark:bg-neutral-800 rounded-lg p-4">
           <p className="type-body-sm text-neutral-600 dark:text-neutral-400 mb-1">Total Value</p>
           <p className="type-h3 text-secondary-600 dark:text-secondary-400">
-            {totalValue.toFixed(2)}
+            {formatTokenAmount(totalValue)}
           </p>
           <p className="type-caption text-neutral-500 dark:text-neutral-400 mt-1">NOVA</p>
         </div>

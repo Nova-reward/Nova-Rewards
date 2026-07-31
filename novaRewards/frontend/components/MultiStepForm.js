@@ -48,6 +48,7 @@ export default function MultiStepForm({
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [liveMessage, setLiveMessage] = useState('');
   const [done, setDone] = useState(false);
 
   // Sync step to URL param
@@ -74,6 +75,11 @@ export default function MultiStepForm({
     if (current === REVIEW_INDEX) return true;
     const errs = steps[current].validate?.(data) ?? {};
     setErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setLiveMessage('Please fix the highlighted errors before continuing.');
+    } else {
+      setLiveMessage('');
+    }
     return Object.keys(errs).length === 0;
   }, [current, data, steps, REVIEW_INDEX]);
 
@@ -81,11 +87,13 @@ export default function MultiStepForm({
     if (!validateCurrent()) return;
     setCurrent((c) => c + 1);
     setErrors({});
+    setLiveMessage('');
   }, [validateCurrent]);
 
   const prev = useCallback(() => {
     setCurrent((c) => c - 1);
     setErrors({});
+    setLiveMessage('');
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -101,7 +109,9 @@ export default function MultiStepForm({
       }
       setDone(true);
     } catch (err) {
-      setSubmitError(err.message || 'Submission failed. Please try again.');
+      const message = err.message || 'Submission failed. Please try again.';
+      setSubmitError(message);
+      setLiveMessage(message);
     } finally {
       setSubmitting(false);
     }
@@ -121,6 +131,9 @@ export default function MultiStepForm({
 
   return (
     <div className="msf">
+      <div role="status" aria-live="polite" aria-atomic="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+        {liveMessage}
+      </div>
       {/* Step indicator */}
       <div className="msf-indicator" role="list">
         {steps.map((step, i) => (

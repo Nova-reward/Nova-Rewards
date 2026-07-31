@@ -20,7 +20,7 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('contracts/fuzz/Cargo.toml') }}
@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload corpus artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-corpus-${{ github.run_id }}
           path: |
@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload crash artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-crashes-${{ github.run_id }}
           path: contracts/fuzz/artifacts/

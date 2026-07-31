@@ -1,3 +1,5 @@
+export { formatTokenAmount } from '../../novaRewards/frontend/lib/formatting';
+
 export function formatNumber(num: number, decimals: number = 2): string {
   if (isNaN(num)) return '0';
   
@@ -23,3 +25,4 @@ export function truncateAddress(address: string, start = 6, end = 4): string {
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+

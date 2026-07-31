@@ -3,12 +3,14 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import api from '../lib/api';
+import { useTokenExpiry } from '../hooks/useTokenExpiry';
 
 const AuthContext = createContext(null);
 
 /**
  * Provides authentication state and actions to the entire app.
  * Requirements: 163.4, 163.5, 163.6
+ * Feature: JWT token expiry warning modal (2 min before expiry)
  */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -16,7 +18,33 @@ export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showTokenWarning, setShowTokenWarning] = useState(false);
+  const [tokenRefreshLoading, setTokenRefreshLoading] = useState(false);
   const router = useRouter();
+
+  // Track token expiry and manage warning modal
+  const { expiresIn, isInactive } = useTokenExpiry(token, {
+    warningThreshold: 2,
+    inactivityTimeout: 5,
+    onWarning: () => {
+      setShowTokenWarning(true);
+    },
+    onExpiry: () => {
+      // Auto-logout when token expires
+      setToken(null);
+      setUser(null);
+      setIsAuthenticated(false);
+      setError(null);
+      setShowTokenWarning(false);
+      
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('authUser');
+      document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      
+      router.push('/login');
+    },
+  });
 
   // Initialize auth state from localStorage on mount
   useEffect(() => {
@@ -148,6 +176,38 @@ export function AuthProvider({ children }) {
   }, []);
 
   /**
+   * Refresh access token silently
+   * Used by token expiry warning modal
+   */
+  const refreshAccessToken = useCallback(async () => {
+    setTokenRefreshLoading(true);
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!refreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const response = await api.post('/auth/refresh', { refreshToken });
+      const { accessToken } = response.data.data;
+      
+      setToken(accessToken);
+      localStorage.setItem('authToken', accessToken);
+      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+      
+      setShowTokenWarning(false);
+      return { success: true };
+    } catch (err) {
+      console.error('[refreshAccessToken] Failed to refresh token:', err);
+      // If refresh fails, logout user
+      logout();
+      router.push('/login');
+      return { success: false, error: err.message };
+    } finally {
+      setTokenRefreshLoading(false);
+    }
+  }, [router]);
+
+  /**
    * Logout user and clear all auth state
    * Requirements: 163.6
    */
@@ -156,6 +216,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setIsAuthenticated(false);
     setError(null);
+    setShowTokenWarning(false);
     
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
@@ -182,6 +243,13 @@ export function AuthProvider({ children }) {
         login,
         logout,
         clearError,
+        // Token expiry management
+        showTokenWarning,
+        setShowTokenWarning,
+        expiresIn,
+        isInactive,
+        refreshAccessToken,
+        tokenRefreshLoading,
       }}
     >
       {children}

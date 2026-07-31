@@ -8,6 +8,7 @@ import LoadingSkeleton from "../components/LoadingSkeleton";
 import ErrorBoundary from "../components/ErrorBoundary";
 import Navbar from "../components/Navbar";
 import { truncateAddress } from "../lib/truncateAddress";
+import { formatTokenAmount } from "../lib/formatting";
 
 /**
  * Customer dashboard — balance, transaction history, trustline, transfer, redeem.
@@ -77,7 +78,7 @@ function DashboardContent() {
                   NOVA Balance
                 </p>
                 <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }}>
-                  {parseFloat(balance).toFixed(2)}
+                  {formatTokenAmount(balance)}
                 </p>
                 <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>NOVA</p>
                 <button
@@ -118,7 +119,7 @@ function DashboardContent() {
                           return (
                             <tr key={tx.id || i}>
                               <td>{type}</td>
-                              <td>{parseFloat(amount).toFixed(4)} NOVA</td>
+                              <td>{formatTokenAmount(amount)} NOVA</td>
                               <td
                                 style={{
                                   fontFamily: "monospace",
@@ -171,6 +172,10 @@ function DashboardContent() {
       </div>
     </>
   );
+}
+
+export async function getServerSideProps() {
+  return { props: {} };
 }
 
 export default function Dashboard() {

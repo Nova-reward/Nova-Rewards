@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const { query, pool } = require('./index');
 const { client: redisClient } = require('../lib/redis');
 
