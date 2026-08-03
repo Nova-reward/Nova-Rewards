@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ secrets.VERCEL_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Deploy to Vercel (Preview)
         id: vercel-deploy
