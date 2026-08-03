@@ -4,7 +4,7 @@
   "description": "NovaRewards Stellar blockchain layer",
   "main": "stellarService.js",
   "dependencies": {
-    "dotenv": "^16.6.1",
+    "dotenv": "^17.4.2",
     "stellar-sdk": "^13.3.0"
   }
 }
