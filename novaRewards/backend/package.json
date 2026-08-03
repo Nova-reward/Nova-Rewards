@@ -24,8 +24,8 @@
     "load:seed": "node tests/load/seed.js"
   },
   "dependencies": {
-    "@aws-sdk/client-secrets-manager": "^3.1097.0",
-    "@elastic/elasticsearch": "^9.4.2",
+    "@aws-sdk/client-secrets-manager": "^3.1099.0",
+    "@elastic/elasticsearch": "^9.4.3",
     "@prisma/client": "^7.9.1",
     "bcryptjs": "^3.0.3",
     "compression": "1.8.1",
