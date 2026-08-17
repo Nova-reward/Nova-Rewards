@@ -10,7 +10,7 @@ const logger = require('../lib/logger');
  *  - Expose index/delete helpers for event-driven sync
  */
 
-const { Client } = require('@elastic/elasticsearch');
+const { Client, errors } = require('@elastic/elasticsearch');
 
 // ---------------------------------------------------------------------------
 // Client
@@ -42,6 +42,39 @@ const INDICES = {
   campaigns: 'nova_campaigns',
   users:     'nova_users',
 };
+
+// ---------------------------------------------------------------------------
+// Connectivity error guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the error represents a transient ES connectivity problem
+ * (node unreachable, no cluster members alive, etc.).  These should be handled
+ * gracefully rather than propagating a 500 to the caller.
+ *
+ * Actual query/mapping ResponseErrors (bad requests) are NOT connectivity
+ * errors and must still propagate so the caller can react appropriately.
+ */
+function isConnectivityError(err) {
+  if (!err) return false;
+  // @elastic/elasticsearch v8+ exposes error classes on the `errors` export.
+  if (errors) {
+    if (
+      err instanceof errors.ConnectionError ||
+      err instanceof errors.NoLivingConnectionsError ||
+      err instanceof errors.TimeoutError
+    ) {
+      return true;
+    }
+  }
+  // Fallback for environments where the class check fails: inspect the name.
+  const name = err.name || '';
+  return (
+    name === 'ConnectionError' ||
+    name === 'NoLivingConnectionsError' ||
+    name === 'TimeoutError'
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Index mappings
@@ -185,21 +218,53 @@ function userToDoc(user) {
 // ---------------------------------------------------------------------------
 
 async function indexReward(reward) {
-  await getClient().index({ index: INDICES.rewards, id: String(reward.id), document: rewardToDoc(reward) });
+  try {
+    await getClient().index({ index: INDICES.rewards, id: String(reward.id), document: rewardToDoc(reward) });
+  } catch (err) {
+    if (isConnectivityError(err)) {
+      logger.warn('[Search] ES unreachable — indexReward skipped:', err.message);
+      return;
+    }
+    throw err;
+  }
 }
 
 async function indexCampaign(campaign) {
-  await getClient().index({ index: INDICES.campaigns, id: String(campaign.id), document: campaignToDoc(campaign) });
+  try {
+    await getClient().index({ index: INDICES.campaigns, id: String(campaign.id), document: campaignToDoc(campaign) });
+  } catch (err) {
+    if (isConnectivityError(err)) {
+      logger.warn('[Search] ES unreachable — indexCampaign skipped:', err.message);
+      return;
+    }
+    throw err;
+  }
 }
 
 async function indexUser(user) {
-  await getClient().index({ index: INDICES.users, id: String(user.id), document: userToDoc(user) });
+  try {
+    await getClient().index({ index: INDICES.users, id: String(user.id), document: userToDoc(user) });
+  } catch (err) {
+    if (isConnectivityError(err)) {
+      logger.warn('[Search] ES unreachable — indexUser skipped:', err.message);
+      return;
+    }
+    throw err;
+  }
 }
 
 async function deleteDocument(entityType, id) {
   const index = INDICES[entityType];
   if (!index) throw new Error(`Unknown entity type: ${entityType}`);
-  await getClient().delete({ index, id: String(id) });
+  try {
+    await getClient().delete({ index, id: String(id) });
+  } catch (err) {
+    if (isConnectivityError(err)) {
+      logger.warn('[Search] ES unreachable — deleteDocument skipped:', err.message);
+      return;
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +282,10 @@ async function deleteDocument(entityType, id) {
  *   limit?: number,
  * }} opts
  * @returns {Promise<{ hits: object[], total: number, facets: object, durationMs: number }>}
+ *
+ * When Elasticsearch is unreachable (ConnectionError / NoLivingConnectionsError),
+ * the function degrades gracefully: logs a warning and returns an empty result
+ * set rather than propagating an unhandled 500.
  */
 async function search({ q, entityType = 'all', filters = {}, page = 1, limit = 20 }) {
   const client = getClient();
@@ -261,27 +330,37 @@ async function search({ q, entityType = 'all', filters = {}, page = 1, limit = 2
   };
 
   const t0 = Date.now();
-  const response = await client.search({
-    index: indices,
-    from,
-    size: limit,
-    query: esQuery,
-    highlight: {
-      fields: {
-        name:        { number_of_fragments: 0 },
-        description: { number_of_fragments: 1, fragment_size: 150 },
-        email:       { number_of_fragments: 0 },
+  let response;
+  try {
+    response = await client.search({
+      index: indices,
+      from,
+      size: limit,
+      query: esQuery,
+      highlight: {
+        fields: {
+          name:        { number_of_fragments: 0 },
+          description: { number_of_fragments: 1, fragment_size: 150 },
+          email:       { number_of_fragments: 0 },
+        },
       },
-    },
-    aggs: {
-      by_type: {
-        terms: { field: '_index', size: 10 },
+      aggs: {
+        by_type: {
+          terms: { field: '_index', size: 10 },
+        },
+        active_count: {
+          filter: { term: { is_active: true } },
+        },
       },
-      active_count: {
-        filter: { term: { is_active: true } },
-      },
-    },
-  });
+    });
+  } catch (err) {
+    if (isConnectivityError(err)) {
+      logger.warn('[Search] ES unreachable — returning degraded result for search:', err.message);
+      return { hits: [], total: 0, facets: { byType: [], activeCount: null }, durationMs: Date.now() - t0 };
+    }
+    // ResponseError (bad query, mapping mismatch, etc.) propagates normally
+    throw err;
+  }
   const durationMs = Date.now() - t0;
 
   const hits = response.hits.hits.map((hit) => ({
@@ -316,6 +395,8 @@ async function search({ q, entityType = 'all', filters = {}, page = 1, limit = 2
  *
  * @param {{ prefix: string, entityType?: string, limit?: number }} opts
  * @returns {Promise<string[]>}
+ *
+ * Returns an empty array when Elasticsearch is unreachable.
  */
 async function suggest({ prefix, entityType = 'all', limit = 5 }) {
   const client = getClient();
@@ -324,22 +405,31 @@ async function suggest({ prefix, entityType = 'all', limit = 5 }) {
     ? Object.values(INDICES)
     : [INDICES[entityType]].filter(Boolean);
 
-  const response = await client.search({
-    index: indices,
-    suggest: {
-      nova_suggest: {
-        prefix,
-        completion: {
-          field: 'suggest',
-          size:  limit,
-          skip_duplicates: true,
-          fuzzy: { fuzziness: 1 },
+  let response;
+  try {
+    response = await client.search({
+      index: indices,
+      suggest: {
+        nova_suggest: {
+          prefix,
+          completion: {
+            field: 'suggest',
+            size:  limit,
+            skip_duplicates: true,
+            fuzzy: { fuzziness: 1 },
+          },
         },
       },
-    },
-    _source: false,
-    size: 0,
-  });
+      _source: false,
+      size: 0,
+    });
+  } catch (err) {
+    if (isConnectivityError(err)) {
+      logger.warn('[Search] ES unreachable — returning empty suggestions:', err.message);
+      return [];
+    }
+    throw err;
+  }
 
   const options = response.suggest?.nova_suggest?.[0]?.options ?? [];
   return [...new Set(options.map((o) => o.text))];
@@ -385,4 +475,9 @@ module.exports = {
   suggest,
   bulkIndex,
   INDICES,
+  isConnectivityError,
+  /** For testing only — resets the singleton so a fresh client is created on next call. */
+  _resetClient() { esClient = null; },
+  /** For testing only — directly sets the ES client singleton (bypasses real Client constructor). */
+  _setClient(client) { esClient = client; },
 };
