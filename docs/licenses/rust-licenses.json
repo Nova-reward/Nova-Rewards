@@ -1333,7 +1333,7 @@
   },
   {
     "name": "soroban-builtin-sdk-macros",
-    "version": "27.0.0",
+    "version": "27.0.1",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-env",
     "license": "Apache-2.0",
@@ -1342,7 +1342,7 @@
   },
   {
     "name": "soroban-env-common",
-    "version": "27.0.0",
+    "version": "27.0.1",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-env",
     "license": "Apache-2.0",
@@ -1351,7 +1351,7 @@
   },
   {
     "name": "soroban-env-guest",
-    "version": "27.0.0",
+    "version": "27.0.1",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-env",
     "license": "Apache-2.0",
@@ -1360,7 +1360,7 @@
   },
   {
     "name": "soroban-env-host",
-    "version": "27.0.0",
+    "version": "27.0.1",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-env",
     "license": "Apache-2.0",
@@ -1369,7 +1369,7 @@
   },
   {
     "name": "soroban-env-macros",
-    "version": "27.0.0",
+    "version": "27.0.1",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-env",
     "license": "Apache-2.0",
@@ -1378,7 +1378,7 @@
   },
   {
     "name": "soroban-ledger-snapshot",
-    "version": "27.0.0",
+    "version": "27.0.6",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-sdk",
     "license": "Apache-2.0",
@@ -1387,7 +1387,7 @@
   },
   {
     "name": "soroban-sdk",
-    "version": "27.0.0",
+    "version": "27.0.6",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-sdk",
     "license": "Apache-2.0",
@@ -1396,7 +1396,7 @@
   },
   {
     "name": "soroban-sdk-macros",
-    "version": "27.0.0",
+    "version": "27.0.6",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-sdk",
     "license": "Apache-2.0",
@@ -1405,7 +1405,7 @@
   },
   {
     "name": "soroban-spec",
-    "version": "27.0.0",
+    "version": "27.0.6",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-sdk",
     "license": "Apache-2.0",
@@ -1414,7 +1414,7 @@
   },
   {
     "name": "soroban-spec-rust",
-    "version": "27.0.0",
+    "version": "27.0.6",
     "authors": "Stellar Development Foundation <info@stellar.org>",
     "repository": "https://github.com/stellar/rs-soroban-sdk",
     "license": "Apache-2.0",
