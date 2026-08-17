@@ -183,7 +183,7 @@ app.use(globalErrorHandler);
 
 // Only start the server when this file is run directly (not when required by tests)
 if (require.main === module) {
-  app.listen(PORT, async () => {
+  const server = app.listen(PORT, async () => {
     await connectRedis();
     startLeaderboardCacheWarmer();
     startDailyLoginBonusJob();
@@ -197,6 +197,56 @@ if (require.main === module) {
     logger.info(`✅ Detailed health: http://localhost:${PORT}/health/detailed`);
     logger.info(`✅ Pool status: http://localhost:${PORT}/pool-status`);
   });
+
+  // ── Coordinated shutdown sequence ─────────────────────────────────────────
+  // Order is critical to prevent UnhandledPromiseRejection:
+  //   1. Stop accepting new HTTP requests (server.close)
+  //   2. Close the BullMQ worker (drains in-flight jobs, stops polling)
+  //   3. Close BullMQ queue connections (flushes DLQ handler)
+  //   4. Drain & close the DB connection pool (safe — all writers are done)
+
+  let isShuttingDown = false;
+
+  async function gracefulShutdown(signal) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    logger.info('[Server] received signal — starting graceful shutdown', { signal });
+
+    // 1. Stop accepting new HTTP connections
+    server.close((httpErr) => {
+      if (httpErr) {
+        logger.error('[Server] error closing HTTP server', { error: httpErr.message });
+      } else {
+        logger.info('[Server] HTTP server closed');
+      }
+    });
+
+    try {
+      // 2. Close BullMQ worker + DLQ queue (must happen before DB pool closes)
+      const { shutdownWorker } = require('./jobs/rewardIssuanceWorker');
+      await shutdownWorker();
+
+      // 3. Close all remaining BullMQ queue connections
+      const { shutdownQueues } = require('./jobs/queues');
+      await shutdownQueues();
+
+      // 4. Drain the DB connection pool
+      logger.info('[Server] closing DB pool…');
+      const { pool } = require('./db/index');
+      await pool.end();
+      logger.info('[Server] DB pool closed');
+
+      logger.info('[Server] graceful shutdown complete');
+      process.exit(0);
+    } catch (err) {
+      logger.error('[Server] shutdown error', { error: err.message });
+      process.exit(1);
+    }
+  }
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 module.exports = app;
