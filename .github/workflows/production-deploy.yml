@@ -18,7 +18,7 @@ jobs:
       run:
         working-directory: novaRewards
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
@@ -54,7 +54,7 @@ jobs:
       previous_slot: ${{ steps.swap.outputs.previous_slot }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
@@ -197,7 +197,7 @@ jobs:
         working-directory: novaRewards/frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
