@@ -59,8 +59,12 @@ export default defineConfig({
     testTimeout: 15000,
     clearMocks: true,
     restoreMocks: true,
-    // Disable auto-loading of .env files since we set vars in globalSetup
-    env: {},
+    // Disable auto-loading of .env files since we set vars in globalSetup.
+    // NODE_ENV is set here so it is available in every test worker before any
+    // module is evaluated (the globalSetup approach only sets it in the main
+    // process; workers inherit it, but CJS require()-based guards like
+    // merchantRepository.js check it at module-load time).
+    env: { NODE_ENV: 'test' },
     include: ['tests/**/*.test.js'],
     exclude: [
       'tests/load/**',
@@ -75,6 +79,7 @@ export default defineConfig({
       inline: [
         /\/backend\//,
         /\/blockchain\//,
+        /@elastic\/elasticsearch/,
       ],
     },
     coverage: {
