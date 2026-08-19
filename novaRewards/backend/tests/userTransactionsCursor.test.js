@@ -115,6 +115,82 @@ describe('getUserTransactionsCursor', () => {
     expect(callArgs[0]).toContain('from_wallet = $1 OR t.to_wallet = $1');
     expect(callArgs[1][0]).toBe('WALLET_XYZ');
   });
+
+  // -------------------------------------------------------------------------
+  // Edge case: cursor pointing to a deleted / non-existent record (#866)
+  // -------------------------------------------------------------------------
+  test('cursor pointing to a non-existent id returns empty page, not 500', async () => {
+    // The DB returns 0 rows when the cursor references a since-deleted row.
+    // The WHERE clause simply matches nothing — this is not an error.
+    const deletedCursor = encodeCursor('2024-06-01T12:00:00.000Z', 99999);
+    query.mockResolvedValue({ rows: [] });
+
+    const result = await getUserTransactionsCursor('WALLET_A', { limit: 10, cursor: deletedCursor });
+
+    // Must resolve cleanly and return a proper empty-page shape.
+    expect(result).toEqual({ data: [], nextCursor: null, hasMore: false });
+  });
+
+  // -------------------------------------------------------------------------
+  // Edge case: limit exceeding server maximum (#866)
+  // -------------------------------------------------------------------------
+  test('clamps an over-limit value (500) to exactly 100 in the LIMIT parameter', async () => {
+    query.mockResolvedValue({ rows: [] });
+    await getUserTransactionsCursor('WALLET_A', { limit: 500 });
+    const params = query.mock.calls[0][1];
+    // Last param is safeLimit + 1. safeLimit = min(max(1,500),100) = 100 → 101.
+    expect(params[params.length - 1]).toBe(101);
+  });
+
+  test('clamps a below-minimum value (-5) to exactly 1 in the LIMIT parameter', async () => {
+    query.mockResolvedValue({ rows: [] });
+    await getUserTransactionsCursor('WALLET_A', { limit: -5 });
+    const params = query.mock.calls[0][1];
+    // safeLimit = min(max(1,-5),100) = 1 → LIMIT param = 2.
+    expect(params[params.length - 1]).toBe(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // Edge case: SQL metacharacters in cursor value (#866)
+  // -------------------------------------------------------------------------
+  test('cursor containing SQL metacharacters is never interpolated into SQL', async () => {
+    // id "1 OR 1=1" → parseInt yields NaN → cursor rejected → no cursor clause.
+    const maliciousCursor = encodeCursor("'; DROP TABLE transactions; --", "1 OR 1=1");
+    query.mockResolvedValue({ rows: [] });
+
+    await getUserTransactionsCursor('WALLET_A', { limit: 5, cursor: maliciousCursor });
+
+    const [sql] = query.mock.calls[0];
+
+    expect(sql).not.toContain('DROP TABLE');
+    expect(sql).not.toContain('OR 1=1');
+    // Cursor was rejected — no cursor clause in the SQL.
+    expect(sql).not.toContain('AND (t.created_at');
+  });
+
+  test('cursor id with leading digits followed by SQL is sanitised by parseInt', async () => {
+    // parseInt('5; DROP TABLE transactions;--') === 5.
+    // A cursor clause IS added, but the id param must be the integer 5.
+    const craftedCursor = Buffer.from(
+      JSON.stringify({ createdAt: '2024-01-01T00:00:00.000Z', id: '5; DROP TABLE transactions;--' })
+    ).toString('base64');
+
+    query.mockResolvedValue({ rows: [] });
+    await getUserTransactionsCursor('WALLET_A', { limit: 5, cursor: craftedCursor });
+
+    const [sql, params] = query.mock.calls[0];
+
+    // No injected payload in the query string.
+    expect(sql).not.toContain('DROP TABLE');
+
+    if (sql.includes('AND (t.created_at')) {
+      // The id is always the second-to-last param (safeLimit+1 is last).
+      const idParam = params[params.length - 2];
+      expect(typeof idParam).toBe('number');
+      expect(idParam).toBe(5);
+    }
+    // Else: cursor rejected entirely — also acceptable, no injection occurred.
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -223,5 +299,58 @@ describe('GET /api/transactions', () => {
     const res = await request(app).get('/api/transactions?limit=1');
     expect(res.body.hasMore).toBe(true);
     expect(res.body.nextCursor).toBe(nextCursor);
+  });
+
+  // -------------------------------------------------------------------------
+  // Route edge cases: limit clamping (#866)
+  // -------------------------------------------------------------------------
+  test('clamps limit=9999 to exactly 100 before calling repository', async () => {
+    mockGetCursor.mockResolvedValue({ data: [], nextCursor: null, hasMore: false });
+    await request(app).get('/api/transactions?limit=9999');
+    expect(mockGetCursor).toHaveBeenCalledWith(
+      'WALLET_A',
+      expect.objectContaining({ limit: 100 }),
+    );
+  });
+
+  test('clamps limit=0 to 1 (minimum) before calling repository', async () => {
+    mockGetCursor.mockResolvedValue({ data: [], nextCursor: null, hasMore: false });
+    await request(app).get('/api/transactions?limit=0');
+    expect(mockGetCursor).toHaveBeenCalledWith(
+      'WALLET_A',
+      expect.objectContaining({ limit: 1 }),
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // Route edge case: cursor for a deleted record (#866)
+  // -------------------------------------------------------------------------
+  test('cursor for a deleted record yields 200 with empty data, not 500', async () => {
+    mockGetCursor.mockResolvedValue({ data: [], nextCursor: null, hasMore: false });
+    const staleCursor = Buffer.from(
+      JSON.stringify({ createdAt: '2024-01-01', id: 99999 })
+    ).toString('base64');
+    const res = await request(app).get(`/api/transactions?cursor=${staleCursor}`);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toEqual([]);
+    expect(res.body.hasMore).toBe(false);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // Route edge case: SQL metacharacters in cursor query param (#866)
+  // -------------------------------------------------------------------------
+  test('cursor containing SQL metacharacters does not cause 500', async () => {
+    mockGetCursor.mockResolvedValue({ data: [], nextCursor: null, hasMore: false });
+    const maliciousCursor = Buffer.from(
+      JSON.stringify({ createdAt: "'; DROP TABLE transactions; --", id: "1 OR 1=1" })
+    ).toString('base64');
+    const res = await request(app).get(
+      `/api/transactions?cursor=${encodeURIComponent(maliciousCursor)}`
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data).toEqual([]);
   });
 });
