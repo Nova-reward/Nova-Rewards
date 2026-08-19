@@ -1,9 +1,12 @@
+'use strict';
+
 const { Queue } = require('bullmq');
 const { createBullBoard } = require('@bull-board/api');
 const { BullMQAdapter } = require('@bull-board/api/bullMQAdapter');
 const { ExpressAdapter } = require('@bull-board/express');
 const rewardIssuanceFailureRepository = require('../repositories/rewardIssuanceFailureRepository');
 const metricsMiddleware = require('../middleware/metricsMiddleware');
+const logger = require('../lib/logger');
 
 const redisConfig = {
   host: process.env.REDIS_HOST || 'localhost',
@@ -50,14 +53,14 @@ rewardIssuanceQueue.on('failed', async (job, err) => {
     // Remove from Redis to prevent bloat; failure is now in DB
     await job.remove();
 
-    logger.error('[RewardWorker] job permanently failed — moved to DLQ', {
+    logger.error('[RewardQueue] job permanently failed — moved to DLQ', {
       jobId: job.id,
       attempts: job.attemptsMade,
       error: err.message,
     });
   } catch (dlqErr) {
     // Critical: DLQ persistence itself failed. Alert immediately.
-    logger.error('[RewardWorker] DLQ-CRITICAL: failed to persist DLQ entry', {
+    logger.error('[RewardQueue] DLQ-CRITICAL: failed to persist DLQ entry', {
       jobId: job.id,
       dlqError: dlqErr.message,
     });
@@ -109,6 +112,27 @@ createBullBoard({
   serverAdapter: serverAdapter,
 });
 
+/**
+ * Closes all BullMQ queue connections.
+ *
+ * Must be called AFTER the BullMQ worker has been closed (via
+ * shutdownWorker()) but BEFORE the DB pool is drained, so any
+ * in-flight DLQ persistence can complete without a pool-already-
+ * closed error.
+ *
+ * @returns {Promise<void>}
+ */
+async function shutdownQueues() {
+  logger.info('[Queues] closing all queue connections…');
+  await Promise.all([
+    rewardIssuanceQueue.close(),
+    transactionSubmissionQueue.close(),
+    webhookDeliveryQueue.close(),
+    rewardDistributionQueue.close(),
+  ]);
+  logger.info('[Queues] all queue connections closed');
+}
+
 module.exports = {
   rewardIssuanceQueue,
   transactionSubmissionQueue,
@@ -116,4 +140,5 @@ module.exports = {
   rewardDistributionQueue,
   serverAdapter,
   novaRewardDlqTotal,
+  shutdownQueues,
 };
