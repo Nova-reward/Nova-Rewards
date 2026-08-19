@@ -59,7 +59,7 @@ fn setup() -> Suite<'static> {
     let vest_id = env.register(VestingContract, ());
     let vesting = VestingContractClient::new(&env, &vest_id);
     vesting.initialize(&admin);
-    vesting.fund_pool(&1_000_000);
+    vesting.fund_pool(&admin, &1_000_000);
 
     Suite {
         env,
@@ -240,7 +240,7 @@ fn test_vesting_create_and_release() {
     // start=0, cliff=0, duration=1000, total=1000
     let sid = s
         .vesting
-        .create_schedule(&beneficiary, &1_000, &0, &0, &1_000);
+        .create_schedule(&s.admin, &beneficiary, &1_000, &0, &0, &1_000);
     s.env.ledger().set_timestamp(500);
 
     let released = s.vesting.claim_vested(&beneficiary, &sid);
@@ -258,7 +258,7 @@ fn test_vesting_full_release_after_duration() {
 
     let sid = s
         .vesting
-        .create_schedule(&beneficiary, &2_000, &0, &0, &1_000);
+        .create_schedule(&s.admin, &beneficiary, &2_000, &0, &0, &1_000);
     s.env.ledger().set_timestamp(1_000);
 
     let released = s.vesting.claim_vested(&beneficiary, &sid);
@@ -275,7 +275,7 @@ fn test_vesting_before_cliff_nothing_released() {
     // cliff at t=200 (start=0 + cliff_duration=200)
     let schedule = s
         .vesting
-        .create_schedule(&beneficiary, &1_000, &0, &200, &1_000);
+        .create_schedule(&s.admin, &beneficiary, &1_000, &0, &200, &1_000);
     s.env.ledger().set_timestamp(100); // before cliff
 
     let sched = s.vesting.get_schedule(&beneficiary, &schedule);
@@ -351,7 +351,7 @@ fn test_vesting_double_release_rejected() {
     let beneficiary = Address::generate(&s.env);
     let sid = s
         .vesting
-        .create_schedule(&beneficiary, &1_000, &0, &0, &1_000);
+        .create_schedule(&s.admin, &beneficiary, &1_000, &0, &0, &1_000);
     s.env.ledger().set_timestamp(1_000);
     s.vesting.claim_vested(&beneficiary, &sid);
     s.vesting.claim_vested(&beneficiary, &sid);
@@ -397,7 +397,9 @@ fn test_pool_deposit_and_vesting_release() {
     assert_eq!(s.pool.balance(), 10_000);
 
     // Admin creates vesting schedule for employee bonus.
-    let sid = s.vesting.create_schedule(&employee, &3_000, &0, &0, &600);
+    let sid = s
+        .vesting
+        .create_schedule(&s.admin, &employee, &3_000, &0, &0, &600);
     s.env.ledger().set_timestamp(600);
 
     // Employee releases fully vested tokens.
