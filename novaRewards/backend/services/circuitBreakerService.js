@@ -53,7 +53,7 @@ class CircuitBreakerService {
       try {
         return await breaker.fire();
       } catch (err) {
-        if (attempt < maxRetries && breaker.status.closed) {
+        if (attempt < maxRetries && breaker.closed) {
           attempt++;
           logger.info(`[Circuit Breaker] Retrying ${name} (attempt ${attempt}/${maxRetries})...`);
           continue;
