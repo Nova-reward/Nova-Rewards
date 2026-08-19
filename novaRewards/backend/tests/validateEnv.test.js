@@ -95,4 +95,29 @@ describe('validateEnv (Property 11)', () => {
 
     expect(() => validateEnv()).not.toThrow();
   });
+
+  test('throws when IDEMPOTENCY_HMAC_SECRET is missing in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ALLOWED_ORIGIN = 'https://example.com';
+    delete process.env.IDEMPOTENCY_HMAC_SECRET;
+
+    expect(() => validateEnv()).toThrow(expect.objectContaining({
+      message: expect.stringContaining('IDEMPOTENCY_HMAC_SECRET')
+    }));
+  });
+
+  test('passes when IDEMPOTENCY_HMAC_SECRET is set in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ALLOWED_ORIGIN = 'https://example.com';
+    process.env.IDEMPOTENCY_HMAC_SECRET = 'test-idempotency-secret';
+
+    expect(() => validateEnv()).not.toThrow();
+  });
+
+  test('passes when IDEMPOTENCY_HMAC_SECRET is missing in test', () => {
+    process.env.NODE_ENV = 'test';
+    delete process.env.IDEMPOTENCY_HMAC_SECRET;
+
+    expect(() => validateEnv()).not.toThrow();
+  });
 });
