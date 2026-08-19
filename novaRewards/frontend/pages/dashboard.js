@@ -52,14 +52,13 @@ function DashboardContent() {
       <nav className="nav">
         <span className="nav-brand">⭐ NovaRewards</span>
         <div className="nav-links">
-          <span style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
+          <span className="text-neutral-400 text-sm">
             {shortKey}
           </span>
-          <a href="/monitoring" style={{ fontSize: "0.9rem" }}>Monitoring</a>
+          <a href="/monitoring" className="text-sm">Monitoring</a>
           <button
-            className="btn btn-secondary"
+            className="btn btn-secondary px-4 py-1.5"
             onClick={disconnect}
-            style={{ padding: "0.4rem 1rem" }}
           >
             Disconnect
           </button>
@@ -73,8 +72,8 @@ function DashboardContent() {
           <>
             <div className="dashboard-summary-grid">
               {/* Balance card */}
-              <div className="card" style={{ textAlign: "center" }}>
-                <p style={{ color: "#94a3b8", marginBottom: "0.4rem" }}>
+              <div className="card text-center">
+                <p className="text-neutral-400 mb-1.5">
                   NOVA Balance
                 </p>
                 <div
@@ -88,8 +87,7 @@ function DashboardContent() {
                 </div>
                 <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>NOVA</p>
                 <button
-                  className="btn btn-secondary"
-                  style={{ marginTop: "1rem" }}
+                  className="btn btn-secondary mt-4"
                   onClick={() => refreshBalance()}
                 >
                   Refresh
@@ -98,13 +96,13 @@ function DashboardContent() {
 
               {/* Transaction history */}
               <div className="card">
-                <h2 style={{ marginBottom: "1rem" }}>Transaction History</h2>
+                <h2 className="mb-4">Transaction History</h2>
                 {transactions.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "1rem 0" }}>
-                    <p style={{ color: "#94a3b8", marginBottom: "0.75rem" }}>
+                  <div className="text-center py-4">
+                    <p className="text-neutral-400 mb-3">
                       No transactions yet. Start earning NOVA rewards!
                     </p>
-                    <a href="/merchant" style={{ color: "#7c3aed", fontWeight: 600 }}>
+                    <a href="/merchant" className="text-primary-600 font-semibold">
                       Browse merchants →
                     </a>
                   </div>
@@ -126,12 +124,7 @@ function DashboardContent() {
                             <tr key={tx.id || i}>
                               <td>{type}</td>
                               <td>{formatTokenAmount(amount)} NOVA</td>
-                              <td
-                                style={{
-                                  fontFamily: "monospace",
-                                  fontSize: "0.85rem",
-                                }}
-                              >
+                              <td className="font-mono text-sm">
                                 {counterparty}
                               </td>
                               <td>{date}</td>
@@ -147,7 +140,7 @@ function DashboardContent() {
 
             {/* Trustline */}
             <div className="card">
-              <h2 style={{ marginBottom: "1rem" }}>Trustline</h2>
+              <h2 className="mb-4">Trustline</h2>
               <TrustlineButton
                 walletAddress={publicKey}
                 onSuccess={() => refreshBalance()}
@@ -156,7 +149,7 @@ function DashboardContent() {
 
             {/* Transfer */}
             <div className="card">
-              <h2 style={{ marginBottom: "1rem" }}>Send NOVA</h2>
+              <h2 className="mb-4">Send NOVA</h2>
               <TransferForm
                 senderPublicKey={publicKey}
                 senderBalance={balance}
@@ -166,7 +159,7 @@ function DashboardContent() {
 
             {/* Redeem */}
             <div className="card">
-              <h2 style={{ marginBottom: "1rem" }}>Redeem NOVA</h2>
+              <h2 className="mb-4">Redeem NOVA</h2>
               <RedeemForm
                 senderPublicKey={publicKey}
                 senderBalance={balance}
