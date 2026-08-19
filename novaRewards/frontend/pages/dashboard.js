@@ -77,9 +77,15 @@ function DashboardContent() {
                 <p style={{ color: "#94a3b8", marginBottom: "0.4rem" }}>
                   NOVA Balance
                 </p>
-                <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }}>
-                  {formatTokenAmount(balance)}
-                </p>
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-label={`${formatTokenAmount(balance)} NOVA tokens`}
+                >
+                  <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }}>
+                    {formatTokenAmount(balance)}
+                  </p>
+                </div>
                 <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>NOVA</p>
                 <button
                   className="btn btn-secondary"
