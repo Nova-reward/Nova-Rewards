@@ -76,10 +76,16 @@ function DashboardContent() {
                 <p className="text-neutral-400 mb-1.5">
                   NOVA Balance
                 </p>
-                <p className="text-5xl font-extrabold text-primary-600">
-                  {formatTokenAmount(balance)}
-                </p>
-                <p className="text-neutral-400 text-sm">NOVA</p>
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-label={`${formatTokenAmount(balance)} NOVA tokens`}
+                >
+                  <p style={{ fontSize: "3rem", fontWeight: 800, color: "#7c3aed" }}>
+                    {formatTokenAmount(balance)}
+                  </p>
+                </div>
+                <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>NOVA</p>
                 <button
                   className="btn btn-secondary mt-4"
                   onClick={() => refreshBalance()}

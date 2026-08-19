@@ -40,10 +40,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Configure CORS based on environment
-const corsOptions =
-  process.env.NODE_ENV === "production" && process.env.ALLOWED_ORIGIN
-    ? { origin: process.env.ALLOWED_ORIGIN }
-    : {};
+const origins = (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((s) => s.trim());
+
+const corsOptions = {
+  origin: origins,
+};
 
 const { compressionMiddleware } = require('./middleware/compressionMiddleware');
 

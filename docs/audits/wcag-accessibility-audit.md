@@ -84,13 +84,13 @@ Tested with: VoiceOver (macOS/iOS), NVDA (Windows), TalkBack (Android).
 | Form errors | ✅ `aria-errormessage` | ✅ | ✅ `aria-invalid` | ✅ Pass |
 | Charts | ⚠️ Missing figcaption | ⚠️ | N/A | **Fix needed** |
 | Transaction table | ✅ `<th scope>` | ✅ | N/A | ✅ Pass |
-| Balance display | ⚠️ No live update | N/A | ⚠️ Missing | **Fix needed** |
+| Balance display | ✅ `role=status` | ✅ | ✅ `aria-live=polite` | ✅ Pass |
 
 ### Remediation — Charts
 Add `<figure>` + `<figcaption className="sr-only">` with text data summary to all chart components.
 
 ### Remediation — Live Balance
-Add `aria-live="polite"` to the balance display container.
+**Resolved (Issue #1244):** `role="status"` + `aria-live="polite"` + human-readable `aria-label` (e.g. "1,234.50 NOVA tokens") added to the balance container in `novaRewards/frontend/pages/dashboard.js` and `novaRewards/frontend/components/BalanceDisplay.js`.
 
 ---
 
@@ -142,7 +142,7 @@ Add `prefers-reduced-motion` check to `NotificationBell.tsx` badge pulse animati
 | P1 | Placeholder contrast | `globals.css` | 5min |
 | P1 | Icon button touch targets | All icon buttons | 30min |
 | P2 | Chart figcaptions | Chart components | 2h |
-| P2 | Live balance aria-live | `BalanceDisplay` | 15min |
+| P2 | Live balance aria-live | `BalanceDisplay` | ✅ Resolved (#1244) |
 | P2 | Mobile drawer focus trap | `MobileDrawer.tsx` | 1h |
 | P3 | Table arrow navigation | `DataTable.js` | 2h |
 | P3 | Notification bell motion | `NotificationBell.tsx` | 30min |

@@ -68,11 +68,18 @@ describe('Express Server Setup & Middleware Integration', () => {
   });
 
   describe('CORS Behavior', () => {
-    it('allows requests and includes CORS headers in dev/test environment', async () => {
+    it('allows requests from listed origins and sets Access-Control-Allow-Origin header', async () => {
       const response = await request(app)
         .get('/health')
         .set('Origin', 'http://localhost:3000');
-      expect(response.headers['access-control-allow-origin']).toBe('*');
+      expect(response.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+    });
+
+    it('rejects requests from unlisted origins without Access-Control-Allow-Origin header', async () => {
+      const response = await request(app)
+        .get('/health')
+        .set('Origin', 'http://unauthorized-origin.com');
+      expect(response.headers['access-control-allow-origin']).toBeUndefined();
     });
   });
 

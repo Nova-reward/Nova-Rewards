@@ -21,6 +21,7 @@
 
 const { test, expect } = require('@playwright/test');
 const AxeBuilder = require('@axe-core/playwright').default;
+const { mockFreighterExtension } = require('./helpers');
 
 /**
  * Known violations pending remediation.
@@ -535,6 +536,112 @@ test('[a11y] ARIA - Landmark regions are properly labeled', async ({ page }) => 
   const nav = page.locator('nav, [role="navigation"]');
   const navCount = await nav.count();
   expect(navCount).toBeGreaterThanOrEqual(1);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ARIA LIVE REGIONS — Issue #1244
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test('[a11y] Dashboard balance is announced via a polite live region (#1244)', async ({ page, context }) => {
+  // Valid ed25519 key (stellar-sdk rejects non-parseable account IDs in loadAccount)
+  const walletAddress = 'GCOZ6NOBW22QKENEDDN5RN6EZE7GBLGT4VZDVGW4V6XKUM5KN6EOVJSE';
+
+  // authToken cookie so the middleware doesn't redirect /dashboard to /login
+  await context.addCookies([
+    {
+      name: 'authToken',
+      value: 'mock-ci-token',
+      domain: 'localhost',
+      path: '/',
+      httpOnly: false,
+      secure: false,
+    },
+  ]);
+
+  await mockFreighterExtension(page, {
+    installed: true,
+    authorized: true,
+    publicKey: walletAddress,
+  });
+
+  // Mock the real Horizon endpoints the wallet context hydrates from
+  await page.route(`**/accounts/${walletAddress}/payments**`, (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ _embedded: { records: [] } }),
+    });
+  });
+  await page.route(`**/accounts/${walletAddress}`, (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: walletAddress,
+        account_id: walletAddress,
+        sequence: '1234567890',
+        subentry_count: 0,
+        last_modified_ledger: 1,
+        thresholds: { low_threshold: 0, med_threshold: 0, high_threshold: 0 },
+        flags: { auth_required: false, auth_revocable: false, auth_immutable: false },
+        signers: [{ weight: 1, key: walletAddress, type: 'ed25519_public_key' }],
+        data: {},
+        balances: [
+          {
+            balance: '1234.5000000',
+            asset_type: 'credit_alphanum4',
+            asset_code: 'NOVA',
+            asset_issuer: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          },
+          {
+            balance: '1234.5000000',
+            asset_type: 'credit_alphanum4',
+            asset_code: 'NOVA',
+            asset_issuer: walletAddress,
+          },
+        ],
+      }),
+    });
+  });
+
+  // Seed the wallet before any page script runs so the wallet context hydrates
+  // with a connected session on first mount
+  await page.addInitScript(
+    (publicKey) => {
+      localStorage.setItem('walletPublicKey', publicKey);
+      localStorage.setItem('walletType', 'freighter');
+    },
+    walletAddress
+  );
+
+  // Land on the home page; once hydrated it routes to /dashboard client-side,
+  // keeping the wallet context mounted so the dashboard never sees a null key
+  await page.goto('/');
+  await page.waitForURL('**/dashboard');
+  await page.waitForLoadState('networkidle');
+
+  const balanceRegion = page.locator('[role="status"][aria-label*="NOVA tokens"]');
+  await expect(balanceRegion).toBeVisible();
+  await expect(balanceRegion).toHaveAttribute('aria-live', 'polite');
+  await expect(balanceRegion).toHaveAttribute(
+    'aria-label',
+    '1,234.5000000 NOVA tokens'
+  );
+
+  // Scoped axe scan for ARIA/live-region rules — must be zero violations
+  const results = await new AxeBuilder({ page })
+    .withRules([
+      'aria-allowed-attr',
+      'aria-valid-attr',
+      'aria-valid-attr-value',
+      'aria-prohibited-attr',
+    ])
+    .analyze();
+
+  const violations = results.violations.filter(
+    (v) => v.impact === 'critical' || v.impact === 'serious'
+  );
+  expect(violations.length).toBe(0);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

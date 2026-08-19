@@ -74,7 +74,12 @@ export default function BalanceDisplay() {
       <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
         Balance
       </span>
-      <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
+      <span
+        className="text-xs font-semibold text-primary-600 dark:text-primary-400"
+        role="status"
+        aria-live="polite"
+        aria-label={`${formattedBalance} NOVA tokens`}
+      >
         {formattedBalance} NOVA
       </span>
     </div>

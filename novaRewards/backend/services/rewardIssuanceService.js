@@ -33,13 +33,10 @@ import { distributeRewards } from '../../blockchain/sendRewards';
 
 /**
  * The HMAC secret used to sign idempotency keys.
- * Use a dedicated env var so key-space is isolated from JWT/encryption secrets.
- * Falls back to a development-only placeholder — always set in production.
+ * Dedicated env var so key-space is isolated from JWT/encryption secrets.
+ * Required in production (enforced by validateEnv) — no fallback chain.
  */
-const IDEMPOTENCY_HMAC_SECRET =
-  process.env.IDEMPOTENCY_HMAC_SECRET ||
-  process.env.JWT_SECRET ||
-  'dev-insecure-idempotency-secret';
+const IDEMPOTENCY_HMAC_SECRET = process.env.IDEMPOTENCY_HMAC_SECRET;
 
 /**
  * Generates a collision-resistant HMAC-SHA256 idempotency key from a
