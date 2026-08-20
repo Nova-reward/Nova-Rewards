@@ -9,11 +9,11 @@ Run monitoring stack separately from your application:
 ```bash
 # Terminal 1: Start application
 cd novaRewards
-docker-compose up -d
+docker compose up -d
 
 # Terminal 2: Start monitoring
 cd ../monitoring
-docker-compose -f docker-compose.monitoring.yml up -d
+docker compose -f docker-compose.monitoring.yml up -d
 ```
 
 ## Option 2: Integrated Setup (Recommended for Production)
@@ -62,11 +62,11 @@ networks:
 ```bash
 # Start application
 cd novaRewards
-docker-compose up -d
+docker compose up -d
 
 # Start monitoring
 cd ../monitoring
-docker-compose -f docker-compose.monitoring.yml up -d
+docker compose -f docker-compose.monitoring.yml up -d
 ```
 
 ## Option 3: Combined docker-compose
@@ -325,7 +325,7 @@ curl http://localhost:4000/metrics
 docker logs nova-prometheus
 
 # Check network connectivity
-docker exec -it nova-prometheus wget -O- http://backend:4000/metrics
+docker exec -it nova-prometheus wget -O- http://backend:3001/metrics
 ```
 
 ### Prometheus Can't Scrape Targets

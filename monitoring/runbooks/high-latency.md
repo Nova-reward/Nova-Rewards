@@ -107,7 +107,7 @@ docker exec -it nova-postgres psql -U nova -d nova_rewards -c "ANALYZE;"
 docker exec -it nova-redis redis-cli INFO stats | grep keyspace
 
 # Warm up cache
-curl -X POST http://backend:4000/api/admin/cache/warm
+curl -X POST http://backend:3001/api/admin/cache/warm
 
 # Increase cache TTL if appropriate
 ```

@@ -33,7 +33,7 @@ POSTGRES_PASSWORD=your-postgres-password
 docker network create nova-rewards_monitoring
 
 # Start monitoring stack
-docker-compose -f docker-compose.monitoring.yml up -d
+docker compose -f docker-compose.monitoring.yml up -d
 
 # Wait for services to start
 sleep 30
@@ -43,7 +43,7 @@ sleep 30
 
 ```bash
 # Check all services are running
-docker-compose -f docker-compose.monitoring.yml ps
+docker compose -f docker-compose.monitoring.yml ps
 
 # Should see all services as "Up"
 ```
@@ -77,7 +77,7 @@ Open in your browser:
 curl http://localhost:9090/api/v1/targets
 
 # Test metrics endpoint
-curl http://localhost:4000/metrics
+curl http://localhost:3001/metrics
 
 # Test alert system
 ./scripts/test-alerts.sh
