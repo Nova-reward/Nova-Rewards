@@ -33,13 +33,13 @@ impl MockToken {
         let bal = Self::balance(env.clone(), to.clone());
         env.storage()
             .instance()
-            .set(&to.clone().to_xdr(&env), &(bal + amount));
+            .set(&to, &(bal + amount));
     }
 
     pub fn balance(env: Env, addr: Address) -> i128 {
         env.storage()
             .instance()
-            .get::<_, i128>(&addr.clone().to_xdr(&env))
+            .get::<_, i128>(&addr)
             .unwrap_or(0)
     }
 
@@ -48,11 +48,11 @@ impl MockToken {
         assert!(from_bal >= amount, "insufficient balance");
         env.storage()
             .instance()
-            .set(&from.clone().to_xdr(&env), &(from_bal - amount));
+            .set(&from, &(from_bal - amount));
         let to_bal = Self::balance(env.clone(), to.clone());
         env.storage()
             .instance()
-            .set(&to.clone().to_xdr(&env), &(to_bal + amount));
+            .set(&to, &(to_bal + amount));
     }
 }
 
@@ -81,7 +81,7 @@ fn setup() -> Setup {
     let admin = Address::generate(&env);
     let pool_id = env.register(RewardPoolContract, ());
     let pool = RewardPoolContractClient::new(&env, &pool_id);
-    pool.initialize(&admin, &token_id).unwrap();
+    pool.initialize(&admin, &token_id);
 
     Setup { env, pool, token_id }
 }
@@ -118,7 +118,7 @@ fn test_deposit_then_withdraw_full_cycle() {
     assert_eq!(s.pool.get_balance(), 10_000);
     assert_eq!(token_balance(&s.env, &s.token_id, &depositor), 0);
 
-    s.pool.withdraw(&recipient, &10_000).unwrap();
+    s.pool.withdraw(&recipient, &10_000);
     assert_eq!(s.pool.get_balance(), 0);
     assert_eq!(token_balance(&s.env, &s.token_id, &recipient), 10_000);
 }
@@ -137,7 +137,7 @@ fn test_multiple_depositors_single_withdrawal() {
     s.pool.deposit(&bob, &7_000);
     assert_eq!(s.pool.get_balance(), 10_000);
 
-    s.pool.withdraw(&recipient, &5_000).unwrap();
+    s.pool.withdraw(&recipient, &5_000);
     assert_eq!(s.pool.get_balance(), 5_000);
     assert_eq!(token_balance(&s.env, &s.token_id, &recipient), 5_000);
 }
@@ -154,7 +154,7 @@ fn test_lock_then_unlock_then_withdraw() {
     // Lock for 2 hours
     let now = s.env.ledger().timestamp();
     let unlock_at = now + 7_200;
-    s.pool.set_locked_until(&unlock_at).unwrap();
+    s.pool.set_locked_until(&unlock_at);
 
     // Withdrawal blocked
     let result = s.pool.try_withdraw(&recipient, &1_000);
@@ -164,7 +164,7 @@ fn test_lock_then_unlock_then_withdraw() {
     s.env.ledger().set_timestamp(unlock_at + 1);
 
     // Withdrawal succeeds
-    s.pool.withdraw(&recipient, &4_000).unwrap();
+    s.pool.withdraw(&recipient, &4_000);
     assert_eq!(s.pool.get_balance(), 0);
 }
 
@@ -177,13 +177,13 @@ fn test_partial_withdrawals_drain_pool() {
     mint(&s.env, &s.token_id, &depositor, 9_000);
     s.pool.deposit(&depositor, &9_000);
 
-    s.pool.withdraw(&recipient, &3_000).unwrap();
+    s.pool.withdraw(&recipient, &3_000);
     assert_eq!(s.pool.get_balance(), 6_000);
 
-    s.pool.withdraw(&recipient, &3_000).unwrap();
+    s.pool.withdraw(&recipient, &3_000);
     assert_eq!(s.pool.get_balance(), 3_000);
 
-    s.pool.withdraw(&recipient, &3_000).unwrap();
+    s.pool.withdraw(&recipient, &3_000);
     assert_eq!(s.pool.get_balance(), 0);
 
     // Empty pool → InsufficientBalance
@@ -203,13 +203,13 @@ fn test_zero_fee_full_cycle() {
     let depositor = Address::generate(&s.env);
     let recipient = Address::generate(&s.env);
 
-    s.pool.update_treasury(&treasury).unwrap();
+    s.pool.update_treasury(&treasury);
     // fee_bps == 0 by default
 
     mint(&s.env, &s.token_id, &depositor, 10_000);
     s.pool.deposit(&depositor, &10_000);
 
-    s.pool.withdraw(&recipient, &3_000).unwrap();
+    s.pool.withdraw(&recipient, &3_000);
 
     assert_eq!(token_balance(&s.env, &s.token_id, &recipient), 3_000);
     assert_eq!(s.pool.get_treasury_balance(), 0);
@@ -224,16 +224,16 @@ fn test_1pct_fee_accumulates_in_treasury() {
     let depositor = Address::generate(&s.env);
     let recipient = Address::generate(&s.env);
 
-    s.pool.update_fee(&100u32).unwrap(); // 1 %
-    s.pool.update_treasury(&treasury).unwrap();
+    s.pool.update_fee(&100u32); // 1 %
+    s.pool.update_treasury(&treasury);
 
     mint(&s.env, &s.token_id, &depositor, 100_000);
     s.pool.deposit(&depositor, &100_000);
 
     // Withdrawal 1: gross 10_000 → fee 100, net 9_900
-    s.pool.withdraw(&recipient, &10_000).unwrap();
+    s.pool.withdraw(&recipient, &10_000);
     // Withdrawal 2: gross 20_000 → fee 200, net 19_800
-    s.pool.withdraw(&recipient, &20_000).unwrap();
+    s.pool.withdraw(&recipient, &20_000);
 
     let expected_treasury = 100 + 200;          // 300
     let expected_recipient = 9_900 + 19_800;    // 29_700
@@ -252,13 +252,13 @@ fn test_10pct_fee_integration() {
     let depositor = Address::generate(&s.env);
     let recipient = Address::generate(&s.env);
 
-    s.pool.update_fee(&1_000u32).unwrap(); // 10 %
-    s.pool.update_treasury(&treasury).unwrap();
+    s.pool.update_fee(&1_000u32); // 10 %
+    s.pool.update_treasury(&treasury);
 
     mint(&s.env, &s.token_id, &depositor, 50_000);
     s.pool.deposit(&depositor, &50_000);
 
-    s.pool.withdraw(&recipient, &10_000).unwrap();
+    s.pool.withdraw(&recipient, &10_000);
 
     // fee = 10_000 * 1_000 / 10_000 = 1_000
     assert_eq!(token_balance(&s.env, &s.token_id, &recipient), 9_000);
@@ -275,21 +275,21 @@ fn test_treasury_update_redirects_fees() {
     let depositor = Address::generate(&s.env);
     let recipient = Address::generate(&s.env);
 
-    s.pool.update_fee(&500u32).unwrap(); // 5 %
-    s.pool.update_treasury(&treasury1).unwrap();
+    s.pool.update_fee(&500u32); // 5 %
+    s.pool.update_treasury(&treasury1);
 
     mint(&s.env, &s.token_id, &depositor, 100_000);
     s.pool.deposit(&depositor, &100_000);
 
     // First withdrawal: fee → treasury1
-    s.pool.withdraw(&recipient, &2_000).unwrap();
+    s.pool.withdraw(&recipient, &2_000);
     // fee = 100
 
     // Change treasury
-    s.pool.update_treasury(&treasury2).unwrap();
+    s.pool.update_treasury(&treasury2);
 
     // Second withdrawal: fee → treasury2
-    s.pool.withdraw(&recipient, &2_000).unwrap();
+    s.pool.withdraw(&recipient, &2_000);
     // fee = 100
 
     assert_eq!(token_balance(&s.env, &s.token_id, &treasury1), 100);
@@ -304,21 +304,21 @@ fn test_fee_disabled_after_update() {
     let depositor = Address::generate(&s.env);
     let recipient = Address::generate(&s.env);
 
-    s.pool.update_fee(&300u32).unwrap(); // 3 %
-    s.pool.update_treasury(&treasury).unwrap();
+    s.pool.update_fee(&300u32); // 3 %
+    s.pool.update_treasury(&treasury);
 
     mint(&s.env, &s.token_id, &depositor, 50_000);
     s.pool.deposit(&depositor, &50_000);
 
     // First withdrawal at 3 %
-    s.pool.withdraw(&recipient, &1_000).unwrap();
+    s.pool.withdraw(&recipient, &1_000);
     // fee = 30
 
     // Disable fee
-    s.pool.update_fee(&0u32).unwrap();
+    s.pool.update_fee(&0u32);
 
     // Second withdrawal at 0 %
-    s.pool.withdraw(&recipient, &1_000).unwrap();
+    s.pool.withdraw(&recipient, &1_000);
     // fee = 0
 
     // Treasury only received fee from first withdrawal
@@ -335,8 +335,8 @@ fn test_insufficient_balance_with_fee() {
     let depositor = Address::generate(&s.env);
     let recipient = Address::generate(&s.env);
 
-    s.pool.update_fee(&500u32).unwrap();
-    s.pool.update_treasury(&treasury).unwrap();
+    s.pool.update_fee(&500u32);
+    s.pool.update_treasury(&treasury);
 
     mint(&s.env, &s.token_id, &depositor, 100);
     s.pool.deposit(&depositor, &100);
