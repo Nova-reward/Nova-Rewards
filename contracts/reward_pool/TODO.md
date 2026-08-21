@@ -6,5 +6,5 @@
 - [x] Step 4: Add get_treasury_balance() -> i128 using NovaTokenClient.
 - [x] Step 5: Modify withdraw to compute fee/net, update balance, transfer tokens (fee to treasury, net to to), emit fee_collected(gross, fee, net).
 - [x] Step 6: Add tests for zero-fee, various bps deductions, treasury accumulation. (pool_tests.rs + integration.rs)
-- [ ] Step 7: Run `cargo test` to verify and update snapshots.
-- [ ] Step 8: Complete task.
+- [x] Step 7: Run `cargo test` to verify and update snapshots.
+- [x] Step 8: Complete task.

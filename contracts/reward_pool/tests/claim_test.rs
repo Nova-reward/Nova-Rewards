@@ -3,15 +3,17 @@
 //! Tests for the RewardPool contract.
 //!
 //! Covers:
+//! - initialize: admin/token storage, double-initialize rejection
 //! - deposit: token transfer, event emission, auth enforcement
 //! - withdraw: admin-only, locked rejection, insufficient balance, success after unlock
+//! - fee accumulation: fee/treasury deduction, zero-fee, invalid fee_bps
 //! - get_balance: reflects real Nova token balance
 //! - locked_until: set/get, withdrawal blocked before unlock, allowed after
 
 use soroban_sdk::{
-    contract, contractimpl,
+    contract, contractimpl, symbol_short,
     testutils::{Address as _, Events, Ledger as _},
-    Address, Env, IntoVal, Symbol, TryIntoVal, Val,
+    Address, Env, IntoVal, Symbol, Val,
 };
 
 use reward_pool::{PoolError, RewardPoolContract, RewardPoolContractClient};
@@ -35,28 +37,19 @@ impl MockNovaToken {
 
     pub fn mint(env: Env, to: Address, amount: i128) {
         let bal = Self::balance(env.clone(), to.clone());
-        env.storage()
-            .instance()
-            .set(&to.clone().to_xdr(&env), &(bal + amount));
+        env.storage().instance().set(&to, &(bal + amount));
     }
 
     pub fn balance(env: Env, addr: Address) -> i128 {
-        env.storage()
-            .instance()
-            .get::<_, i128>(&addr.clone().to_xdr(&env))
-            .unwrap_or(0)
+        env.storage().instance().get::<_, i128>(&addr).unwrap_or(0)
     }
 
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
         let from_bal = Self::balance(env.clone(), from.clone());
         assert!(from_bal >= amount, "insufficient balance");
-        env.storage()
-            .instance()
-            .set(&from.clone().to_xdr(&env), &(from_bal - amount));
+        env.storage().instance().set(&from, &(from_bal - amount));
         let to_bal = Self::balance(env.clone(), to.clone());
-        env.storage()
-            .instance()
-            .set(&to.clone().to_xdr(&env), &(to_bal + amount));
+        env.storage().instance().set(&to, &(to_bal + amount));
     }
 }
 
@@ -67,7 +60,7 @@ impl MockNovaToken {
 struct TestSetup {
     env: Env,
     pool: RewardPoolContractClient<'static>,
-    _pool_id: Address,
+    pool_id: Address,
     token_id: Address,
     _admin: Address,
 }
@@ -94,7 +87,7 @@ fn setup() -> TestSetup {
     TestSetup {
         env,
         pool,
-        _pool_id: pool_id,
+        pool_id,
         token_id,
         _admin: admin,
     }
@@ -129,14 +122,16 @@ fn test_initialize_stores_admin_and_token() {
     assert_eq!(t.pool.get_locked_until(), 0);
     // get_balance returns 0 when pool holds no tokens
     assert_eq!(t.pool.get_balance(), 0);
+    // fee_bps defaults to 0 (no fee)
+    assert_eq!(t.pool.get_fee_bps(), 0);
 }
 
 #[test]
-#[should_panic(expected = "already initialized")]
-fn test_double_initialize_panics() {
+fn test_double_initialize_returns_already_initialized() {
     let t = setup();
     let other_admin = Address::generate(&t.env);
-    t.pool.initialize(&other_admin, &t.token_id);
+    let result = t.pool.try_initialize(&other_admin, &t.token_id);
+    assert_eq!(result, Err(Ok(PoolError::AlreadyInitialized)));
 }
 
 // ---------------------------------------------------------------------------
@@ -167,16 +162,17 @@ fn test_deposit_emits_deposited_event() {
 
     t.pool.deposit(&depositor, &1_000);
 
-    let events = t.env.events().all();
-    let deposited_event = events.iter().any(|(_, topics, _)| {
-        topics.get(1)
-            .and_then(|v| {
-                let sym: Result<Symbol, _> = v.clone().try_into_val(&t.env);
-                sym.ok().map(|s| s == Symbol::new(&t.env, "deposited"))
-            })
-            .unwrap_or(false)
-    });
-    assert!(deposited_event, "expected 'deposited' event to be emitted");
+    assert_eq!(
+        t.env.events().all(),
+        soroban_sdk::vec![
+            &t.env,
+            (
+                t.pool_id.clone(),
+                (symbol_short!("rwd_pool"), symbol_short!("deposited")).into_val(&t.env),
+                (depositor, 1_000i128).into_val(&t.env),
+            )
+        ]
+    );
 }
 
 #[test]
@@ -208,7 +204,7 @@ fn test_deposit_negative_panics() {
 }
 
 // ---------------------------------------------------------------------------
-// Withdraw tests
+// Withdraw tests (no fee)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -230,7 +226,7 @@ fn test_withdraw_success_after_unlock() {
     t.env.ledger().set_timestamp(unlock_at + 1);
 
     // Withdraw should succeed
-    t.pool.withdraw(&recipient, &2_000).unwrap();
+    t.pool.withdraw(&recipient, &2_000);
 
     assert_eq!(t.pool.get_balance(), 3_000);
     assert_eq!(token_balance(&t.env, &t.token_id, &recipient), 2_000);
@@ -245,18 +241,19 @@ fn test_withdraw_emits_withdrawn_event() {
     mint_tokens(&t.env, &t.token_id, &depositor, 1_000);
     t.pool.deposit(&depositor, &1_000);
 
-    t.pool.withdraw(&recipient, &500).unwrap();
+    t.pool.withdraw(&recipient, &500);
 
-    let events = t.env.events().all();
-    let withdrawn_event = events.iter().any(|(_, topics, _)| {
-        topics.get(1)
-            .and_then(|v| {
-                let sym: Result<Symbol, _> = v.clone().try_into_val(&t.env);
-                sym.ok().map(|s| s == Symbol::new(&t.env, "withdrawn"))
-            })
-            .unwrap_or(false)
-    });
-    assert!(withdrawn_event, "expected 'withdrawn' event to be emitted");
+    assert_eq!(
+        t.env.events().all(),
+        soroban_sdk::vec![
+            &t.env,
+            (
+                t.pool_id.clone(),
+                (symbol_short!("rwd_pool"), symbol_short!("withdrawn")).into_val(&t.env),
+                (recipient, 500i128).into_val(&t.env),
+            )
+        ]
+    );
 }
 
 #[test]
@@ -268,7 +265,7 @@ fn test_withdraw_full_balance() {
     mint_tokens(&t.env, &t.token_id, &depositor, 7_500);
     t.pool.deposit(&depositor, &7_500);
 
-    t.pool.withdraw(&recipient, &7_500).unwrap();
+    t.pool.withdraw(&recipient, &7_500);
 
     assert_eq!(t.pool.get_balance(), 0);
     assert_eq!(token_balance(&t.env, &t.token_id, &recipient), 7_500);
@@ -308,15 +305,14 @@ fn test_withdraw_rejected_at_exact_lock_boundary() {
     let unlock_at: u64 = 5_000;
     t.pool.set_locked_until(&unlock_at);
 
-    // At exactly unlock_at, still locked (now < locked_until is false, now == locked_until passes)
-    // Set time to one second before unlock
+    // One second before unlock: still locked
     t.env.ledger().set_timestamp(unlock_at - 1);
     let result = t.pool.try_withdraw(&recipient, &500);
     assert_eq!(result, Err(Ok(PoolError::PoolLocked)));
 
     // At exactly unlock_at, withdrawal is allowed (now >= locked_until)
     t.env.ledger().set_timestamp(unlock_at);
-    t.pool.withdraw(&recipient, &500).unwrap();
+    t.pool.withdraw(&recipient, &500);
 }
 
 #[test]
@@ -329,7 +325,7 @@ fn test_withdraw_allowed_when_no_lock_set() {
     t.pool.deposit(&depositor, &2_000);
 
     // No lock set (locked_until = 0), withdrawal should succeed immediately
-    t.pool.withdraw(&recipient, &1_000).unwrap();
+    t.pool.withdraw(&recipient, &1_000);
     assert_eq!(t.pool.get_balance(), 1_000);
 }
 
@@ -361,7 +357,180 @@ fn test_withdraw_more_than_balance_returns_error() {
 }
 
 // ---------------------------------------------------------------------------
-// get_balance tests
+// Fee accumulation tests
+// ---------------------------------------------------------------------------
+
+/// Zero fee (default): recipient gets the full gross amount, treasury stays empty.
+#[test]
+fn test_zero_fee_recipient_gets_full_amount() {
+    let t = setup();
+    let treasury = Address::generate(&t.env);
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    // Fee is 0 by default, but set treasury anyway
+    t.pool.update_treasury(&treasury);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 10_000);
+    t.pool.deposit(&depositor, &10_000);
+
+    t.pool.withdraw(&recipient, &1_000);
+
+    // Recipient gets the full gross amount
+    assert_eq!(token_balance(&t.env, &t.token_id, &recipient), 1_000);
+    // Treasury stays 0 — nothing is sent when fee_bps == 0
+    assert_eq!(t.pool.get_treasury_balance(), 0);
+    assert_eq!(token_balance(&t.env, &t.token_id, &treasury), 0);
+}
+
+/// fee = amount * fee_bps / 10_000: 100 bps (1 %) on 1_000 → fee 10, net 990.
+#[test]
+fn test_fee_deducted_matches_bps_formula() {
+    let t = setup();
+    let treasury = Address::generate(&t.env);
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    t.pool.update_fee(&100u32);
+    t.pool.update_treasury(&treasury);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 10_000);
+    t.pool.deposit(&depositor, &10_000);
+
+    let amount: i128 = 1_000;
+    let fee_bps: i128 = 100;
+    let expected_fee = amount * fee_bps / 10_000;
+    let expected_net = amount - expected_fee;
+
+    t.pool.withdraw(&recipient, &amount);
+
+    assert_eq!(token_balance(&t.env, &t.token_id, &recipient), expected_net);
+    assert_eq!(token_balance(&t.env, &t.token_id, &treasury), expected_fee);
+    assert_eq!(t.pool.get_treasury_balance(), expected_fee);
+}
+
+/// Multiple withdrawals accumulate fees in the treasury.
+#[test]
+fn test_treasury_accumulates_across_multiple_withdrawals() {
+    let t = setup();
+    let treasury = Address::generate(&t.env);
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    t.pool.update_fee(&200u32); // 2 %
+    t.pool.update_treasury(&treasury);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 100_000);
+    t.pool.deposit(&depositor, &100_000);
+
+    t.pool.withdraw(&recipient, &10_000); // fee = 200
+    t.pool.withdraw(&recipient, &5_000); // fee = 100
+    t.pool.withdraw(&recipient, &1_000); // fee = 20
+
+    assert_eq!(t.pool.get_treasury_balance(), 320);
+    assert_eq!(
+        token_balance(&t.env, &t.token_id, &recipient),
+        (10_000 - 200) + (5_000 - 100) + (1_000 - 20)
+    );
+}
+
+/// Withdraw with fee_bps > 0 but no treasury configured → TreasuryNotSet error.
+#[test]
+fn test_withdraw_with_fee_no_treasury_returns_error() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    t.pool.update_fee(&100u32); // No treasury configured
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 5_000);
+    t.pool.deposit(&depositor, &5_000);
+
+    let result = t.pool.try_withdraw(&recipient, &1_000);
+    assert_eq!(result, Err(Ok(PoolError::TreasuryNotSet)));
+}
+
+/// update_fee rejects a bps value above 10_000 (100 %).
+#[test]
+fn test_update_fee_above_max_returns_invalid_fee_bps() {
+    let t = setup();
+    let result = t.pool.try_update_fee(&10_001u32);
+    assert_eq!(result, Err(Ok(PoolError::InvalidFeeBps)));
+    // Fee is left unchanged (still the default 0)
+    assert_eq!(t.pool.get_fee_bps(), 0);
+}
+
+/// update_fee accepts the exact boundary value of 10_000 (100 %).
+#[test]
+fn test_update_fee_at_max_succeeds() {
+    let t = setup();
+    t.pool.update_fee(&10_000u32);
+    assert_eq!(t.pool.get_fee_bps(), 10_000);
+}
+
+/// fee_coll event carries (gross, fee, net) and is emitted before withdrawn.
+#[test]
+fn test_fee_collected_event_emitted_with_correct_data() {
+    let t = setup();
+    let treasury = Address::generate(&t.env);
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    t.pool.update_fee(&100u32);
+    t.pool.update_treasury(&treasury);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 5_000);
+    t.pool.deposit(&depositor, &5_000);
+
+    t.pool.withdraw(&recipient, &2_000);
+
+    // fee = 2_000 * 100 / 10_000 = 20, net = 1_980
+    assert_eq!(
+        t.env.events().all(),
+        soroban_sdk::vec![
+            &t.env,
+            (
+                t.pool_id.clone(),
+                (symbol_short!("rwd_pool"), symbol_short!("fee_coll")).into_val(&t.env),
+                (2_000i128, 20i128, 1_980i128).into_val(&t.env),
+            ),
+            (
+                t.pool_id.clone(),
+                (symbol_short!("rwd_pool"), symbol_short!("withdrawn")).into_val(&t.env),
+                (recipient, 2_000i128).into_val(&t.env),
+            )
+        ]
+    );
+}
+
+/// No fee_coll event is emitted when fee_bps == 0.
+#[test]
+fn test_no_fee_event_when_bps_zero() {
+    let t = setup();
+    let depositor = Address::generate(&t.env);
+    let recipient = Address::generate(&t.env);
+
+    mint_tokens(&t.env, &t.token_id, &depositor, 5_000);
+    t.pool.deposit(&depositor, &5_000);
+
+    t.pool.withdraw(&recipient, &1_000);
+
+    // Only the withdrawn event is emitted — no fee_coll.
+    assert_eq!(
+        t.env.events().all(),
+        soroban_sdk::vec![
+            &t.env,
+            (
+                t.pool_id.clone(),
+                (symbol_short!("rwd_pool"), symbol_short!("withdrawn")).into_val(&t.env),
+                (recipient, 1_000i128).into_val(&t.env),
+            )
+        ]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// get_balance / get_treasury_balance tests
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -376,7 +545,7 @@ fn test_get_balance_reflects_real_token_balance() {
     assert_eq!(t.pool.get_balance(), 4_000);
 
     // Withdraw some and verify balance decreases
-    t.pool.withdraw(&depositor, &1_500).unwrap();
+    t.pool.withdraw(&depositor, &1_500);
     assert_eq!(t.pool.get_balance(), 2_500);
 }
 
@@ -384,6 +553,12 @@ fn test_get_balance_reflects_real_token_balance() {
 fn test_get_balance_zero_on_empty_pool() {
     let t = setup();
     assert_eq!(t.pool.get_balance(), 0);
+}
+
+#[test]
+fn test_get_treasury_balance_zero_when_no_treasury() {
+    let t = setup();
+    assert_eq!(t.pool.get_treasury_balance(), 0);
 }
 
 // ---------------------------------------------------------------------------
