@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { formatTokenAmount } from '../../lib/formatting';
 import EmptyState from '../EmptyState';
 import DataTable from '../DataTable';
 
@@ -109,7 +110,7 @@ export default function CampaignList({ campaigns, loading, onPause, onResume }) 
     {
       key: 'rewardRate',
       label: 'Rate',
-      render: (v) => (v != null ? `${v} NOVA/unit` : '—'),
+      render: (v) => (v != null ? `${formatTokenAmount(v)} NOVA/unit` : '—'),
     },
     {
       key: 'endDate',

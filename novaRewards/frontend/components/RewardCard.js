@@ -1,5 +1,7 @@
 'use client';
 
+import { formatTokenAmount } from '../lib/formatting';
+
 /**
  * Individual reward card component.
  * Displays reward image, name, point cost, stock status, and redeem button.
@@ -39,7 +41,7 @@ export default function RewardCard({
         <div className="reward-meta">
           <div className="reward-cost">
             <span className="reward-cost-label">Cost:</span>
-            <span className="reward-cost-value">{reward.cost} pts</span>
+            <span className="reward-cost-value">{formatTokenAmount(reward.cost)} pts</span>
           </div>
           
           {reward.stock !== null && (
@@ -54,7 +56,7 @@ export default function RewardCard({
 
         {!canAfford && inStock && (
           <p className="reward-error">
-            You need {reward.cost - userPoints} more points
+            You need {formatTokenAmount(reward.cost - userPoints)} more points
           </p>
         )}
       </div>

@@ -5,6 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, Brush,
 } from 'recharts';
+import { formatTokenAmount } from '../../lib/formatting';
 import { useChartTheme } from '../analytics/useChartTheme';
 import ChartEmptyState from './ChartEmptyState';
 
@@ -25,7 +26,7 @@ function CustomTooltip({ active, payload, label }) {
       <p className="font-semibold mb-1">{label}</p>
       {payload.map((entry) => (
         <p key={entry.dataKey} style={{ color: entry.color }}>
-          {entry.name}: <strong>{entry.value?.toLocaleString()}</strong>
+          {entry.name}: <strong>{formatTokenAmount(entry.value)}</strong>
         </p>
       ))}
       {payload[0]?.payload?.type && (

@@ -1,5 +1,6 @@
 'use client';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { formatTokenAmount } from '../../lib/formatting';
 import { useChartTheme } from '../analytics/useChartTheme';
 import ChartEmptyState from './ChartEmptyState';
 
@@ -33,7 +34,7 @@ export default function RedemptionDonutChart({ data = [], loading = false, error
         </Pie>
         <Tooltip
           contentStyle={{ background: tooltip.bg, border: `1px solid ${tooltip.border}`, color: tooltip.color }}
-          formatter={(value) => [value.toLocaleString(), '']}
+          formatter={(value) => [formatTokenAmount(value), '']}
         />
         <Legend
           wrapperStyle={{ color: text, fontSize: 12 }}

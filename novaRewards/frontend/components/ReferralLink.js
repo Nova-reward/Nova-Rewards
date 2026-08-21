@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { formatTokenAmount } from '../lib/formatting';
 import { withFeatureFlag, FLAGS } from '../lib/featureFlags';
 import CopyButton from './ui/CopyButton';
 
@@ -110,7 +111,7 @@ function ReferralLink({ userId }) {
         </div>
         <div className="stat-pill">
           <span className="stat-label">Tokens Earned:</span>
-          <span className="stat-value">{referralData.pointsEarned} NOVA</span>
+          <span className="stat-value">{formatTokenAmount(referralData.pointsEarned)} NOVA</span>
         </div>
       </div>
 

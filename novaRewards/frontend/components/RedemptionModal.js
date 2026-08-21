@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { formatTokenAmount } from '../lib/formatting';
 
 /**
  * Multi-step redemption modal:
@@ -98,15 +99,15 @@ export default function RedemptionModal({
             <div className="redemption-points">
               <div className="points-row">
                 <span className="points-label">Your Points</span>
-                <span className="points-value">{currentPoints.toLocaleString()}</span>
+                <span className="points-value">{formatTokenAmount(currentPoints)}</span>
               </div>
               <div className="points-row points-deduction">
                 <span className="points-label">Cost ({amount} × {reward.cost})</span>
-                <span className="points-value">−{totalCost.toLocaleString()}</span>
+                <span className="points-value">−{formatTokenAmount(totalCost)}</span>
               </div>
               <div className="points-row points-total">
                 <span className="points-label">Points After</span>
-                <span className="points-value">{pointsAfter.toLocaleString()}</span>
+                <span className="points-value">{formatTokenAmount(pointsAfter)}</span>
               </div>
             </div>
 
