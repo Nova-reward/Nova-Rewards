@@ -27,11 +27,12 @@ services:
     image: prom/alertmanager:v0.26.0
     container_name: nova-alertmanager
     restart: unless-stopped
+    entrypoint: ["/bin/sh", "/usr/local/bin/render-config.sh"]
     command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
     volumes:
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.tmpl.yml:ro
+      - ./alertmanager/render-config.sh:/usr/local/bin/render-config.sh:ro
       - alertmanager_data:/alertmanager
     ports:
       - "9093:9093"
@@ -90,8 +91,6 @@ services:
       - "9187:9187"
     networks:
       - monitoring
-    depends_on:
-      - postgres
 
   redis-exporter:
     image: oliver006/redis_exporter:v1.55.0
@@ -104,8 +103,6 @@ services:
       - "9121:9121"
     networks:
       - monitoring
-    depends_on:
-      - redis
 
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:1.0.0
@@ -117,8 +114,6 @@ services:
       - "9113:9113"
     networks:
       - monitoring
-    depends_on:
-      - gateway
 
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.24.0
@@ -135,7 +130,8 @@ services:
 
 networks:
   monitoring:
-    driver: bridge
+    external: true
+    name: nova-rewards_monitoring
 
 volumes:
   prometheus_data:

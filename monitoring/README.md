@@ -104,7 +104,7 @@ The primary operational dashboard. Panels:
 | Request Rate | `sum(rate(http_request_duration_seconds_count[5m])) by (route)` | Requests/sec broken down by API route |
 | Error Rate | `sum(rate(…{status_code=~"5.."}[5m])) / sum(rate(…[5m]))` | Percentage of 5xx responses |
 | p95 Latency | `histogram_quantile(0.95, sum(rate(…_bucket[5m])) by (le, route))` | 95th-percentile response time per route |
-| Active Requests | `sum(http_requests_in_flight)` | Requests currently being processed |
+| Active Requests | `sum(http_requests_active)` | Requests currently being processed |
 | CPU Usage | `100 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100` | Host CPU % |
 | Memory Usage | `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100` | Host memory % |
 | DB Connections | `pg_stat_database_numbackends / pg_settings_max_connections * 100` | Connection pool % |
@@ -134,7 +134,7 @@ Scrape interval: **15 s** | Retention: **30 days**
 | Job | Target | Key metrics |
 |-----|--------|-------------|
 | `prometheus` | `localhost:9090` | `prometheus_*` (self-monitoring) |
-| `nova-backend` | `backend:4000/metrics` | `http_request_duration_seconds`, `http_requests_in_flight`, `reward_*` |
+| `nova-backend` | `backend:3001/metrics` | `http_request_duration_seconds`, `http_requests_active`, `reward_*` |
 | `node-exporter` | `node-exporter:9100` | `node_cpu_seconds_total`, `node_memory_*`, `node_filesystem_*`, `node_network_*` |
 | `postgres` | `postgres-exporter:9187` | `pg_up`, `pg_stat_database_*`, `pg_settings_max_connections` |
 | `redis` | `redis-exporter:9121` | `redis_up`, `redis_memory_used_bytes`, `redis_keyspace_hits_total`, `redis_keyspace_misses_total` |
@@ -147,7 +147,7 @@ Scrape interval: **15 s** | Retention: **30 days**
 | Metric | Type | Description |
 |--------|------|-------------|
 | `http_request_duration_seconds` | Histogram | Request latency, labelled by `route`, `method`, `status_code` |
-| `http_requests_in_flight` | Gauge | Concurrent requests being handled |
+| `http_requests_active` | Gauge | Concurrent requests being handled |
 | `http_requests_total` | Counter | Total requests, labelled by `route`, `method`, `status_code` |
 | `reward_issuances_total` | Counter | Reward issuance attempts, labelled by `status` (`success`/`failed`) |
 | `reward_queue_depth` | Gauge | Pending jobs in the reward issuance queue |
@@ -276,7 +276,7 @@ The `/metrics` endpoint is already wired to `register.metrics()` — no addition
 
 ```bash
 # Check the raw scrape output
-curl -s http://backend:4000/metrics | grep nova_my_
+curl -s http://backend:3001/metrics | grep nova_my_
 
 # Query via Prometheus API
 curl -G 'http://localhost:9090/api/v1/query' \
@@ -348,7 +348,7 @@ Use the recorded metric name in dashboards and alerts instead of the raw express
 curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job:.labels.job, health:.health, lastError:.lastError}'
 
 # Test connectivity from inside the Prometheus container
-docker exec nova-prometheus wget -qO- http://backend:4000/metrics | head
+docker exec nova-prometheus wget -qO- http://backend:3001/metrics | head
 ```
 
 **Grafana shows "No data"**

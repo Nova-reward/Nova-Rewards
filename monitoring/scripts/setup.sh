@@ -9,9 +9,9 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Check if Docker Compose is installed
-if ! command -v docker-compose &> /dev/null; then
-    echo "❌ Docker Compose is not installed. Please install Docker Compose first."
+# Check if the Docker Compose plugin is installed
+if ! docker compose version &> /dev/null; then
+    echo "❌ Docker Compose is not installed. Please install the Docker Compose plugin first."
     exit 1
 fi
 
@@ -29,7 +29,7 @@ docker network create nova-rewards_monitoring 2>/dev/null || echo "Network alrea
 
 # Start monitoring stack
 echo "🐳 Starting monitoring services..."
-docker-compose -f docker-compose.monitoring.yml up -d
+docker compose -f docker-compose.monitoring.yml up -d
 
 # Wait for services to be ready
 echo "⏳ Waiting for services to be ready..."
