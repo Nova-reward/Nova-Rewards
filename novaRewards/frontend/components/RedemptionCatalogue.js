@@ -7,6 +7,7 @@ import api from '../lib/api';
 import { signAndSubmit } from '../lib/freighter';
 import { useAuth } from '../context/AuthContext';
 import { useWallet } from '../context/WalletContext';
+import { formatTokenAmount } from '../lib/formatting';
 import { useToast } from './Toast';
 import RewardCard from './RewardCard';
 import RedemptionModal from './RedemptionModal';
@@ -214,7 +215,7 @@ export default function RedemptionCatalogue() {
         <div>
           <h1>Redeem Rewards</h1>
           <p className="redemption-subtitle">
-            You have <strong>{userPoints.toLocaleString()} points</strong> available
+            You have <strong>{formatTokenAmount(userPoints)} points</strong> available
           </p>
         </div>
       </div>

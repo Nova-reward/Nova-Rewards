@@ -115,7 +115,7 @@ export default function RedemptionFlow({ walletAddress, onSuccess }) {
                 onClick={() => { setSelectedCampaign(c); setStep(STEPS.AMOUNT); }}
               >
                 <span className="campaign-name">{c.name}</span>
-                <span className="campaign-rate">Rate: {c.reward_rate} NOVA / perk</span>
+                <span className="campaign-rate">Rate: {formatTokenAmount(c.reward_rate)} NOVA / perk</span>
               </button>
             </li>
           ))}
@@ -167,7 +167,7 @@ export default function RedemptionFlow({ walletAddress, onSuccess }) {
           <dt>Campaign</dt><dd>{selectedCampaign.name}</dd>
           <dt>Tokens to burn</dt><dd>{formatTokenAmount(amount)} NOVA</dd>
           <dt>Perk value received</dt><dd>{perkValue}</dd>
-          <dt>Exchange rate</dt><dd>{selectedCampaign.reward_rate} per NOVA</dd>
+          <dt>Exchange rate</dt><dd>{formatTokenAmount(selectedCampaign.reward_rate)} per NOVA</dd>
         </dl>
         <div className="flow-actions">
           <button className="btn btn-secondary" onClick={() => setStep(STEPS.AMOUNT)}>Back</button>

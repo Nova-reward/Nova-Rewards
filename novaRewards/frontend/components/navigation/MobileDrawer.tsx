@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { X, Wallet, Star } from 'lucide-react';
 import { useWalletStore } from '../../store/walletStore';
+import { formatTokenAmount } from '../../lib/formatting';
 import { truncateAddress } from '../../lib/truncateAddress';
 import type { NavItem } from './Navbar';
 
@@ -121,7 +122,7 @@ export default function MobileDrawer({ isOpen, onClose, items }: MobileDrawerPro
                 {truncateAddress(publicKey)}
               </p>
               <p className="text-sm font-bold text-primary-600 dark:text-primary-400 mb-3">
-                {parseFloat(balance).toLocaleString()} NOVA
+                {formatTokenAmount(balance)} NOVA
               </p>
               <button
                 onClick={() => { disconnect(); onClose(); }}

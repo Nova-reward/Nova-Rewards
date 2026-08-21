@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useReferral } from '../../hooks/useReferral';
+import { formatTokenAmount } from '../../lib/formatting';
 
 interface ReferralStatsWidgetProps {
   userId: string | number | null | undefined;
@@ -107,7 +108,7 @@ export function ReferralStatsWidget({ userId, className = '' }: ReferralStatsWid
         />
         <StatItem
           label="Tokens earned"
-          value={`${stats?.tokensEarned ?? 0} NOVA`}
+          value={`${formatTokenAmount(stats?.tokensEarned ?? 0)} NOVA`}
           accent="text-violet-600 dark:text-violet-400"
           icon={
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

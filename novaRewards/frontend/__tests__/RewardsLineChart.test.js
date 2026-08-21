@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { formatTokenAmount } from '../../lib/formatting';
 
 // ── Recharts mock ──────────────────────────────────────────────────────────────
 // Recharts uses ResizeObserver and SVG APIs unavailable in jsdom.
@@ -114,7 +115,7 @@ describe('RewardsLineChart', () => {
       // Tooltip mock renders the content element with active=true
       expect(screen.getByRole('tooltip')).toBeInTheDocument();
       expect(screen.getByRole('tooltip')).toHaveTextContent('2024-01-15');
-      expect(screen.getByRole('tooltip')).toHaveTextContent('42');
+      expect(screen.getByRole('tooltip')).toHaveTextContent(formatTokenAmount(42));
       expect(screen.getByRole('tooltip')).toHaveTextContent('issuance');
     });
   });

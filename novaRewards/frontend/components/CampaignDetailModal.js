@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
+import { formatTokenAmount } from '../lib/formatting';
 
 /**
  * CampaignDetailModal — full campaign details including eligibility rules.
@@ -185,7 +187,7 @@ export default function CampaignDetailModal({ campaign, onClose }) {
               gap: '0.75rem',
             }}
           >
-            <StatBox label="Reward Rate" value={`${rewardRate} NOVA/unit`} accent />
+            <StatBox label="Reward Rate" value={`${formatTokenAmount(rewardRate)} NOVA/unit`} accent />
             <StatBox label="Participants" value={participantCount > 0 ? participantCount.toLocaleString() : '—'} />
             <StatBox label="Start Date" value={start} />
             <StatBox label="End Date" value={end} />
@@ -256,9 +258,9 @@ export default function CampaignDetailModal({ campaign, onClose }) {
             Close
           </button>
           {status === 'active' && (
-            <a href="/dashboard" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+            <Link href="/dashboard" className="btn btn-primary" style={{ textDecoration: 'none' }}>
               Participate Now →
-            </a>
+            </Link>
           )}
         </div>
       </div>

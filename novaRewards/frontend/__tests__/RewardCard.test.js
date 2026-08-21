@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import RewardCard from '../components/RewardCard';
+import { formatTokenAmount } from '../lib/formatting';
 
 const baseReward = {
   id: 1,
@@ -16,7 +17,7 @@ describe('RewardCard', () => {
   test('renders reward name and cost', () => {
     render(<RewardCard reward={baseReward} userPoints={200} onRedeem={jest.fn()} />);
     expect(screen.getByText('Coffee Voucher')).toBeInTheDocument();
-    expect(screen.getByText('100 pts')).toBeInTheDocument();
+    expect(screen.getByText(`${formatTokenAmount(100)} pts`)).toBeInTheDocument();
   });
 
   test('renders description when provided', () => {
@@ -47,7 +48,7 @@ describe('RewardCard', () => {
 
   test('shows points deficit message when user cannot afford', () => {
     render(<RewardCard reward={baseReward} userPoints={50} onRedeem={jest.fn()} />);
-    expect(screen.getByText('You need 50 more points')).toBeInTheDocument();
+    expect(screen.getByText(`You need ${formatTokenAmount(50)} more points`)).toBeInTheDocument();
   });
 
   test('shows out-of-stock badge and disables button when stock is 0', () => {

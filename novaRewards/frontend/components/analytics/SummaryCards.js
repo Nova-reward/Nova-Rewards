@@ -1,5 +1,6 @@
 'use client';
 
+import { formatTokenAmount } from '../../lib/formatting';
 import AnimatedCounter from '../ui/AnimatedCounter';
 
 /**
@@ -13,7 +14,7 @@ export default function SummaryCards({ summary }) {
     { key: 'totalRevenue',   label: 'Total Revenue',   icon: '💰', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
     { key: 'activeUsers',    label: 'Active Users',    icon: '👥', fmt: (v) => Math.round(v).toLocaleString() },
     { key: 'conversionRate', label: 'Conversion Rate', icon: '📈', fmt: (v) => `${v.toFixed(1)}%` },
-    { key: 'rewardsIssued',  label: 'Rewards Issued',  icon: '🎁', fmt: (v) => Math.round(v).toLocaleString() },
+    { key: 'rewardsIssued',  label: 'Rewards Issued',  icon: '🎁', fmt: formatTokenAmount },
   ];
 
   return (
