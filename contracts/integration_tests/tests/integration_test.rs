@@ -45,7 +45,7 @@ fn setup() -> Suite<'static> {
 
     let pool_id = env.register(RewardPool, ());
     let pool = RewardPoolClient::new(&env, &pool_id);
-    pool.initialize(&admin);
+    pool.initialize(&admin, &token_id);
 
     let roles_id = env.register(AdminRolesContract, ());
     let admin_roles = AdminRolesContractClient::new(&env, &roles_id);
@@ -408,6 +408,46 @@ fn test_pool_deposit_and_vesting_release() {
 
     // Pool is independent — still holds merchant deposit.
     assert_eq!(s.pool.balance(), 10_000);
+}
+
+// ── 10. Pool ↔ token cross-contract balance verification (#1228) ─────────────
+//
+// `setup()` now wires the real Nova token address into `pool.initialize`, so
+// deposit/withdraw perform genuine cross-contract token transfers instead of
+// being silently skipped. These tests assert the actual token balances move.
+
+/// Depositing into the pool increases the pool contract's own Nova token
+/// balance by the deposited amount, and debits the depositor.
+#[test]
+fn test_pool_deposit_increases_token_balance() {
+    let s = setup();
+    let merchant = Address::generate(&s.env);
+
+    s.token.mint(&merchant, &5_000);
+    assert_eq!(s.token.balance(&s.pool.address), 0);
+
+    s.pool.deposit(&merchant, &5_000);
+
+    assert_eq!(s.token.balance(&s.pool.address), 5_000);
+    assert_eq!(s.token.balance(&merchant), 0);
+}
+
+/// Withdrawing from the pool increases the recipient's Nova token balance
+/// by the withdrawn amount (no fee configured by default) and debits the pool.
+#[test]
+fn test_pool_withdraw_increases_recipient_token_balance() {
+    let s = setup();
+    let merchant = Address::generate(&s.env);
+    let recipient = Address::generate(&s.env);
+
+    s.token.mint(&merchant, &5_000);
+    s.pool.deposit(&merchant, &5_000);
+
+    assert_eq!(s.token.balance(&recipient), 0);
+    s.pool.withdraw(&recipient, &2_000);
+
+    assert_eq!(s.token.balance(&recipient), 2_000);
+    assert_eq!(s.token.balance(&s.pool.address), 3_000);
 }
 
 // ── Distribution integration tests (#1126) ───────────────────────────────────
