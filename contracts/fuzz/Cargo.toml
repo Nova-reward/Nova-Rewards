@@ -13,19 +13,23 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-soroban-sdk = { version = "26.0.1", features = ["testutils"] }
+soroban-sdk = { version = "27.0.0", features = ["testutils"] }
 nova-rewards = { path = "../nova-rewards", optional = true }
 nova_token = { path = "../nova_token", optional = true }
 distribution = { path = "../distribution", optional = true }
+reward_pool = { path = "../reward_pool", optional = true }
 vesting = { path = "../vesting" }
+referral = { path = "../referral" }
 
 [features]
 # The distribution contract does not parse on main (mangled merge in
-# contracts/distribution/src/lib.rs) and nova-rewards fails to build with the
-# soroban-sdk "testutils" feature enabled. Until those crates are repaired,
-# their fuzz targets are gated behind this feature so the remaining targets
-# stay buildable: cargo fuzz run <target> --features broken-contracts
-broken-contracts = ["dep:nova-rewards", "dep:nova_token", "dep:distribution"]
+# contracts/distribution/src/lib.rs), nova-rewards fails to build with the
+# soroban-sdk "testutils" feature enabled, and reward_pool has duplicated
+# `get_balance` definitions plus a dangling code fragment left over from a
+# bad merge (tracked in #1225). Until those crates are repaired, their fuzz
+# targets are gated behind this feature so the remaining targets stay
+# buildable: cargo fuzz run <target> --features broken-contracts
+broken-contracts = ["dep:nova-rewards", "dep:nova_token", "dep:distribution", "dep:reward_pool"]
 
 [[bin]]
 name = "fuzz_calculate_payout"
@@ -46,6 +50,19 @@ name = "fuzz_vesting"
 path = "fuzz_targets/fuzz_vesting.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "fuzz_referral"
+path = "fuzz_targets/fuzz_referral.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_reward_pool"
+path = "fuzz_targets/fuzz_reward_pool.rs"
+test = false
+doc = false
+required-features = ["broken-contracts"]
 
 [[bin]]
 name = "fuzz_token_transfer"

@@ -45,7 +45,14 @@ jobs:
             corpus/vesting \
             -- -max_total_time=600 -max_len=144
 
-      # The four targets below depend on contracts that currently do not build
+      - name: Fuzz referral (60s)
+        working-directory: contracts/fuzz
+        run: |
+          cargo fuzz run fuzz_referral \
+            corpus/referral \
+            -- -max_total_time=60 -max_len=52
+
+      # The five targets below depend on contracts that currently do not build
       # (see the broken-contracts feature in contracts/fuzz/Cargo.toml); they are
       # non-blocking until those crates are repaired.
       - name: Fuzz calculate_payout (60s)
@@ -79,6 +86,14 @@ jobs:
           cargo fuzz run fuzz_reward_distribution --features broken-contracts \
             corpus/reward_distribution \
             -- -max_total_time=60 -max_len=40
+
+      - name: Fuzz reward_pool (60s)
+        continue-on-error: true
+        working-directory: contracts/fuzz
+        run: |
+          cargo fuzz run fuzz_reward_pool --features broken-contracts \
+            corpus/reward_pool \
+            -- -max_total_time=60 -max_len=26
 
       - name: Upload corpus artifacts
         if: always()
