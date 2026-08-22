@@ -52,7 +52,7 @@ vi.mock('../services/rewardIssuanceService', () => ({
   processRewardIssuance: vi.fn().mockResolvedValue({ status: 'ok' }),
 }));
 
-vi.mock('../repositories/rewardIssuanceRepository', () => ({
+vi.mock('../db/rewardIssuanceRepository', () => ({
   default: {
     getByRewardId: vi.fn().mockResolvedValue(null),
   },
