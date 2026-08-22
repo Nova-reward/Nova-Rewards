@@ -10,7 +10,8 @@
 
 const { Worker, Queue } = require('bullmq');
 const { processRewardIssuance } = require('../services/rewardIssuanceService');
-const rewardIssuanceRepository = require('../repositories/rewardIssuanceRepository');
+const rewardIssuanceRepository = require('../db/rewardIssuanceRepository');
+const { handleRewardIssuanceFailure } = require('./queues');
 const logger = require('../lib/logger');
 
 /** Maximum milliseconds to wait for the worker + DLQ to close cleanly. */
@@ -55,6 +56,11 @@ worker.on('failed', async (job, err) => {
       error: err.message,
     });
     await rewardDLQ.add('dead-letter', { ...job.data, failedReason: err.message });
+
+    // Persist to reward_issuance_failures + increment the Prometheus counter.
+    // This is the event that actually fires in production — see the NOTE on
+    // handleRewardIssuanceFailure in queues.js.
+    await handleRewardIssuanceFailure(job, err);
   }
 });
 

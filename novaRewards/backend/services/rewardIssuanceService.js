@@ -16,16 +16,16 @@
  */
 
 import crypto from 'crypto';
-import { rewardIssuanceQueue } from '../jobs/queues';
+import { rewardIssuanceQueue } from '../jobs/queues.js';
 import {
   createIssuance,
   getIssuanceByKey,
   markConfirmed,
   markFailed,
   incrementAttempts,
-} from '../db/rewardIssuanceRepository';
-import { getActiveCampaign } from '../db/campaignRepository';
-import { distributeRewards } from '../../blockchain/sendRewards';
+} from '../db/rewardIssuanceRepository.js';
+import { getActiveCampaign } from '../db/campaignRepository.js';
+import { distributeRewards } from '../../blockchain/sendRewards.js';
 
 // ---------------------------------------------------------------------------
 // Idempotency key generation

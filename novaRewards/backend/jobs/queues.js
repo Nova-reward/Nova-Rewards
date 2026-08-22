@@ -32,8 +32,16 @@ const rewardIssuanceQueue = new Queue('reward-issuance', {
 });
 
 // ── DLQ Event Handler ─────────────────────────────────────────────
-// Persist permanently failed jobs to DB + Prometheus before removing from Redis
-rewardIssuanceQueue.on('failed', async (job, err) => {
+// Persist permanently failed jobs to DB + Prometheus before removing from Redis.
+//
+// NOTE: a plain BullMQ `Queue` instance never locally emits job-lifecycle
+// events ('failed'/'completed') — only `Worker` and `QueueEvents` do. The
+// `.on('failed', ...)` registration below is a no-op against real Redis, so
+// rewardIssuanceWorker.js's `worker.on('failed', ...)` handler (which fires
+// for real) calls this function directly. It's kept here — and still
+// registered on the queue — as the single source of truth for the
+// persistence logic and to preserve existing test coverage.
+async function handleRewardIssuanceFailure(job, err) {
   const maxAttempts = job.opts?.attempts ?? 3;
   if (job.attemptsMade < maxAttempts) {
     return; // Will be retried, not DLQ yet
@@ -66,7 +74,9 @@ rewardIssuanceQueue.on('failed', async (job, err) => {
     });
     // Do NOT remove job from queue so it doesn't disappear silently
   }
-});
+}
+
+rewardIssuanceQueue.on('failed', handleRewardIssuanceFailure);
 
 const transactionSubmissionQueue = new Queue('transaction-submission', {
   connection: redisConfig,
@@ -140,5 +150,6 @@ module.exports = {
   rewardDistributionQueue,
   serverAdapter,
   novaRewardDlqTotal,
+  handleRewardIssuanceFailure,
   shutdownQueues,
 };
