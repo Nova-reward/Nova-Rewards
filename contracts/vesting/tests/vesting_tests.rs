@@ -1,9 +1,12 @@
 #![cfg(test)]
 
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, Env,
+};
 use vesting::Error;
 use vesting::VestingContract;
 use vesting::VestingContractClient;
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env};
 
 fn setup() -> (Env, Address, VestingContractClient<'static>) {
     let env = Env::default();
@@ -88,19 +91,25 @@ fn create_schedule_stores_correct_fields() {
 }
 
 #[test]
-#[should_panic(expected = "total_duration must be > 0")]
-fn create_schedule_zero_duration_panics() {
+fn create_schedule_zero_duration_returns_invalid_schedule() {
     let (env, admin, client) = setup();
     let b = Address::generate(&env);
-    client.create_schedule(&admin, &b, &1_000, &0, &0, &0);
+    let err = client
+        .try_create_schedule(&admin, &b, &1_000, &0, &0, &0)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, Error::InvalidSchedule);
 }
 
 #[test]
-#[should_panic(expected = "total_amount must be > 0")]
-fn create_schedule_zero_amount_panics() {
+fn create_schedule_zero_amount_returns_invalid_schedule() {
     let (env, admin, client) = setup();
     let b = Address::generate(&env);
-    client.create_schedule(&admin, &b, &0, &0, &0, &1_000);
+    let err = client
+        .try_create_schedule(&admin, &b, &0, &0, &0, &1_000)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, Error::InvalidSchedule);
 }
 
 #[test]
@@ -174,36 +183,36 @@ fn release_twice_gives_incremental_amounts() {
 }
 
 #[test]
-#[should_panic(expected = "nothing to release")]
-fn release_when_nothing_vested_panics() {
+fn release_when_nothing_vested_returns_nothing_to_release() {
     let (env, admin, client) = setup();
     let b = Address::generate(&env);
     // cliff at 500, ledger at 0
     let sid = client.create_schedule(&admin, &b, &1_000, &0, &500, &1_000);
     env.ledger().set_timestamp(0);
-    client.claim_vested(&b, &sid);
+    let err = client.try_claim_vested(&b, &sid).unwrap_err().unwrap();
+    assert_eq!(err, Error::NothingToRelease);
 }
 
 #[test]
-#[should_panic(expected = "nothing to release")]
-fn release_before_cliff_panics() {
+fn release_before_cliff_returns_nothing_to_release() {
     let (env, admin, client) = setup();
     let b = Address::generate(&env);
     // cliff at start(100) + cliff_duration(200) = 300; ledger at 150
     let sid = client.create_schedule(&admin, &b, &1_000, &100, &200, &1_000);
     env.ledger().set_timestamp(150);
-    client.claim_vested(&b, &sid);
+    let err = client.try_claim_vested(&b, &sid).unwrap_err().unwrap();
+    assert_eq!(err, Error::NothingToRelease);
 }
 
 #[test]
-#[should_panic(expected = "nothing to release")]
-fn double_release_at_same_time_panics() {
+fn double_release_at_same_time_returns_nothing_to_release() {
     let (env, admin, client) = setup();
     let b = Address::generate(&env);
     let sid = client.create_schedule(&admin, &b, &1_000, &0, &0, &1_000);
     env.ledger().set_timestamp(1_000);
     client.claim_vested(&b, &sid);
-    client.claim_vested(&b, &sid); // nothing left
+    let err = client.try_claim_vested(&b, &sid).unwrap_err().unwrap();
+    assert_eq!(err, Error::NothingToRelease);
 }
 
 #[test]
@@ -215,8 +224,7 @@ fn release_nonexistent_schedule_panics() {
 }
 
 #[test]
-#[should_panic(expected = "insufficient pool balance")]
-fn release_when_pool_empty_panics() {
+fn release_when_pool_empty_returns_insufficient_pool() {
     let env = Env::default();
     env.mock_all_auths();
     let id = env.register(VestingContract, ());
@@ -227,7 +235,8 @@ fn release_when_pool_empty_panics() {
     let b = Address::generate(&env);
     let sid = client.create_schedule(&admin, &b, &1_000, &0, &0, &1_000);
     env.ledger().set_timestamp(1_000);
-    client.claim_vested(&b, &sid);
+    let err = client.try_claim_vested(&b, &sid).unwrap_err().unwrap();
+    assert_eq!(err, Error::InsufficientPool);
 }
 
 #[test]
@@ -393,7 +402,7 @@ fn claim_immediately_after_revoke_pays_exact_pro_rata() {
     // claim in the same ledger, immediately after revocation
     let claimed = client.claim_vested(&b, &sid);
     assert_eq!(claimed, 3_370); // exactly the pro-rata vested amount, no more
-    // nothing further is ever claimable, even arbitrarily far in the future
+                                // nothing further is ever claimable, even arbitrarily far in the future
     env.ledger().set_timestamp(u64::MAX);
     assert!(client.try_claim_vested(&b, &sid).is_err());
     // conservation: released + returned == total
@@ -435,28 +444,37 @@ fn revoke_partial_then_claim_then_no_more() {
 // ── u64 timestamp overflow guards ─────────────────────────────────────────────
 
 #[test]
-#[should_panic(expected = "start_time + cliff_duration overflows u64")]
-fn create_schedule_cliff_end_overflow_panics() {
+fn create_schedule_cliff_end_overflow_returns_invalid_schedule() {
     let (env, admin, client) = setup();
     let b = Address::generate(&env);
-    client.create_schedule(&admin, &b, &1_000, &u64::MAX, &1, &1_000);
+    let err = client
+        .try_create_schedule(&admin, &b, &1_000, &u64::MAX, &1, &1_000)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, Error::InvalidSchedule);
 }
 
 #[test]
-#[should_panic(expected = "start_time + total_duration overflows u64")]
-fn create_schedule_vesting_end_overflow_panics() {
+fn create_schedule_vesting_end_overflow_returns_invalid_schedule() {
     let (env, admin, client) = setup();
     let b = Address::generate(&env);
     // cliff end (MAX-5 + 0) fits, vesting end (MAX-5 + 10) overflows
-    client.create_schedule(&admin, &b, &1_000, &(u64::MAX - 5), &0, &10);
+    let err = client
+        .try_create_schedule(&admin, &b, &1_000, &(u64::MAX - 5), &0, &10)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, Error::InvalidSchedule);
 }
 
 #[test]
-#[should_panic(expected = "total_amount * total_duration overflows i128")]
-fn create_schedule_pro_rata_numerator_overflow_panics() {
+fn create_schedule_pro_rata_numerator_overflow_returns_invalid_schedule() {
     let (env, admin, client) = setup();
     let b = Address::generate(&env);
-    client.create_schedule(&admin, &b, &i128::MAX, &0, &0, &2);
+    let err = client
+        .try_create_schedule(&admin, &b, &i128::MAX, &0, &0, &2)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, Error::InvalidSchedule);
 }
 
 #[test]

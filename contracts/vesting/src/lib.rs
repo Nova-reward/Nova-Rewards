@@ -28,7 +28,9 @@
 //! let returned = client.revoke(&admin, &beneficiary, &id);
 //! ```
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, contracterror, symbol_short, Address, Env};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env,
+};
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 #[contracterror]
@@ -41,6 +43,12 @@ pub enum Error {
     Unauthorized = 3,
     /// The contract has not been initialized yet (no admin set).
     NotInitialized = 4,
+    /// Schedule parameters are invalid or would overflow vesting arithmetic.
+    InvalidSchedule = 5,
+    /// The schedule has no newly vested tokens available to claim.
+    NothingToRelease = 6,
+    /// The vesting pool does not hold enough tokens to satisfy a claim.
+    InsufficientPool = 7,
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -175,14 +183,8 @@ impl VestingContract {
     /// - [`Error::NotInitialized`] if the contract has not been initialized.
     /// - [`Error::Unauthorized`] if `caller` is not the admin.
     ///
-    /// # Panics
-    /// - `"total_duration must be > 0"` if `total_duration == 0`.
-    /// - `"total_amount must be > 0"` if `total_amount <= 0`.
-    /// - `"start_time + cliff_duration overflows u64"` if the cliff end exceeds `u64::MAX`.
-    /// - `"start_time + total_duration overflows u64"` if the vesting end exceeds `u64::MAX`.
-    /// - `"total_amount * total_duration overflows i128"` if the pro-rata numerator
-    ///   cannot be represented, which would otherwise trap inside
-    ///   [`claim_vested`](VestingContract::claim_vested) and permanently lock the schedule.
+    /// - [`Error::InvalidSchedule`] if the duration/amount is invalid or if
+    ///   the cliff end, vesting end, or pro-rata numerator would overflow.
     pub fn create_schedule(
         env: Env,
         caller: Address,
@@ -193,24 +195,19 @@ impl VestingContract {
         total_duration: u64,
     ) -> Result<u32, Error> {
         Self::require_admin(&env, &caller)?;
-        assert!(total_duration > 0, "total_duration must be > 0");
-        assert!(total_amount > 0, "total_amount must be > 0");
+        if total_duration == 0 || total_amount <= 0 {
+            return Err(Error::InvalidSchedule);
+        }
         // Reject schedules whose vesting math would overflow later. Without these
         // guards a mis-created schedule traps in vested_amount (overflow-checks are
         // enabled in release wasm), bricking both claim_vested and revoke and
         // permanently locking the funds.
-        assert!(
-            start_time.checked_add(cliff_duration).is_some(),
-            "start_time + cliff_duration overflows u64"
-        );
-        assert!(
-            start_time.checked_add(total_duration).is_some(),
-            "start_time + total_duration overflows u64"
-        );
-        assert!(
-            total_amount.checked_mul(total_duration as i128).is_some(),
-            "total_amount * total_duration overflows i128"
-        );
+        if start_time.checked_add(cliff_duration).is_none()
+            || start_time.checked_add(total_duration).is_none()
+            || total_amount.checked_mul(total_duration as i128).is_none()
+        {
+            return Err(Error::InvalidSchedule);
+        }
 
         let next_id_key = DataKey::NextId(beneficiary.clone());
         let id: u32 = env.storage().instance().get(&next_id_key).unwrap_or(0);
@@ -233,9 +230,17 @@ impl VestingContract {
 
         env.storage().instance().set(&next_id_key, &(id + 1));
 
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("created")),
-            (beneficiary, id, total_amount, start_time, cliff_duration, total_duration),
+            (
+                beneficiary,
+                id,
+                total_amount,
+                start_time,
+                cliff_duration,
+                total_duration,
+            ),
         );
 
         Ok(id)
@@ -283,10 +288,11 @@ impl VestingContract {
     /// # Errors
     /// - [`Error::NotInitialized`] if the contract has not been initialized.
     ///
+    /// - [`Error::NothingToRelease`] if no new tokens have vested since the last release.
+    /// - [`Error::InsufficientPool`] if the pool holds fewer tokens than the releasable amount.
+    ///
     /// # Panics
     /// - `"schedule not found"` if no schedule exists for the given beneficiary and id.
-    /// - `"nothing to release"` if no new tokens have vested since the last release.
-    /// - `"insufficient pool balance"` if the pool holds fewer tokens than the releasable amount.
     pub fn claim_vested(env: Env, beneficiary: Address, schedule_id: u32) -> Result<i128, Error> {
         if !env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::NotInitialized);
@@ -304,14 +310,18 @@ impl VestingContract {
         let now = env.ledger().timestamp();
         let vested = Self::vested_amount(&schedule, now);
         let releasable = vested - schedule.released;
-        assert!(releasable > 0, "nothing to release");
+        if releasable <= 0 {
+            return Err(Error::NothingToRelease);
+        }
 
         let pool_bal: i128 = env
             .storage()
             .instance()
             .get(&DataKey::PoolBalance)
             .unwrap_or(0);
-        assert!(pool_bal >= releasable, "insufficient pool balance");
+        if pool_bal < releasable {
+            return Err(Error::InsufficientPool);
+        }
         env.storage()
             .instance()
             .set(&DataKey::PoolBalance, &(pool_bal - releasable));
@@ -322,6 +332,7 @@ impl VestingContract {
             .persistent()
             .extend_ttl(&key, 31_536_000, 31_536_000);
 
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("claimed")),
             (beneficiary, releasable, now),
@@ -397,6 +408,7 @@ impl VestingContract {
             .persistent()
             .extend_ttl(&key, 31_536_000, 31_536_000);
 
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("revoked")),
             (beneficiary, unvested, now),
@@ -488,14 +500,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "nothing to release")]
-    fn test_double_release_blocked() {
+    fn test_double_release_returns_nothing_to_release() {
         let (env, admin, client) = setup();
         let beneficiary = Address::generate(&env);
         let sid = client.create_schedule(&admin, &beneficiary, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(1000);
         client.claim_vested(&beneficiary, &sid);
-        client.claim_vested(&beneficiary, &sid); // should panic
+        let err = client
+            .try_claim_vested(&beneficiary, &sid)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, Error::NothingToRelease);
     }
 
     #[test]
@@ -511,7 +526,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "already initialised")]
     fn test_reinitialize_is_blocked() {
-        let (env, admin, client) = setup();
+        let (_env, admin, client) = setup();
         client.initialize(&admin);
     }
 
