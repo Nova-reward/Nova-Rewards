@@ -23,7 +23,7 @@
     "@stellar/freighter-api": "^2.0.0",
     "axios": "^1.7.2",
     "canvas-confetti": "^1.9.4",
-    "framer-motion": "^12.43.0",
+    "framer-motion": "^13.1.1",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^1.22.0",
     "next": "^15.5.15",
