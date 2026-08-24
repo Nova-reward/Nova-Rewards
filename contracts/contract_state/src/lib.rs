@@ -218,6 +218,7 @@ impl StateContract {
             .persistent()
             .get(&snap_key)
             .expect("snapshot not found");
+        env.storage().persistent().extend_ttl(&snap_key, TTL, TTL);
         let state_key = DataKey::State(key);
         env.storage().persistent().set(&state_key, &value);
         env.storage().persistent().extend_ttl(&state_key, TTL, TTL);

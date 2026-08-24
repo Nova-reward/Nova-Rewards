@@ -63,3 +63,35 @@ fn get_version_refreshes_contract_instance_ttl() {
         "expected get_version() to refresh contract instance TTL"
     );
 }
+
+#[test]
+fn recover_refreshes_snapshot_ttl() {
+    let (env, contract_id, _admin, client) = setup();
+    let key = Bytes::from_slice(&env, b"ttl-snapshot");
+    let first = Bytes::from_slice(&env, b"first");
+    let second = Bytes::from_slice(&env, b"second");
+
+    client.set(&key, &first);
+    client.snapshot(&key);
+    client.set(&key, &second);
+
+    env.ledger()
+        .with_mut(|ledger| ledger.sequence_number += 100);
+    let ttl_before = env.as_contract(&contract_id, || {
+        env.storage()
+            .persistent()
+            .get_ttl(&contract_state::DataKey::Snapshot(key.clone(), 0))
+    });
+
+    client.recover(&key, &0);
+
+    let ttl_after = env.as_contract(&contract_id, || {
+        env.storage()
+            .persistent()
+            .get_ttl(&contract_state::DataKey::Snapshot(key.clone(), 0))
+    });
+    assert!(
+        ttl_after > ttl_before,
+        "expected recover() to refresh snapshot TTL"
+    );
+}
