@@ -28,24 +28,26 @@ pub const EVENT_SCHEMA_VERSION: u32 = 1;
 // ── Types ─────────────────────────────────────────────────────────────────────
 #[contracttype]
 pub enum DataKey {
+    /// Instance storage. Critical admin metadata; contract instance TTL refreshed to `TTL`.
     Admin,
-    /// Schema version counter
+    /// Instance storage. Schema version counter; contract instance TTL refreshed to `TTL`.
     Version,
-    /// Live state entry
+    /// Persistent storage. Live state entry; entry TTL refreshed to `TTL` on read/write paths.
     State(Bytes),
-    /// Snapshot: (key, version) -> value
+    /// Persistent storage. Snapshot value; entry TTL refreshed to `TTL` on snapshot/recovery paths.
     Snapshot(Bytes, u32),
-    /// Multisig signers for upgrade authorization
+    /// Instance storage. Multisig signer set; contract instance TTL refreshed to `TTL`.
     Signers,
-    /// Minimum approvals required for upgrade
+    /// Instance storage. Upgrade approval threshold; contract instance TTL refreshed to `TTL`.
     Threshold,
-    /// Pending upgrade approvals: wasm_hash -> Vec<Address>
+    /// Instance storage. Pending upgrade approvals; contract instance TTL refreshed to `TTL`.
     UpgradeApprovals(BytesN<32>),
 }
 
 // ── Event helpers ─────────────────────────────────────────────────────────────
 
 fn emit_state_set(env: &Env, schema_version: u32) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("state"), symbol_short!("set")),
         (EVENT_SCHEMA_VERSION, schema_version),
@@ -53,6 +55,7 @@ fn emit_state_set(env: &Env, schema_version: u32) {
 }
 
 fn emit_state_delete(env: &Env, schema_version: u32) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("state"), symbol_short!("delete")),
         (EVENT_SCHEMA_VERSION, schema_version),
@@ -60,6 +63,7 @@ fn emit_state_delete(env: &Env, schema_version: u32) {
 }
 
 fn emit_snapshot(env: &Env, schema_version: u32) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("state"), symbol_short!("snapshot")),
         (EVENT_SCHEMA_VERSION, schema_version),
@@ -67,6 +71,7 @@ fn emit_snapshot(env: &Env, schema_version: u32) {
 }
 
 fn emit_migrate(env: &Env, new_version: u32) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("state"), symbol_short!("migrate")),
         (EVENT_SCHEMA_VERSION, new_version),
@@ -74,6 +79,7 @@ fn emit_migrate(env: &Env, new_version: u32) {
 }
 
 fn emit_recover(env: &Env, snap_version: u32) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("state"), symbol_short!("recover")),
         (EVENT_SCHEMA_VERSION, snap_version),
@@ -81,6 +87,7 @@ fn emit_recover(env: &Env, snap_version: u32) {
 }
 
 fn emit_contract_upgraded(env: &Env, new_wasm_hash: &BytesN<32>) {
+    #[allow(deprecated)]
     env.events().publish(
         (symbol_short!("state"), symbol_short!("upgraded")),
         (EVENT_SCHEMA_VERSION, new_wasm_hash.clone()),
@@ -93,6 +100,10 @@ pub struct StateContract;
 
 #[contractimpl]
 impl StateContract {
+    fn bump_instance_ttl(env: &Env) {
+        env.storage().instance().extend_ttl(TTL, TTL);
+    }
+
     /// Initialize the contract.
     ///
     /// # Parameters
@@ -111,14 +122,19 @@ impl StateContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Version, &0_u32);
         env.storage().instance().set(&DataKey::Signers, &signers);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
+        Self::bump_instance_ttl(&env);
     }
 
     fn admin(env: &Env) -> Address {
+        Self::bump_instance_ttl(env);
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
     fn version(env: &Env) -> u32 {
+        Self::bump_instance_ttl(env);
         env.storage().instance().get(&DataKey::Version).unwrap_or(0)
     }
 
@@ -226,6 +242,7 @@ impl StateContract {
     /// - `"already approved"` if `signer` has already approved this hash.
     pub fn approve_upgrade(env: Env, signer: Address, new_wasm_hash: BytesN<32>) {
         signer.require_auth();
+        Self::bump_instance_ttl(&env);
 
         let signers: Vec<Address> = env
             .storage()
@@ -262,6 +279,7 @@ impl StateContract {
     }
 
     pub fn get_upgrade_approvals(env: Env, new_wasm_hash: BytesN<32>) -> u32 {
+        Self::bump_instance_ttl(&env);
         let approval_key = DataKey::UpgradeApprovals(new_wasm_hash);
         let approvals: Vec<Address> = env
             .storage()
@@ -272,6 +290,7 @@ impl StateContract {
     }
 
     pub fn get_threshold(env: Env) -> u32 {
+        Self::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&DataKey::Threshold)
@@ -279,6 +298,7 @@ impl StateContract {
     }
 
     pub fn get_signers(env: Env) -> Vec<Address> {
+        Self::bump_instance_ttl(&env);
         env.storage()
             .instance()
             .get(&DataKey::Signers)
