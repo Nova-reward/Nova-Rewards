@@ -24,11 +24,11 @@
     "load:seed": "node tests/load/seed.js"
   },
   "dependencies": {
-    "@aws-sdk/client-secrets-manager": "^3.1110.0",
+    "@aws-sdk/client-secrets-manager": "^3.1115.0",
     "@elastic/elasticsearch": "^9.5.0",
     "@prisma/client": "^7.9.1",
     "bcryptjs": "^3.0.3",
-    "bullmq": "^6.1.0",
+    "bullmq": "^6.2.0",
     "class-validator": "^0.15.1",
     "compression": "1.8.1",
     "cors": "^2.8.5",
@@ -52,15 +52,15 @@
     "stellar-sdk": "^13.3.0",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
-    "uuid": "^14.0.1",
+    "uuid": "^14.0.2",
     "winston": "^3.17.0",
     "winston-cloudwatch": "^6.3.0"
   },
   "devDependencies": {
-    "@faker-js/faker": "^10.5.0",
+    "@faker-js/faker": "^10.6.0",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "fast-check": "^4.9.0",
     "fishery": "^2.2.2",
     "nodemon": "^3.1.14",
