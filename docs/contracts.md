@@ -27,6 +27,7 @@ All Nova Rewards smart contracts are deployed on the Stellar network using the S
 | `referral` | `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | — | 1.0.0 |
 | `distribution` | `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | — | 1.0.0 |
 | `admin_roles` | `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | — | 1.0.0 |
+| `contract_state` | `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | — | 1.0.0 |
 
 ### Mainnet
 
@@ -40,6 +41,7 @@ All Nova Rewards smart contracts are deployed on the Stellar network using the S
 | `referral` | `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | — | — |
 | `distribution` | `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | — | — |
 | `admin_roles` | `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | — | — |
+| `contract_state` | `CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` | — | — |
 
 ---
 
@@ -110,12 +112,19 @@ stellar contract invoke \
   --token_id <NOVA_TOKEN_CONTRACT_ID>
 ```
 
+For `contract_state`, the initialization path seeds the critical instance-backed
+keys (`Admin`, `Version`, `Signers`, `Threshold`) and immediately extends the
+contract instance TTL. Subsequent version, admin, and upgrade-approval paths
+refresh the instance TTL, while state and snapshot entries refresh their
+persistent TTL on read/write paths.
+
 ---
 
 ## Contract Dependencies
 
 ```
 admin_roles          (standalone)
+contract_state       (standalone)
 nova_token           (standalone)
 reward_pool          (standalone)
 vesting              (standalone)
