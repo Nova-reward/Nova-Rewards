@@ -22,9 +22,11 @@
     "@sentry/nextjs": "^10.50.0",
     "@stellar/freighter-api": "^2.0.0",
     "axios": "^1.7.2",
+    "axios-mock-adapter": "2.1.0",
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^11.2.0",
     "lucide-react": "^1.22.0",
+    "msw": "2.10.4",
     "next": "^15.5.15",
     "next-i18next": "^14.0.3",
     "next-themes": "^0.4.6",
@@ -41,8 +43,9 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.2.7",
     "@axe-core/playwright": "^4.9.1",
+    "@faker-js/faker": "8.4.1",
+    "@next/bundle-analyzer": "^16.2.7",
     "@playwright/test": "^1.61.1",
     "@storybook/addon-a11y": "^10.4.1",
     "@storybook/addon-essentials": "^8.1.0",
