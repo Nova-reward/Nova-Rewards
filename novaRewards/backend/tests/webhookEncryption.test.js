@@ -8,7 +8,7 @@
 const TEST_KEY = 'a'.repeat(64);
 
 // Mock the pg query so we can inspect what gets written to the DB
-const mockQuery = vi.fn();
+const mockQuery = vi.hoisted(() => vi.fn());
 vi.mock('../db/index', () => ({ query: mockQuery }));
 
 // Provide a real encryption key
@@ -20,6 +20,7 @@ const {
   getWebhookById,
   getActiveWebhooksForEvent,
   getDueRetries,
+  createDelivery,
 } = require('../db/webhookRepository');
 
 const {
@@ -130,3 +131,48 @@ describe('webhookRepository — field-level encryption', () => {
     expect(verifySignature(secret, signature, timestamp, tamperedDeliveryId, rawBody)).toBe(false);
   });
 });
+
+describe('webhookService delivery limits', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    vi.clearAllMocks();
+  });
+
+  test('attemptDelivery marks delivery failed if response exceeds 64 KB', async () => {
+    const http = require('http');
+    const { attemptDelivery } = require('../services/webhookService');
+
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.write('a'.repeat(1024 * 1024)); // 1 MB
+      res.end();
+    });
+
+    await new Promise(resolve => server.listen(0, resolve));
+    const port = server.address().port;
+    const url = `http://localhost:${port}/`;
+
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+
+    const delivery = {
+      id: 1,
+      webhook_id: 1,
+      payload: {},
+      attempt: 1,
+      url,
+      secret: 'secret',
+      delivery_id: 'test-delivery-id'
+    };
+
+    const result = await attemptDelivery(delivery);
+    
+    server.close();
+
+    expect(result).toBe(false);
+    
+    const lastCall = mockQuery.mock.calls[mockQuery.mock.calls.length - 1];
+    expect(lastCall[0]).toContain('UPDATE webhook_deliveries');
+    expect(lastCall[1]).toContain('Response body exceeds 64 KB limit');
+  });
+});
+

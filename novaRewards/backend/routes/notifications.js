@@ -45,8 +45,6 @@ router.patch('/:id/read', authenticateUser, async (req, res, next) => {
   }
 });
 
-const { getNotificationsForUser, markAllNotificationsAsRead, markNotificationAsRead } = require('../db/notificationRepository');
-
 /**
  * GET /api/notifications
  * Returns the user's notifications.

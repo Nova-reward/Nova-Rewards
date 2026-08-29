@@ -34,9 +34,9 @@ jobs:
       STELLAR_NETWORK: testnet
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -57,7 +57,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload regression results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: regression-results-${{ github.run_id }}
@@ -67,7 +67,7 @@ jobs:
 
       - name: Notify Slack on failure
         if: steps.regression.outcome == 'failure'
-        uses: slackapi/slack-github-action@v3.0.3
+        uses: slackapi/slack-github-action@v4.0.0
         with:
           payload: |
             {
@@ -79,7 +79,7 @@ jobs:
 
       - name: Send email alert on failure
         if: steps.regression.outcome == 'failure'
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v18
         with:
           server_address: smtp.gmail.com
           server_port: 465

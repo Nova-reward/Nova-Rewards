@@ -50,13 +50,14 @@ fuzz_target!(|data: &[u8]| {
     let beneficiary = Address::generate(&env);
 
     client.initialize(&admin);
-    client.fund_pool(&total_amount);
+    client.fund_pool(&admin, &total_amount);
 
     env.ledger().set_timestamp(initial_ts);
 
     // create_schedule rejects zero durations/amounts and timestamp-overflow
     // combinations — those rejections are correct behaviour, not crashes.
     let schedule_id = match client.try_create_schedule(
+        &admin,
         &beneficiary,
         &total_amount,
         &start_time,
@@ -77,7 +78,7 @@ fuzz_target!(|data: &[u8]| {
             .set_timestamp(env.ledger().timestamp().saturating_add(advance));
 
         if op[0] & 0x03 == 0 && !revoked {
-            if let Ok(Ok(r)) = client.try_revoke(&beneficiary, &schedule_id) {
+            if let Ok(Ok(r)) = client.try_revoke(&admin, &beneficiary, &schedule_id) {
                 assert!(r >= 0, "revoke returned a negative amount");
                 returned = r;
                 revoked = true;

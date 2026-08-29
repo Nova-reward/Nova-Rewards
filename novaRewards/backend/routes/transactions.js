@@ -4,6 +4,8 @@ const { server, NOVA, isValidStellarAddress } = require('../../blockchain/stella
 const { recordTransaction, getTransactionsByMerchant, getMerchantTotals } = require('../db/transactionRepository');
 const { query } = require('../db/index');
 const { log } = require('../monitoring/eventsLogger');
+const { authenticateUser } = require('../middleware/authenticateUser');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
 /**
  * POST /api/transactions/record
@@ -124,8 +126,10 @@ router.post('/reconcile', authenticateMerchant, async (req, res, next) => {
   try {
     const reconciliation = await reconcileMerchantTransactions(req.merchant.id, req.body || {});
     res.json({ success: true, data: reconciliation });
- feat/define-constants
-    const { walletAddress } = req.params;
+  } catch (err) {
+    next(err);
+  }
+});
 
     if (!isValidStellarAddress(walletAddress)) {
       return res.status(400).json({
@@ -181,9 +185,6 @@ router.post('/reconcile', authenticateMerchant, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-
-  } catch (err) { next(err); }
- main
 });
 
 router.get('/user/history', async (req, res, next) => {

@@ -1,5 +1,5 @@
 'use strict';
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 
 const assertAdminCaller = require('../middleware/assertAdminCaller');
 const adminRepository = require('../db/adminRepository');

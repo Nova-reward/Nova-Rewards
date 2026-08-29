@@ -38,7 +38,7 @@ const {
   CONTRACT_EVENT_BATCH_SIZE,
 } = require('../config/constants');
 
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 
 /** Active EventSource handles keyed by contractId */
 const activeStreams = new Map();

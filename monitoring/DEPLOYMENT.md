@@ -35,17 +35,17 @@ Configure the following in `.env`:
 
 # Or manually:
 docker network create nova-rewards_monitoring
-docker-compose -f docker-compose.monitoring.yml up -d
+docker compose -f docker-compose.monitoring.yml up -d
 ```
 
 ### 3. Verify Deployment
 
 ```bash
 # Check all services are running
-docker-compose -f docker-compose.monitoring.yml ps
+docker compose -f docker-compose.monitoring.yml ps
 
 # Check logs
-docker-compose -f docker-compose.monitoring.yml logs -f
+docker compose -f docker-compose.monitoring.yml logs -f
 ```
 
 ### 4. Configure Grafana
@@ -155,7 +155,7 @@ docker-compose -f docker-compose.monitoring.yml up -d
 curl http://localhost:9090/api/v1/targets | jq
 
 # Test connectivity
-docker exec -it nova-prometheus wget -O- http://backend:4000/metrics
+docker exec -it nova-prometheus wget -O- http://backend:3001/metrics
 ```
 
 ### Grafana Shows No Data

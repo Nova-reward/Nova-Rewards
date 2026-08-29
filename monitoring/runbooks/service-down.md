@@ -18,7 +18,7 @@
 docker ps | grep nova
 
 # Check service health
-curl -v http://backend:4000/health
+curl -v http://backend:3001/health
 
 # Check logs for crash
 docker logs nova-backend --tail 50
@@ -43,7 +43,7 @@ docker restart nova-backend
 
 # Wait 30 seconds and check health
 sleep 30
-curl http://backend:4000/health
+curl http://backend:3001/health
 
 # If still down, restart all services
 docker-compose restart
@@ -223,7 +223,7 @@ docker-compose up -d
 
 # Verify health
 sleep 30
-curl http://backend:4000/health
+curl http://backend:3001/health
 ```
 
 ### Rollback Deployment
@@ -239,7 +239,7 @@ docker-compose down
 docker-compose up -d --build
 
 # Verify
-curl http://backend:4000/health
+curl http://backend:3001/health
 ```
 
 ### Scale Up (AWS)

@@ -1,7 +1,21 @@
 {
+  "@hookform/resolvers@5.5.7": {
+    "licenses": "MIT",
+    "repository": "https://github.com/react-hook-form/resolvers",
+    "publisher": "bluebill1049",
+    "email": "bluebill1049@hotmail.com",
+    "path": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend/node_modules/@hookform/resolvers",
+    "licenseFile": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend/node_modules/@hookform/resolvers/LICENSE"
+  },
   "nova-rewards-frontend@1.0.0": {
     "licenses": "UNLICENSED",
     "private": true,
     "path": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend"
+  },
+  "react@18.3.1": {
+    "licenses": "MIT",
+    "repository": "https://github.com/facebook/react",
+    "path": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend/node_modules/react",
+    "licenseFile": "/home/runner/work/Nova-Rewards/Nova-Rewards/novaRewards/frontend/node_modules/react/LICENSE"
   }
 }

@@ -2,6 +2,7 @@
 
 import { useWalletStore } from '../store/walletStore';
 import { truncateAddress } from '../lib/truncateAddress';
+import { formatTokenAmount } from '../lib/formatting';
 import { Wallet, Unplug, AlertCircle, Loader2, Wifi } from 'lucide-react';
 
 /**
@@ -73,7 +74,7 @@ export default function WalletConnectButton() {
               {truncateAddress(publicKey)}
             </span>
             <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
-              {parseFloat(balance).toLocaleString()} NOVA
+              {formatTokenAmount(balance)} NOVA
             </span>
           </div>
           {/* Network badge */}

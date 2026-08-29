@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import CampaignCard from '../components/CampaignCard';
+import { formatTokenAmount } from '../lib/formatting';
 
 const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 const past   = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -40,8 +41,8 @@ describe('CampaignCard — active campaign', () => {
 
   it('renders reward rate', () => {
     render(<CampaignCard campaign={baseCampaign} onViewDetails={jest.fn()} />);
-    expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.getByText('NOVA')).toBeInTheDocument();
+    expect(screen.getByText(formatTokenAmount(5))).toBeInTheDocument();
+    expect(screen.getByText('/unit')).toBeInTheDocument();
   });
 
   it('shows Active status badge', () => {

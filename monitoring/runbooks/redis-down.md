@@ -222,7 +222,7 @@ docker exec -it nova-redis redis-cli DBSIZE
 ### Warm Up Cache
 ```bash
 # Trigger cache warming
-curl -X POST http://backend:4000/api/admin/cache/warm
+curl -X POST http://backend:3001/api/admin/cache/warm
 
 # Or manually populate critical data
 docker exec -it nova-redis redis-cli SET key value EX 3600

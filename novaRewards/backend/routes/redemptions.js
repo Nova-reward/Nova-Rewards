@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const router = require('express').Router();
 const { authenticateUser } = require('../middleware/authenticateUser');
 const { redeemReward, getRedemptionById, getUserRedemptions } = require('../db/redemptionRepository');
@@ -215,7 +215,9 @@ router.post('/', validateCreateRedemption, async (req, res, next) => {
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get('/', validateRedemptionQuery, async (req, res, next) => {
-
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
     const result = await getUserRedemptions(req.user.id, { page, limit });
     res.json({ success: true, ...result });
   } catch (err) {

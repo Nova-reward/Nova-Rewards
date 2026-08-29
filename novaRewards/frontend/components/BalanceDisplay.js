@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useWalletStore } from '../store/walletStore';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { formatTokenAmount } from '../lib/formatting';
 
 /**
  * BalanceDisplay — Shows the authenticated user's live NOVA token balance
@@ -66,17 +67,19 @@ export default function BalanceDisplay() {
   }
 
   // Success state - show formatted balance with 7 decimal places
-  const formattedBalance = parseFloat(balance).toLocaleString('en-US', {
-    minimumFractionDigits: 7,
-    maximumFractionDigits: 7,
-  });
+  const formattedBalance = formatTokenAmount(balance);
 
   return (
     <div className="flex flex-col leading-none gap-1">
       <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400">
         Balance
       </span>
-      <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">
+      <span
+        className="text-xs font-semibold text-primary-600 dark:text-primary-400"
+        role="status"
+        aria-live="polite"
+        aria-label={`${formattedBalance} NOVA tokens`}
+      >
         {formattedBalance} NOVA
       </span>
     </div>

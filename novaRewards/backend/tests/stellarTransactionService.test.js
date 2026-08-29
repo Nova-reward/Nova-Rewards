@@ -670,3 +670,232 @@ describe('Route: GET /api/transactions/sequence/:publicKey', () => {
     expect(res.body.error).toBe('account_not_found');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: Fee-bump retry logic (acceptance criteria)
+//
+// These tests use the _deps injection seam on stellarTransactionService to
+// mock loadAccount and submitTransaction without relying on vitest module
+// interception of CJS require() calls (which doesn't work reliably).
+// ---------------------------------------------------------------------------
+describe('stellarTransactionService — fee-bump retry logic', () => {
+  const { Keypair, Account, BASE_FEE } = require('stellar-sdk');
+  const stellarTxSvc = require('../services/stellarTransactionService');
+
+  // Generate a valid fee-source keypair for all fee-bump tests
+  const feeSourceKp = Keypair.random();
+  const feeSourceSecret = feeSourceKp.secret();
+
+  // Build a minimal Account mock the TransactionBuilder accepts
+  function makeFakeAccount(publicKey, sequence = '100') {
+    return new Account(publicKey, sequence);
+  }
+
+  let mockLoadAccount;
+  let mockSubmitTransaction;
+  let mockRecordTx;
+  let savedDeps;
+
+  beforeEach(() => {
+    mockLoadAccount = vi.fn();
+    mockSubmitTransaction = vi.fn();
+    mockRecordTx = vi.fn().mockResolvedValue({ id: 1 });
+
+    // Save real deps and inject mocks
+    savedDeps = { server: stellarTxSvc._deps.server, recordTransaction: stellarTxSvc._deps.recordTransaction };
+    stellarTxSvc._deps.server = {
+      loadAccount: mockLoadAccount,
+      submitTransaction: mockSubmitTransaction,
+    };
+    stellarTxSvc._deps.recordTransaction = mockRecordTx;
+  });
+
+  afterEach(() => {
+    // Restore real deps so other test suites are unaffected
+    stellarTxSvc._deps.server = savedDeps.server;
+    stellarTxSvc._deps.recordTransaction = savedDeps.recordTransaction;
+  });
+
+  // ── AC-1: tx_bad_seq → sequence refresh → success on fee-bump ────────────
+  it('AC-1: resolves with correct txHash when tx_bad_seq triggers a fee-bump retry', async () => {
+    const sourceKp = Keypair.random();
+    const destKp  = Keypair.random();
+
+    const badSeqError = Object.assign(new Error('tx_bad_seq'), {
+      response: { data: { extras: { result_codes: { transaction: ['tx_bad_seq'] } } } },
+    });
+
+    // loadAccount calls:
+    //   1 — initial submit (inside submit())
+    //   2 — inline tx_bad_seq refresh (inside submitHorizonTransaction)
+    //   3 — fee-bump attempt 1 (inside submitWithFeeBumpRetry loop)
+    mockLoadAccount
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '100'))
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '101'))
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '102'));
+
+    // submitTransaction calls:
+    //   1 — initial fails with tx_bad_seq
+    //   2 — after inline refresh also fails with tx_bad_seq → fee-bump loop
+    //   3 — fee-bump attempt 1 succeeds
+    mockSubmitTransaction
+      .mockRejectedValueOnce(badSeqError)
+      .mockRejectedValueOnce(badSeqError)
+      .mockResolvedValueOnce({ hash: 'feebump_success_hash', ledger: 55, result_xdr: 'AAAAAA==' });
+
+    const result = await stellarTxSvc.submit({
+      sourceAddress: sourceKp.publicKey(),
+      operations: [Operation.payment({ destination: destKp.publicKey(), asset: Asset.native(), amount: '10' })],
+      signers: [sourceKp],
+      options: { feeSourceSecret },
+    });
+
+    expect(result.txHash).toBe('feebump_success_hash');
+    expect(result.status).toBe('submitted');
+  });
+
+  // ── AC-2: MAX_FEE_BUMP_ATTEMPTS exhausted → typed error ─────────────────
+  it('AC-2: rejects with typed error (code=tx_submission_failed) after MAX_FEE_BUMP_ATTEMPTS consecutive failures', async () => {
+    const sourceKp = Keypair.random();
+    const destKp  = Keypair.random();
+
+    const insufficientFeeErr = Object.assign(new Error('tx_insufficient_fee'), {
+      response: { data: { extras: { result_codes: { transaction: ['tx_insufficient_fee'] } } } },
+    });
+
+    // Every loadAccount and submitTransaction call fails with tx_insufficient_fee
+    mockLoadAccount.mockResolvedValue(makeFakeAccount(sourceKp.publicKey(), '200'));
+    mockSubmitTransaction.mockRejectedValue(insufficientFeeErr);
+
+    const err = await stellarTxSvc.submit({
+      sourceAddress: sourceKp.publicKey(),
+      operations: [Operation.payment({ destination: destKp.publicKey(), asset: Asset.native(), amount: '1' })],
+      signers: [sourceKp],
+      options: { feeSourceSecret },
+    }).catch(e => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err.code).toBe('tx_submission_failed');
+    expect(err.message).toMatch(/tx_insufficient_fee/);
+    expect(err.status).toBe(400);
+  });
+
+  // ── AC-3: No sequence number reuse — loadAccount called per attempt ──────
+  it('AC-3: calls loadAccount before each fee-bump attempt (no stale sequence reuse)', async () => {
+    const sourceKp = Keypair.random();
+    const destKp  = Keypair.random();
+
+    const tooLateErr = Object.assign(new Error('tx_too_late'), {
+      response: { data: { extras: { result_codes: { transaction: ['tx_too_late'] } } } },
+    });
+
+    // 1 initial + 3 fee-bump refreshes = 4 total loadAccount calls
+    mockLoadAccount
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '300'))
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '301'))
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '302'))
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '303'));
+
+    mockSubmitTransaction.mockRejectedValue(tooLateErr);
+
+    await stellarTxSvc.submit({
+      sourceAddress: sourceKp.publicKey(),
+      operations: [Operation.payment({ destination: destKp.publicKey(), asset: Asset.native(), amount: '2' })],
+      signers: [sourceKp],
+      options: { feeSourceSecret },
+    }).catch(() => {});
+
+    // 1 initial + 3 fee-bump refreshes = 4 calls total
+    expect(mockLoadAccount).toHaveBeenCalledTimes(1 + stellarTxSvc.MAX_FEE_BUMP_ATTEMPTS);
+
+    // Every call must use the source address (NOT the fee-source address)
+    mockLoadAccount.mock.calls.forEach(call => {
+      expect(call[0]).toBe(sourceKp.publicKey());
+    });
+  });
+
+  // ── AC-4: tx_insufficient_fee — fee doubled per attempt (FEE_BUMP_MULTIPLIER=2) ──
+  it('AC-4: doubles the base fee on each tx_insufficient_fee fee-bump attempt', async () => {
+    const sourceKp = Keypair.random();
+    const destKp  = Keypair.random();
+
+    const insufficientFeeErr = Object.assign(new Error('tx_insufficient_fee'), {
+      response: { data: { extras: { result_codes: { transaction: ['tx_insufficient_fee'] } } } },
+    });
+
+    mockLoadAccount.mockResolvedValue(makeFakeAccount(sourceKp.publicKey(), '400'));
+
+    // initial fails, fee-bump 1 fails, fee-bump 2 fails, fee-bump 3 succeeds
+    mockSubmitTransaction
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockRejectedValueOnce(insufficientFeeErr)
+      .mockResolvedValueOnce({ hash: 'feebump_fee_hash', ledger: 77, result_xdr: 'BBBBBB==' });
+
+    const result = await stellarTxSvc.submit({
+      sourceAddress: sourceKp.publicKey(),
+      operations: [Operation.payment({ destination: destKp.publicKey(), asset: Asset.native(), amount: '3' })],
+      signers: [sourceKp],
+      options: { feeSourceSecret },
+    });
+
+    expect(result.txHash).toBe('feebump_fee_hash');
+    // 1 initial + 3 fee-bump attempts = 4 total
+    expect(mockSubmitTransaction).toHaveBeenCalledTimes(4);
+
+    // Verify fee increases on each fee-bump attempt.
+    // stellar-sdk computes feeBumpTx.fee = baseFee * (innerTxOps + 1).
+    // With 1 inner operation: fee = baseFee * 2.
+    // attempt 1: bumpedFee = BASE_FEE*FEE_BUMP_MULTIPLIER*1 = 200 → tx.fee = 400
+    // attempt 2: bumpedFee = BASE_FEE*FEE_BUMP_MULTIPLIER*2 = 400 → tx.fee = 800
+    // attempt 3: bumpedFee = BASE_FEE*FEE_BUMP_MULTIPLIER*3 = 600 → tx.fee = 1200
+    const { FEE_BUMP_MULTIPLIER: mult } = stellarTxSvc;
+    const baseFeeNum = parseInt(BASE_FEE, 10);
+
+    const feeBumpCalls = mockSubmitTransaction.mock.calls.slice(1); // skip initial
+    expect(feeBumpCalls.length).toBe(stellarTxSvc.MAX_FEE_BUMP_ATTEMPTS);
+
+    // Each successive fee-bump must have a strictly higher fee than the previous
+    const fees = feeBumpCalls.map(call => parseInt(call[0].fee, 10));
+    for (let i = 1; i < fees.length; i++) {
+      expect(fees[i]).toBeGreaterThan(fees[i - 1]);
+    }
+    // Verify multiplier scaling: fee[i] / fee[0] should equal (i+1)
+    for (let i = 0; i < fees.length; i++) {
+      expect(fees[i]).toBe(fees[0] * (i + 1));
+    }
+    // fee[0] must use FEE_BUMP_MULTIPLIER
+    expect(fees[0]).toBe(baseFeeNum * mult * 2); // *2 because stellar fee-bump fee = baseFee*(innerOps+1)
+  });
+
+  // ── AC-5: tx_too_late → success on first fee-bump ────────────────────────
+  it('AC-5: resolves on first fee-bump attempt when initial tx_too_late fails', async () => {
+    const sourceKp = Keypair.random();
+    const destKp  = Keypair.random();
+
+    const tooLateErr = Object.assign(new Error('tx_too_late'), {
+      response: { data: { extras: { result_codes: { transaction: ['tx_too_late'] } } } },
+    });
+
+    // 1 initial + 1 fee-bump refresh = 2 loadAccount calls
+    mockLoadAccount
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '500'))
+      .mockResolvedValueOnce(makeFakeAccount(sourceKp.publicKey(), '501'));
+
+    mockSubmitTransaction
+      .mockRejectedValueOnce(tooLateErr)
+      .mockResolvedValueOnce({ hash: 'too_late_bump_hash', ledger: 88, result_xdr: 'CCCCCC==' });
+
+    const result = await stellarTxSvc.submit({
+      sourceAddress: sourceKp.publicKey(),
+      operations: [Operation.payment({ destination: destKp.publicKey(), asset: Asset.native(), amount: '4' })],
+      signers: [sourceKp],
+      options: { feeSourceSecret },
+    });
+
+    expect(result.txHash).toBe('too_late_bump_hash');
+    expect(mockSubmitTransaction).toHaveBeenCalledTimes(2);
+    expect(mockLoadAccount).toHaveBeenCalledTimes(2);
+  });
+});
+

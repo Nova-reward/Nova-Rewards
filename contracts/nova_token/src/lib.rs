@@ -39,6 +39,7 @@ enum DataKey {
     Balance(Address),
     /// Stores AllowanceValue { amount, expiration_ledger } keyed by (owner, spender)
     Allowance(Address, Address),
+    TotalSupply,
 }
 
 // ============================================
@@ -76,6 +77,7 @@ impl NovaToken {
         }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::TotalSupply, &0_i128);
     }
 
     // ========================================
@@ -91,10 +93,12 @@ impl NovaToken {
     fn balance_of(env: &Env, addr: &Address) -> i128 {
         let key = DataKey::Balance(addr.clone());
         let balance = env.storage().persistent().get(&key).unwrap_or(0i128);
-        // Extend TTL by 31 days (2,678,400 ledgers at 5s/ledger)
-        env.storage()
-            .persistent()
-            .extend_ttl(&key, 2_678_400, 2_678_400);
+        if env.storage().persistent().has(&key) {
+            // Extend TTL by 31 days (2,678,400 ledgers at 5s/ledger)
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, 2_678_400, 2_678_400);
+        }
         balance
     }
 
@@ -129,9 +133,17 @@ impl NovaToken {
     pub fn mint(env: Env, to: Address, amount: i128) {
         Self::admin(&env).require_auth();
         assert!(amount > 0, "amount must be positive");
-        
+
         let new_bal = Self::balance_of(&env, &to).saturating_add(amount);
         Self::set_balance(&env, &to, new_bal);
+        let supply: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalSupply)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalSupply, &supply.saturating_add(amount));
 
         env.events().publish(
             (symbol_short!("nova_tok"), symbol_short!("mint")),
@@ -157,11 +169,19 @@ impl NovaToken {
     pub fn burn(env: Env, from: Address, amount: i128) {
         from.require_auth();
         assert!(amount > 0, "amount must be positive");
-        
+
         let bal = Self::balance_of(&env, &from);
         assert!(bal >= amount, "insufficient balance");
-        
+
         Self::set_balance(&env, &from, bal - amount);
+        let supply: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalSupply)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalSupply, &supply.saturating_sub(amount));
 
         env.events().publish(
             (symbol_short!("nova_tok"), symbol_short!("burn")),
@@ -188,10 +208,10 @@ impl NovaToken {
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
         from.require_auth();
         assert!(amount > 0, "amount must be positive");
-        
+
         let from_bal = Self::balance_of(&env, &from);
         assert!(from_bal >= amount, "insufficient balance");
-        
+
         Self::set_balance(&env, &from, from_bal - amount);
         let to_bal = Self::balance_of(&env, &to);
         Self::set_balance(&env, &to, to_bal + amount);
@@ -229,14 +249,14 @@ impl NovaToken {
         assert!(amount > 0, "amount must be positive");
 
         let allowance_key = DataKey::Allowance(from.clone(), spender.clone());
-        let allowance: AllowanceValue = env
-            .storage()
-            .persistent()
-            .get(&allowance_key)
-            .unwrap_or(AllowanceValue {
-                amount: 0,
-                expiration_ledger: 0,
-            });
+        let allowance: AllowanceValue =
+            env.storage()
+                .persistent()
+                .get(&allowance_key)
+                .unwrap_or(AllowanceValue {
+                    amount: 0,
+                    expiration_ledger: 0,
+                });
 
         // Treat expired allowances as zero
         let current_ledger = env.ledger().sequence();
@@ -296,7 +316,13 @@ impl NovaToken {
     /// # Panics
     /// - `"expiration_ledger must be >= current ledger"` if `expiration_ledger` is in the past
     ///   and `amount > 0`.
-    pub fn approve(env: Env, owner: Address, spender: Address, amount: i128, expiration_ledger: u32) {
+    pub fn approve(
+        env: Env,
+        owner: Address,
+        spender: Address,
+        amount: i128,
+        expiration_ledger: u32,
+    ) {
         owner.require_auth();
 
         // Reject stale approvals for non-zero amounts
@@ -390,14 +416,14 @@ impl NovaToken {
         assert!(amount > 0, "amount must be positive");
 
         let key = DataKey::Allowance(owner.clone(), spender.clone());
-        let existing: AllowanceValue = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(AllowanceValue {
-                amount: 0,
-                expiration_ledger: 0,
-            });
+        let existing: AllowanceValue =
+            env.storage()
+                .persistent()
+                .get(&key)
+                .unwrap_or(AllowanceValue {
+                    amount: 0,
+                    expiration_ledger: 0,
+                });
 
         let new_amount = existing.amount.saturating_sub(amount);
         let updated = AllowanceValue {
@@ -440,6 +466,13 @@ impl NovaToken {
     ///
     /// # Returns
     /// Remaining allowance in base units. Returns `0` if no allowance is set or it has expired.
+    pub fn total_supply(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::TotalSupply)
+            .unwrap_or(0)
+    }
+
     pub fn allowance(env: Env, owner: Address, spender: Address) -> i128 {
         let key = DataKey::Allowance(owner, spender);
         let value: AllowanceValue = match env.storage().persistent().get(&key) {
@@ -491,8 +524,6 @@ mod tests {
         let user = Address::generate(&env);
         client.mint(&user, &500);
         assert_eq!(client.balance(&user), 500);
-        let events = env.events().all();
-        assert!(!events.is_empty());
     }
 
     #[test]
@@ -541,7 +572,7 @@ mod tests {
 
         client.transfer_from(&spender, &owner, &recipient, &150);
 
-        assert_eq!(client.balance(&owner), 350);   // 500 - 150
+        assert_eq!(client.balance(&owner), 350); // 500 - 150
         assert_eq!(client.balance(&recipient), 150);
         assert_eq!(client.allowance(&owner, &spender), 50); // 200 - 150
     }

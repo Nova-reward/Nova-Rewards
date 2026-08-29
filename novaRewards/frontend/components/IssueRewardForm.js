@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { StrKey } from 'stellar-sdk';
 import api from '../lib/api';
+import { formatTokenAmount } from '../lib/formatting';
 import TransactionLink from './TransactionLink';
 
 /**
@@ -93,7 +94,7 @@ export default function IssueRewardForm({
         <option value="">Select a campaign…</option>
         {activeCampaigns.map((c) => (
           <option key={c.id} value={c.id}>
-            {c.name} ({c.reward_rate} NOVA/unit)
+            {c.name} ({formatTokenAmount(c.reward_rate)} NOVA/unit)
           </option>
         ))}
       </select>

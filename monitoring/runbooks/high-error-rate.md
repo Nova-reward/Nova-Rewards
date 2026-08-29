@@ -41,7 +41,7 @@ aws logs tail /nova-rewards/production/app --follow --filter-pattern "ERROR"
 ### 4. Check Service Health
 ```bash
 # Test health endpoint
-curl http://backend:4000/health
+curl http://backend:3001/health
 
 # Check service status
 docker ps | grep nova-backend

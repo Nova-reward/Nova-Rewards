@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 /**
  * Required environment variables for the NovaRewards backend.
  * Requirements: 11.1, 11.3
@@ -35,6 +35,8 @@ function validateEnv() {
     if (!process.env.ALLOWED_ORIGIN) missing.push('ALLOWED_ORIGIN');
     // REDIS_URL is required in production (sourced from Secrets Manager)
     if (!process.env.REDIS_URL) missing.push('REDIS_URL');
+    // IDEMPOTENCY_HMAC_SECRET signs idempotency keys; never fall back to weaker secrets
+    if (!process.env.IDEMPOTENCY_HMAC_SECRET) missing.push('IDEMPOTENCY_HMAC_SECRET');
   }
 
   if (process.env.BACKUP_ENABLED === 'true') {

@@ -20,15 +20,17 @@
 //! ## Usage
 //! ```ignore
 //! client.initialize(&admin);
-//! client.fund_pool(&1_000_000);
-//! let id = client.create_schedule(&beneficiary, &100_000, &start, &cliff, &duration);
+//! client.fund_pool(&admin, &1_000_000);
+//! let id = client.create_schedule(&admin, &beneficiary, &100_000, &start, &cliff, &duration);
 //! // time passes …
 //! let claimed = client.claim_vested(&beneficiary, &id);
 //! // admin revokes remaining unvested tokens
-//! let returned = client.revoke(&beneficiary, &id);
+//! let returned = client.revoke(&admin, &beneficiary, &id);
 //! ```
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, contracterror, symbol_short, Address, Env};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env,
+};
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 #[contracterror]
@@ -37,6 +39,16 @@ use soroban_sdk::{contract, contractimpl, contracttype, contracterror, symbol_sh
 pub enum Error {
     AlreadyInitialized = 1,
     ScheduleRevoked = 2,
+    /// Caller does not match the stored admin address.
+    Unauthorized = 3,
+    /// The contract has not been initialized yet (no admin set).
+    NotInitialized = 4,
+    /// Schedule parameters are invalid or would overflow vesting arithmetic.
+    InvalidSchedule = 5,
+    /// The schedule has no newly vested tokens available to claim.
+    NothingToRelease = 6,
+    /// The vesting pool does not hold enough tokens to satisfy a claim.
+    InsufficientPool = 7,
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -95,18 +107,44 @@ impl VestingContract {
         env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
+    /// Verifies that `caller` is the stored admin and has authorized this call.
+    ///
+    /// Checks identity before invoking [`Address::require_auth`] so that a
+    /// mismatched caller yields a typed [`Error::Unauthorized`] instead of a
+    /// generic Soroban auth panic. Also guards against calling before
+    /// [`initialize`](VestingContract::initialize) has set an admin.
+    ///
+    /// # Errors
+    /// - [`Error::NotInitialized`] if no admin has been set yet.
+    /// - [`Error::Unauthorized`] if `caller` is not the stored admin.
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(Error::NotInitialized);
+        }
+        if *caller != Self::admin(env) {
+            return Err(Error::Unauthorized);
+        }
+        caller.require_auth();
+        Ok(())
+    }
+
     /// Adds tokens to the vesting pool used for future releases.
     ///
     /// # Parameters
+    /// - `caller` – Address invoking this call; must be the stored admin.
     /// - `amount` – Tokens to add to the pool (must be > 0).
     ///
     /// # Authorization
-    /// Requires admin authorization.
+    /// Requires `caller` to be the admin and to have authorized this call.
+    ///
+    /// # Errors
+    /// - [`Error::NotInitialized`] if the contract has not been initialized.
+    /// - [`Error::Unauthorized`] if `caller` is not the admin.
     ///
     /// # Panics
     /// - `"amount must be positive"` if `amount <= 0`.
-    pub fn fund_pool(env: Env, amount: i128) {
-        Self::admin(&env).require_auth();
+    pub fn fund_pool(env: Env, caller: Address, amount: i128) -> Result<(), Error> {
+        Self::require_admin(&env, &caller)?;
         assert!(amount > 0, "amount must be positive");
         let bal: i128 = env
             .storage()
@@ -116,6 +154,7 @@ impl VestingContract {
         env.storage()
             .instance()
             .set(&DataKey::PoolBalance, &(bal + amount));
+        Ok(())
     }
 
     /// Creates a vesting schedule for a beneficiary and returns its schedule id.
@@ -123,6 +162,7 @@ impl VestingContract {
     /// Schedule ids are per-beneficiary and start at `0`.
     ///
     /// # Parameters
+    /// - `caller` – Address invoking this call; must be the stored admin.
     /// - `beneficiary` – Address that will receive vested tokens.
     /// - `total_amount` – Total tokens to vest (must be > 0).
     /// - `start_time` – Unix timestamp (seconds) when vesting begins.
@@ -134,46 +174,40 @@ impl VestingContract {
     /// The new schedule id (`u32`) for this beneficiary.
     ///
     /// # Authorization
-    /// Requires admin authorization.
+    /// Requires `caller` to be the admin and to have authorized this call.
     ///
     /// # Events
     /// Emits `("vesting", "created")` with data `(beneficiary, id, total_amount, start_time, cliff_duration, total_duration)`.
     ///
-    /// # Panics
-    /// - `"total_duration must be > 0"` if `total_duration == 0`.
-    /// - `"total_amount must be > 0"` if `total_amount <= 0`.
-    /// - `"start_time + cliff_duration overflows u64"` if the cliff end exceeds `u64::MAX`.
-    /// - `"start_time + total_duration overflows u64"` if the vesting end exceeds `u64::MAX`.
-    /// - `"total_amount * total_duration overflows i128"` if the pro-rata numerator
-    ///   cannot be represented, which would otherwise trap inside
-    ///   [`claim_vested`](VestingContract::claim_vested) and permanently lock the schedule.
+    /// # Errors
+    /// - [`Error::NotInitialized`] if the contract has not been initialized.
+    /// - [`Error::Unauthorized`] if `caller` is not the admin.
+    ///
+    /// - [`Error::InvalidSchedule`] if the duration/amount is invalid or if
+    ///   the cliff end, vesting end, or pro-rata numerator would overflow.
     pub fn create_schedule(
         env: Env,
+        caller: Address,
         beneficiary: Address,
         total_amount: i128,
         start_time: u64,
         cliff_duration: u64,
         total_duration: u64,
-    ) -> u32 {
-        Self::admin(&env).require_auth();
-        assert!(total_duration > 0, "total_duration must be > 0");
-        assert!(total_amount > 0, "total_amount must be > 0");
+    ) -> Result<u32, Error> {
+        Self::require_admin(&env, &caller)?;
+        if total_duration == 0 || total_amount <= 0 {
+            return Err(Error::InvalidSchedule);
+        }
         // Reject schedules whose vesting math would overflow later. Without these
         // guards a mis-created schedule traps in vested_amount (overflow-checks are
         // enabled in release wasm), bricking both claim_vested and revoke and
         // permanently locking the funds.
-        assert!(
-            start_time.checked_add(cliff_duration).is_some(),
-            "start_time + cliff_duration overflows u64"
-        );
-        assert!(
-            start_time.checked_add(total_duration).is_some(),
-            "start_time + total_duration overflows u64"
-        );
-        assert!(
-            total_amount.checked_mul(total_duration as i128).is_some(),
-            "total_amount * total_duration overflows i128"
-        );
+        if start_time.checked_add(cliff_duration).is_none()
+            || start_time.checked_add(total_duration).is_none()
+            || total_amount.checked_mul(total_duration as i128).is_none()
+        {
+            return Err(Error::InvalidSchedule);
+        }
 
         let next_id_key = DataKey::NextId(beneficiary.clone());
         let id: u32 = env.storage().instance().get(&next_id_key).unwrap_or(0);
@@ -196,12 +230,20 @@ impl VestingContract {
 
         env.storage().instance().set(&next_id_key, &(id + 1));
 
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("created")),
-            (beneficiary, id, total_amount, start_time, cliff_duration, total_duration),
+            (
+                beneficiary,
+                id,
+                total_amount,
+                start_time,
+                cliff_duration,
+                total_duration,
+            ),
         );
 
-        id
+        Ok(id)
     }
 
     /// Computes the total vested amount for a schedule at a specific timestamp.
@@ -243,11 +285,18 @@ impl VestingContract {
     /// # Events
     /// Emits `("vesting", "claimed")` with data `(beneficiary: Address, amount: i128, timestamp: u64)`.
     ///
+    /// # Errors
+    /// - [`Error::NotInitialized`] if the contract has not been initialized.
+    ///
+    /// - [`Error::NothingToRelease`] if no new tokens have vested since the last release.
+    /// - [`Error::InsufficientPool`] if the pool holds fewer tokens than the releasable amount.
+    ///
     /// # Panics
     /// - `"schedule not found"` if no schedule exists for the given beneficiary and id.
-    /// - `"nothing to release"` if no new tokens have vested since the last release.
-    /// - `"insufficient pool balance"` if the pool holds fewer tokens than the releasable amount.
-    pub fn claim_vested(env: Env, beneficiary: Address, schedule_id: u32) -> i128 {
+    pub fn claim_vested(env: Env, beneficiary: Address, schedule_id: u32) -> Result<i128, Error> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(Error::NotInitialized);
+        }
         let key = DataKey::Schedule(beneficiary.clone(), schedule_id);
         let mut schedule: VestingSchedule = env
             .storage()
@@ -261,14 +310,18 @@ impl VestingContract {
         let now = env.ledger().timestamp();
         let vested = Self::vested_amount(&schedule, now);
         let releasable = vested - schedule.released;
-        assert!(releasable > 0, "nothing to release");
+        if releasable <= 0 {
+            return Err(Error::NothingToRelease);
+        }
 
         let pool_bal: i128 = env
             .storage()
             .instance()
             .get(&DataKey::PoolBalance)
             .unwrap_or(0);
-        assert!(pool_bal >= releasable, "insufficient pool balance");
+        if pool_bal < releasable {
+            return Err(Error::InsufficientPool);
+        }
         env.storage()
             .instance()
             .set(&DataKey::PoolBalance, &(pool_bal - releasable));
@@ -279,12 +332,13 @@ impl VestingContract {
             .persistent()
             .extend_ttl(&key, 31_536_000, 31_536_000);
 
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("claimed")),
             (beneficiary, releasable, now),
         );
 
-        releasable
+        Ok(releasable)
     }
 
     /// Revokes a vesting schedule, stopping future vesting and returning unvested
@@ -294,6 +348,7 @@ impl VestingContract {
     /// to collect any tokens that had already vested before this call.
     ///
     /// # Parameters
+    /// - `caller` – Address invoking this call; must be the stored admin.
     /// - `beneficiary` – Address that owns the schedule.
     /// - `schedule_id` – Id of the schedule to revoke.
     ///
@@ -301,16 +356,25 @@ impl VestingContract {
     /// The number of unvested tokens returned to the treasury pool.
     ///
     /// # Authorization
-    /// Requires admin authorization.
+    /// Requires `caller` to be the admin and to have authorized this call.
     ///
     /// # Events
     /// Emits `("vesting", "revoked")` with data `(beneficiary: Address, returned: i128, timestamp: u64)`.
     ///
+    /// # Errors
+    /// - [`Error::NotInitialized`] if the contract has not been initialized.
+    /// - [`Error::Unauthorized`] if `caller` is not the admin.
+    ///
     /// # Panics
     /// - `"schedule not found"` if no schedule exists for the given beneficiary and id.
     /// - `"already revoked"` if the schedule has already been revoked.
-    pub fn revoke(env: Env, beneficiary: Address, schedule_id: u32) -> i128 {
-        Self::admin(&env).require_auth();
+    pub fn revoke(
+        env: Env,
+        caller: Address,
+        beneficiary: Address,
+        schedule_id: u32,
+    ) -> Result<i128, Error> {
+        Self::require_admin(&env, &caller)?;
 
         let key = DataKey::Schedule(beneficiary.clone(), schedule_id);
         let mut schedule: VestingSchedule = env
@@ -344,12 +408,13 @@ impl VestingContract {
             .persistent()
             .extend_ttl(&key, 31_536_000, 31_536_000);
 
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("revoked")),
             (beneficiary, unvested, now),
         );
 
-        unvested
+        Ok(unvested)
     }
 
     /// Returns the stored schedule for a beneficiary and schedule id.
@@ -394,16 +459,16 @@ mod tests {
         let client = VestingContractClient::new(&env, &id);
         let admin = Address::generate(&env);
         client.initialize(&admin);
-        client.fund_pool(&1_000_000);
+        client.fund_pool(&admin, &1_000_000);
         (env, admin, client)
     }
 
     #[test]
     fn test_before_cliff_release_is_zero() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let beneficiary = Address::generate(&env);
         // start=100, cliff=200, duration=1000
-        let sid = client.create_schedule(&beneficiary, &1000, &100, &200, &1000);
+        let sid = client.create_schedule(&admin, &beneficiary, &1000, &100, &200, &1000);
         // set ledger time to 150 (before cliff at 300)
         env.ledger().set_timestamp(150);
         // vested = 0 because cliff not reached
@@ -415,10 +480,10 @@ mod tests {
 
     #[test]
     fn test_partial_linear_release() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let beneficiary = Address::generate(&env);
         // start=0, cliff=0, duration=1000, total=1000
-        let sid = client.create_schedule(&beneficiary, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &beneficiary, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(500);
         let released = client.claim_vested(&beneficiary, &sid);
         assert_eq!(released, 500);
@@ -426,30 +491,33 @@ mod tests {
 
     #[test]
     fn test_full_release_after_duration() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let beneficiary = Address::generate(&env);
-        let sid = client.create_schedule(&beneficiary, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &beneficiary, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(1000);
         let released = client.claim_vested(&beneficiary, &sid);
         assert_eq!(released, 1000);
     }
 
     #[test]
-    #[should_panic(expected = "nothing to release")]
-    fn test_double_release_blocked() {
-        let (env, _admin, client) = setup();
+    fn test_double_release_returns_nothing_to_release() {
+        let (env, admin, client) = setup();
         let beneficiary = Address::generate(&env);
-        let sid = client.create_schedule(&beneficiary, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &beneficiary, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(1000);
         client.claim_vested(&beneficiary, &sid);
-        client.claim_vested(&beneficiary, &sid); // should panic
+        let err = client
+            .try_claim_vested(&beneficiary, &sid)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, Error::NothingToRelease);
     }
 
     #[test]
     fn test_release_emits_event() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let beneficiary = Address::generate(&env);
-        let sid = client.create_schedule(&beneficiary, &500, &0, &0, &500);
+        let sid = client.create_schedule(&admin, &beneficiary, &500, &0, &0, &500);
         env.ledger().set_timestamp(500);
         client.claim_vested(&beneficiary, &sid);
         let _ = env.events().all(); // drain; event emission verified via snapshot
@@ -458,18 +526,79 @@ mod tests {
     #[test]
     #[should_panic(expected = "already initialised")]
     fn test_reinitialize_is_blocked() {
-        let (env, admin, client) = setup();
+        let (_env, admin, client) = setup();
         client.initialize(&admin);
+    }
+
+    // ── typed auth / initialization errors ─────────────────────────────────────
+
+    #[test]
+    fn test_fund_pool_from_non_admin_returns_unauthorized() {
+        let (env, _admin, client) = setup();
+        let outsider = Address::generate(&env);
+        let err = client.try_fund_pool(&outsider, &500).unwrap_err().unwrap();
+        assert_eq!(err, Error::Unauthorized);
+    }
+
+    #[test]
+    fn test_create_schedule_from_non_admin_returns_unauthorized() {
+        let (env, _admin, client) = setup();
+        let outsider = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+        let err = client
+            .try_create_schedule(&outsider, &beneficiary, &1000, &0, &0, &1000)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, Error::Unauthorized);
+    }
+
+    #[test]
+    fn test_revoke_from_non_admin_returns_unauthorized() {
+        let (env, admin, client) = setup();
+        let outsider = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+        let sid = client.create_schedule(&admin, &beneficiary, &1000, &0, &0, &1000);
+        let err = client
+            .try_revoke(&outsider, &beneficiary, &sid)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, Error::Unauthorized);
+    }
+
+    #[test]
+    fn test_claim_vested_before_initialize_returns_not_initialized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(VestingContract, ());
+        let client = VestingContractClient::new(&env, &id);
+        let beneficiary = Address::generate(&env);
+        // no initialize() call — contract has no admin set yet
+        let err = client
+            .try_claim_vested(&beneficiary, &0)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, Error::NotInitialized);
+    }
+
+    #[test]
+    fn test_fund_pool_before_initialize_returns_not_initialized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(VestingContract, ());
+        let client = VestingContractClient::new(&env, &id);
+        let someone = Address::generate(&env);
+        let err = client.try_fund_pool(&someone, &100).unwrap_err().unwrap();
+        assert_eq!(err, Error::NotInitialized);
     }
 
     // ── zero cliff / immediate full vest ──────────────────────────────────────
 
     #[test]
     fn test_zero_cliff_vesting_starts_immediately() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
         // cliff=0 means vesting starts at start_time with no delay
-        let sid = client.create_schedule(&b, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(1);
         let released = client.claim_vested(&b, &sid);
         assert_eq!(released, 1); // 1/1000 of tokens vested
@@ -477,10 +606,10 @@ mod tests {
 
     #[test]
     fn test_immediate_full_vest_at_start() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
         // duration=1, cliff=0, elapsed>=duration → 100% vested immediately
-        let sid = client.create_schedule(&b, &1000, &0, &0, &1);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &0, &1);
         env.ledger().set_timestamp(1);
         let released = client.claim_vested(&b, &sid);
         assert_eq!(released, 1000);
@@ -490,13 +619,13 @@ mod tests {
 
     #[test]
     fn test_revoke_returns_unvested_to_pool() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
         // 1000 tokens, start=0, no cliff, duration=1000
-        let sid = client.create_schedule(&b, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &0, &1000);
         // at t=400: 400 vested, 600 unvested
         env.ledger().set_timestamp(400);
-        let returned = client.revoke(&b, &sid);
+        let returned = client.revoke(&admin, &b, &sid);
         assert_eq!(returned, 600);
         // pool went from 1_000_000 down to 999_000 after create_schedule funded nothing
         // then revoke adds 600 back: 999_000 + 600 = 999_600
@@ -505,12 +634,12 @@ mod tests {
 
     #[test]
     fn test_revoke_allows_claiming_vested_portion() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
-        let sid = client.create_schedule(&b, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(500);
         // revoke; 500 unvested returned to pool
-        client.revoke(&b, &sid);
+        client.revoke(&admin, &b, &sid);
         // beneficiary can still claim the 500 that were vested at revocation
         let claimed = client.claim_vested(&b, &sid);
         assert_eq!(claimed, 500);
@@ -518,11 +647,11 @@ mod tests {
 
     #[test]
     fn test_revoke_stops_further_vesting() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
-        let sid = client.create_schedule(&b, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(300);
-        client.revoke(&b, &sid);
+        client.revoke(&admin, &b, &sid);
         // advance time well past full duration
         env.ledger().set_timestamp(9999);
         // vested amount is still capped at what was vested at revocation (300)
@@ -534,59 +663,59 @@ mod tests {
     #[test]
     #[should_panic(expected = "already revoked")]
     fn test_revoke_twice_panics() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
-        let sid = client.create_schedule(&b, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(500);
-        client.revoke(&b, &sid);
-        client.revoke(&b, &sid); // should panic
+        client.revoke(&admin, &b, &sid);
+        client.revoke(&admin, &b, &sid); // should panic
     }
 
     #[test]
     #[should_panic(expected = "schedule not found")]
     fn test_revoke_nonexistent_schedule_panics() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
-        client.revoke(&b, &99);
+        client.revoke(&admin, &b, &99);
     }
 
     #[test]
     fn test_revoke_fully_vested_returns_zero() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
-        let sid = client.create_schedule(&b, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &0, &1000);
         // fully vested before revoke
         env.ledger().set_timestamp(1000);
-        let returned = client.revoke(&b, &sid);
+        let returned = client.revoke(&admin, &b, &sid);
         assert_eq!(returned, 0); // nothing unvested to return
     }
 
     #[test]
     fn test_revoke_before_cliff_returns_all() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
         // cliff at 500; revoke at t=100 (before cliff)
-        let sid = client.create_schedule(&b, &1000, &0, &500, &1000);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &500, &1000);
         env.ledger().set_timestamp(100);
-        let returned = client.revoke(&b, &sid);
+        let returned = client.revoke(&admin, &b, &sid);
         assert_eq!(returned, 1000); // nothing vested yet, all returned
     }
 
     #[test]
     fn test_revoke_emits_event() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
-        let sid = client.create_schedule(&b, &1000, &0, &0, &1000);
+        let sid = client.create_schedule(&admin, &b, &1000, &0, &0, &1000);
         env.ledger().set_timestamp(500);
-        client.revoke(&b, &sid);
+        client.revoke(&admin, &b, &sid);
         let _ = env.events().all();
     }
 
     #[test]
     fn test_create_schedule_emits_vesting_created_event() {
-        let (env, _admin, client) = setup();
+        let (env, admin, client) = setup();
         let b = Address::generate(&env);
-        client.create_schedule(&b, &1000, &0, &0, &1000);
+        client.create_schedule(&admin, &b, &1000, &0, &0, &1000);
         let _ = env.events().all();
     }
 }

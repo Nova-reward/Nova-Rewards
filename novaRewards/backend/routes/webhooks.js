@@ -25,61 +25,104 @@ const {
 const {
   EVENT_TYPES,
   generateSecret,
+  verifySignature,
   dispatch,
   attemptDelivery,
+  SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
+  DELIVERY_ID_HEADER,
 } = require('../services/webhookService');
 
-const crypto = require('crypto');
-// Assuming we have a global webhook secret for inbound events, or we look it up per merchant. 
-// For this issue, we will verify the signature using a shared secret defined in the environment.
+// Shared secret used to verify inbound webhook requests from external callers.
 const INBOUND_WEBHOOK_SECRET = process.env.INBOUND_WEBHOOK_SECRET || 'test_secret';
 // If we had a queue setup, we'd import it. Issue #579 introduces BullMQ queues. 
 // We will stub the queue import and use it.
 const { Queue } = require('bullmq');
-const redisConfig = require('../lib/redis').redisConfig; // assuming redis config is exportable, or just use connection config.
 const connection = {
   host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
+  port: parseInt(process.env.REDIS_PORT, 10) || 6379,
 };
-const webhookDeliveryQueue = new Queue('webhook-delivery', { connection });
+
+// Lazily initialized so the queue connection is only established on first use.
+// This prevents Redis connections during module loading (important in test environments).
+let _webhookDeliveryQueue = null;
+function getDeliveryQueue() {
+  if (!_webhookDeliveryQueue) {
+    _webhookDeliveryQueue = new Queue('webhook-delivery', { connection });
+  }
+  return _webhookDeliveryQueue;
+}
 
 // ---------------------------------------------------------------------------
-// POST /api/webhooks/actions  — Inbound webhook from merchant
+// POST /api/webhooks/actions  — Inbound webhook from external caller
+// ---------------------------------------------------------------------------
+//
+// Verifies the request using the shared INBOUND_WEBHOOK_SECRET via
+// verifySignature(), which enforces both HMAC-SHA256 integrity and a 5-minute
+// timestamp window to prevent replay attacks.
+//
+// Required headers:
+//   x-nova-signature   — HMAC-SHA256 hex digest
+//   x-nova-timestamp   — Unix epoch in milliseconds (as a string)
+//   x-nova-delivery-id — Unique per-delivery UUID (used in the HMAC input)
 // ---------------------------------------------------------------------------
 router.post('/actions', webhookApiKeyLimiter, async (req, res, next) => {
   try {
-    const signature = req.headers['x-signature'] || req.headers['x-hub-signature-256'];
-    if (!signature) {
-      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Missing signature' });
+    const receivedSig  = req.headers[SIGNATURE_HEADER];
+    const timestamp    = req.headers[TIMESTAMP_HEADER];
+    const deliveryId   = req.headers[DELIVERY_ID_HEADER];
+
+    // Missing required security headers → reject immediately
+    if (!receivedSig || !timestamp || !deliveryId) {
+      return res.status(401).json({
+        success: false,
+        error:   'unauthorized',
+        message: 'Missing required security headers (x-nova-signature, x-nova-timestamp, x-nova-delivery-id)',
+      });
     }
 
-    const payloadString = JSON.stringify(req.body);
-    const expectedSignature = crypto
-      .createHmac('sha256', INBOUND_WEBHOOK_SECRET)
-      .update(payloadString)
-      .digest('hex');
+    // Raw body must be available for signature verification.
+    // We re-serialise req.body as the canonical raw body string.
+    const rawBody = JSON.stringify(req.body);
 
-    // Handle different signature formats like "sha256=..." or raw hex
-    const providedSig = signature.replace(/^sha256=/, '');
-    
-    if (expectedSignature !== providedSig) {
-      return res.status(401).json({ success: false, error: 'unauthorized', message: 'Invalid signature' });
+    const valid = verifySignature(INBOUND_WEBHOOK_SECRET, receivedSig, timestamp, deliveryId, rawBody);
+
+    if (!valid) {
+      // Distinguish a stale timestamp (replay) from a bad HMAC so the
+      // caller gets an actionable error message.
+      const ts = parseInt(timestamp, 10);
+      const TOLERANCE_MS = 5 * 60 * 1000;
+      if (!isNaN(ts) && Math.abs(Date.now() - ts) > TOLERANCE_MS) {
+        return res.status(400).json({
+          success: false,
+          error:   'replay_detected',
+          message: 'Replay detected',
+        });
+      }
+      return res.status(401).json({
+        success: false,
+        error:   'unauthorized',
+        message: 'Invalid signature',
+      });
     }
 
     const { action, userId, details } = req.body;
     if (!action || !userId) {
-      return res.status(400).json({ success: false, error: 'validation_error', message: 'action and userId are required' });
+      return res.status(400).json({
+        success: false,
+        error:   'validation_error',
+        message: 'action and userId are required',
+      });
     }
 
     // Enqueue for async processing
-    await webhookDeliveryQueue.add('process-inbound-action', { action, userId, details, timestamp: Date.now() });
+    await getDeliveryQueue().add('process-inbound-action', { action, userId, details, timestamp: Date.now() });
 
-    // Store delivery log (for debugging and replay)
-    // Here we use createDelivery to log the inbound payload as well
+    // Log the inbound delivery for audit / debugging
     await createDelivery({
-      webhookId: null, // No specific outbound webhook ID
+      webhookId: null,   // No outbound webhook ID — this is an inbound event
       eventType: 'inbound_action',
-      payload: req.body,
+      payload:   req.body,
     });
 
     res.status(202).json({ success: true, message: 'Event enqueued' });

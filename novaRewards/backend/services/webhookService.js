@@ -93,6 +93,7 @@ const DELIVERY_TIMEOUT_MS = parseInt(process.env.WEBHOOK_TIMEOUT_MS) || 10_000;
 
 /**
  * Sends a single HTTP POST to the webhook URL.
+ * Includes a response body size limit of 64 KB to prevent memory exhaustion (security fix).
  *
  * @param {string} url
  * @param {object} payload
@@ -125,8 +126,20 @@ function deliverHttp(url, payload, secret, deliveryId) {
     const transport = parsed.protocol === 'https:' ? https : http;
     const req = transport.request(options, (res) => {
       let body = '';
-      res.on('data', (chunk) => { body += chunk; });
-      res.on('end', () => resolve({ httpStatus: res.statusCode, responseBody: body.slice(0, 1000) }));
+      let totalBytes = 0;
+      res.on('data', (chunk) => {
+        totalBytes += chunk.length;
+        if (totalBytes > 65536) {
+          req.destroy(new Error('Response body exceeds 64 KB limit'));
+          return;
+        }
+        body += chunk;
+      });
+      res.on('end', () => {
+        if (totalBytes <= 65536) {
+          resolve({ httpStatus: res.statusCode, responseBody: body.slice(0, 1000) });
+        }
+      });
     });
 
     req.setTimeout(DELIVERY_TIMEOUT_MS, () => {

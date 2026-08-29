@@ -105,6 +105,22 @@ fn balance_of(env: &Env, addr: &Address) -> i128 {
 - Configuration stored in instance (no TTL)
 - Withdrawal history extended on `withdraw()` calls
 
+### Contract State Contract
+- [x] Admin address → Instance storage (refresh contract instance TTL on access)
+- [x] Schema version → Instance storage (refresh contract instance TTL on access)
+- [x] Signers → Instance storage (refresh contract instance TTL on access)
+- [x] Threshold → Instance storage (refresh contract instance TTL on access)
+- [x] Upgrade approvals → Instance storage (refresh contract instance TTL on access)
+- [x] Live state entries → Persistent storage (extend on read/write)
+- [x] Snapshot entries → Persistent storage (extend on snapshot/recovery)
+- [x] Temporary entries → Not used by this contract
+
+**Cost Optimization:**
+- Critical instance-backed metadata is refreshed via `env.storage().instance().extend_ttl(...)`
+  during initialization and subsequent read/write paths.
+- Live state and snapshot entries refresh their persistent TTL when they are written,
+  read, snapshotted, or recovered.
+
 ## Benchmarking
 
 ### Before Optimization

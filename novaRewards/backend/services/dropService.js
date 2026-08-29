@@ -132,4 +132,4 @@ async function processClaim(drop, user, proof, eventEmitter) {
   return { success: true, claim };
 }
 
-module.exports = { getEligibleDrops, verifyMerkleProof, processClaim };
+module.exports = { evaluateCriteria, getEligibleDrops, verifyMerkleProof, processClaim };

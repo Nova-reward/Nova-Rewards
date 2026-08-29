@@ -45,7 +45,7 @@ fn setup() -> Suite<'static> {
 
     let pool_id = env.register(RewardPool, ());
     let pool = RewardPoolClient::new(&env, &pool_id);
-    pool.initialize(&admin);
+    pool.initialize(&admin, &token_id);
 
     let roles_id = env.register(AdminRolesContract, ());
     let admin_roles = AdminRolesContractClient::new(&env, &roles_id);
@@ -59,7 +59,7 @@ fn setup() -> Suite<'static> {
     let vest_id = env.register(VestingContract, ());
     let vesting = VestingContractClient::new(&env, &vest_id);
     vesting.initialize(&admin);
-    vesting.fund_pool(&1_000_000);
+    vesting.fund_pool(&admin, &1_000_000);
 
     Suite {
         env,
@@ -240,7 +240,7 @@ fn test_vesting_create_and_release() {
     // start=0, cliff=0, duration=1000, total=1000
     let sid = s
         .vesting
-        .create_schedule(&beneficiary, &1_000, &0, &0, &1_000);
+        .create_schedule(&s.admin, &beneficiary, &1_000, &0, &0, &1_000);
     s.env.ledger().set_timestamp(500);
 
     let released = s.vesting.claim_vested(&beneficiary, &sid);
@@ -258,7 +258,7 @@ fn test_vesting_full_release_after_duration() {
 
     let sid = s
         .vesting
-        .create_schedule(&beneficiary, &2_000, &0, &0, &1_000);
+        .create_schedule(&s.admin, &beneficiary, &2_000, &0, &0, &1_000);
     s.env.ledger().set_timestamp(1_000);
 
     let released = s.vesting.claim_vested(&beneficiary, &sid);
@@ -275,7 +275,7 @@ fn test_vesting_before_cliff_nothing_released() {
     // cliff at t=200 (start=0 + cliff_duration=200)
     let schedule = s
         .vesting
-        .create_schedule(&beneficiary, &1_000, &0, &200, &1_000);
+        .create_schedule(&s.admin, &beneficiary, &1_000, &0, &200, &1_000);
     s.env.ledger().set_timestamp(100); // before cliff
 
     let sched = s.vesting.get_schedule(&beneficiary, &schedule);
@@ -351,7 +351,7 @@ fn test_vesting_double_release_rejected() {
     let beneficiary = Address::generate(&s.env);
     let sid = s
         .vesting
-        .create_schedule(&beneficiary, &1_000, &0, &0, &1_000);
+        .create_schedule(&s.admin, &beneficiary, &1_000, &0, &0, &1_000);
     s.env.ledger().set_timestamp(1_000);
     s.vesting.claim_vested(&beneficiary, &sid);
     s.vesting.claim_vested(&beneficiary, &sid);
@@ -397,7 +397,9 @@ fn test_pool_deposit_and_vesting_release() {
     assert_eq!(s.pool.balance(), 10_000);
 
     // Admin creates vesting schedule for employee bonus.
-    let sid = s.vesting.create_schedule(&employee, &3_000, &0, &0, &600);
+    let sid = s
+        .vesting
+        .create_schedule(&s.admin, &employee, &3_000, &0, &0, &600);
     s.env.ledger().set_timestamp(600);
 
     // Employee releases fully vested tokens.
@@ -406,6 +408,46 @@ fn test_pool_deposit_and_vesting_release() {
 
     // Pool is independent — still holds merchant deposit.
     assert_eq!(s.pool.balance(), 10_000);
+}
+
+// ── 10. Pool ↔ token cross-contract balance verification (#1228) ─────────────
+//
+// `setup()` now wires the real Nova token address into `pool.initialize`, so
+// deposit/withdraw perform genuine cross-contract token transfers instead of
+// being silently skipped. These tests assert the actual token balances move.
+
+/// Depositing into the pool increases the pool contract's own Nova token
+/// balance by the deposited amount, and debits the depositor.
+#[test]
+fn test_pool_deposit_increases_token_balance() {
+    let s = setup();
+    let merchant = Address::generate(&s.env);
+
+    s.token.mint(&merchant, &5_000);
+    assert_eq!(s.token.balance(&s.pool.address), 0);
+
+    s.pool.deposit(&merchant, &5_000);
+
+    assert_eq!(s.token.balance(&s.pool.address), 5_000);
+    assert_eq!(s.token.balance(&merchant), 0);
+}
+
+/// Withdrawing from the pool increases the recipient's Nova token balance
+/// by the withdrawn amount (no fee configured by default) and debits the pool.
+#[test]
+fn test_pool_withdraw_increases_recipient_token_balance() {
+    let s = setup();
+    let merchant = Address::generate(&s.env);
+    let recipient = Address::generate(&s.env);
+
+    s.token.mint(&merchant, &5_000);
+    s.pool.deposit(&merchant, &5_000);
+
+    assert_eq!(s.token.balance(&recipient), 0);
+    s.pool.withdraw(&recipient, &2_000);
+
+    assert_eq!(s.token.balance(&recipient), 2_000);
+    assert_eq!(s.token.balance(&s.pool.address), 3_000);
 }
 
 // ── Distribution integration tests (#1126) ───────────────────────────────────

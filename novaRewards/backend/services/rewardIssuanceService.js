@@ -16,16 +16,16 @@
  */
 
 import crypto from 'crypto';
-import { rewardIssuanceQueue } from '../jobs/queues';
+import { rewardIssuanceQueue } from '../jobs/queues.js';
 import {
   createIssuance,
   getIssuanceByKey,
   markConfirmed,
   markFailed,
   incrementAttempts,
-} from '../db/rewardIssuanceRepository';
-import { getActiveCampaign } from '../db/campaignRepository';
-import { distributeRewards } from '../../blockchain/sendRewards';
+} from '../db/rewardIssuanceRepository.js';
+import { getActiveCampaign } from '../db/campaignRepository.js';
+import { distributeRewards } from '../../blockchain/sendRewards.js';
 
 // ---------------------------------------------------------------------------
 // Idempotency key generation
@@ -33,13 +33,10 @@ import { distributeRewards } from '../../blockchain/sendRewards';
 
 /**
  * The HMAC secret used to sign idempotency keys.
- * Use a dedicated env var so key-space is isolated from JWT/encryption secrets.
- * Falls back to a development-only placeholder — always set in production.
+ * Dedicated env var so key-space is isolated from JWT/encryption secrets.
+ * Required in production (enforced by validateEnv) — no fallback chain.
  */
-const IDEMPOTENCY_HMAC_SECRET =
-  process.env.IDEMPOTENCY_HMAC_SECRET ||
-  process.env.JWT_SECRET ||
-  'dev-insecure-idempotency-secret';
+const IDEMPOTENCY_HMAC_SECRET = process.env.IDEMPOTENCY_HMAC_SECRET;
 
 /**
  * Generates a collision-resistant HMAC-SHA256 idempotency key from a
@@ -154,6 +151,10 @@ export async function processRewardIssuance(job) {
   try {
     const { txHash } = await distributeRewards({ recipient: walletAddress, amount, campaignId });
     await markConfirmed(issuanceId, txHash);
+
+    // Invalidate balance cache for the beneficiary wallet
+    await cacheService.invalidateBalanceCache(walletAddress);
+
     return { confirmed: true, txHash };
   } catch (err) {
     // On the final attempt, mark as failed; otherwise let BullMQ retry

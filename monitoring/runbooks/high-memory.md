@@ -169,7 +169,7 @@ docker exec -it nova-backend node -e "global.gc(); console.log('GC forced')"
 docker exec -it nova-redis redis-cli FLUSHDB
 
 # Clear application cache
-curl -X POST http://backend:4000/api/admin/cache/clear
+curl -X POST http://backend:3001/api/admin/cache/clear
 ```
 
 ## Prevention

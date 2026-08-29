@@ -3,10 +3,6 @@ global:
   slack_api_url: '${SLACK_WEBHOOK_URL}'
   pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
 
-# Templates for notifications
-templates:
-  - '/etc/alertmanager/templates/*.tmpl'
-
 # Route tree for alert distribution
 route:
   receiver: 'default'
@@ -16,6 +12,18 @@ route:
   repeat_interval: 12h
   
   routes:
+    # Component-specific channels are evaluated first and continue to severity routing.
+    - match:
+        component: database
+      receiver: 'slack-database'
+      group_wait: 2m
+      continue: true
+    
+    - match:
+        component: infrastructure
+      receiver: 'slack-infrastructure'
+      continue: true
+
     # Critical alerts go to PagerDuty and Slack
     - match:
         severity: critical
@@ -33,17 +41,6 @@ route:
       receiver: 'slack-warnings'
       group_wait: 5m
     
-    # Database alerts
-    - match:
-        component: database
-      receiver: 'slack-database'
-      group_wait: 2m
-    
-    # Infrastructure alerts
-    - match:
-        component: infrastructure
-      receiver: 'slack-infrastructure'
-
 # Inhibition rules to prevent alert spam
 inhibit_rules:
   # Inhibit warning if critical is firing

@@ -20,7 +20,7 @@ query_uptime() {
 }
 
 ENDPOINTS=(
-  "${API_HEALTH_URL:-http://backend:4000/health}"
+  "${API_HEALTH_URL:-http://backend:3001/health}"
   "${FRONTEND_URL:-http://frontend:3000}"
   "${STELLAR_RPC_URL:-https://horizon-testnet.stellar.org}"
 )

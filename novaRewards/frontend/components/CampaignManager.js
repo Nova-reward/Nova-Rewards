@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import api from '../lib/api';
+import { formatTokenAmount } from '../lib/formatting';
 import CampaignForm from './CampaignForm';
 import DataTable from './DataTable';
 import EmptyState from './EmptyState';
@@ -103,7 +104,7 @@ export default function CampaignManager({ merchantId, apiKey, onUpdate }) {
     {
       key: 'reward_rate',
       label: 'Rate',
-      render: (v) => (v != null ? `${v} NOVA/unit` : '—'),
+      render: (v) => (v != null ? `${formatTokenAmount(v)} NOVA/unit` : '—'),
     },
     {
       key: 'start_date',

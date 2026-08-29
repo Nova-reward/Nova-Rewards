@@ -1,4 +1,4 @@
-const logger = require('./lib/logger');
+const logger = require('../lib/logger');
 const router = require('express').Router();
 const { query } = require('../db/index');
 const { authenticateUser } = require('../middleware/authenticateUser');

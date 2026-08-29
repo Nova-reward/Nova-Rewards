@@ -3,7 +3,7 @@ const router = require('express').Router();
 const { v4: uuidv4 } = require('uuid');
 const { query } = require('../db/index');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
-const { log } = require('../monitoring/eventsLogger');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
 
 /**
  * POST /merchants

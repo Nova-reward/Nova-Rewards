@@ -27,7 +27,7 @@ scrape_configs:
   - job_name: 'nova-backend'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['backend:4000']
+      - targets: ['backend:3001']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
@@ -60,8 +60,8 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - http://backend:4000/health
-          - http://backend:4000/api/leaderboard
+          - http://backend:3001/health
+          - http://backend:3001/api/leaderboard
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -77,7 +77,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - ${API_HEALTH_URL:-http://backend:4000/health}
+          - ${API_HEALTH_URL:-http://backend:3001/health}
           - ${FRONTEND_URL:-http://frontend:3000}
           - ${STELLAR_RPC_URL:-https://horizon-testnet.stellar.org}
     relabel_configs:

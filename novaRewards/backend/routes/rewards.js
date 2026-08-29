@@ -5,6 +5,11 @@ const { getCampaignById, getActiveCampaign } = require('../db/campaignRepository
 const { distributeRewards } = require('../../blockchain/sendRewards');
 const { isValidStellarAddress } = require('../../blockchain/stellarService');
 const { log } = require('../monitoring/eventsLogger');
+const { authenticateMerchant } = require('../middleware/authenticateMerchant');
+const { slidingRewards } = require('../middleware/rateLimiter');
+const { checkRewardFarming } = require('../middleware/abuseDetection');
+const { validateIssueReward, validateDistributeReward } = require('../dtos/middleware');
+const { idempotency } = require('../middleware/idempotency');
 
 /**
  * @openapi
@@ -113,7 +118,7 @@ router.post('/issue', authenticateMerchant, slidingRewards, validateIssueReward,
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/distribute', authenticateMerchant, slidingRewards, checkRewardFarming, validateDistributeReward, async (req, res, next) => {
+router.post('/distribute', authenticateMerchant, slidingRewards, checkRewardFarming, idempotency, validateDistributeReward, async (req, res, next) => {
   try {
     const { walletAddress, customerWallet, amount, campaignId } = req.body;
     const recipientWallet = walletAddress || customerWallet;

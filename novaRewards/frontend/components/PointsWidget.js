@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Lottie from 'lottie-react';
 import api from '../lib/api';
 import { useWallet } from '../context/WalletContext';
+import { formatTokenAmount } from '../lib/formatting';
 import AnimatedCounter from './ui/AnimatedCounter';
 import counterAnimationData from '../public/points-counter-increment.json';
 import styles from '../styles/PointsWidget.module.css';
@@ -82,7 +83,7 @@ export default function PointsWidget() {
       <div className={styles.label}>Nova Points</div>
       <div className={styles.balanceWrapper}>
         <div className={styles.balanceWithAnimation}>
-        <AnimatedCounter value={balance} className={styles.balance} />
+        <AnimatedCounter value={balance} format={formatTokenAmount} className={styles.balance} />
           {showCounterAnimation && (
             <div className={styles.lottieOverlay}>
               <Lottie animationData={counterAnimationData} loop={false} />
@@ -91,7 +92,7 @@ export default function PointsWidget() {
         </div>
         {showDelta && delta !== 0 && (
           <div className={`${styles.delta} ${delta > 0 ? styles.positive : styles.negative}`}>
-            {delta > 0 ? `+${delta}` : delta}
+            {delta > 0 ? `+${formatTokenAmount(delta)}` : formatTokenAmount(delta)}
           </div>
         )}
       </div>

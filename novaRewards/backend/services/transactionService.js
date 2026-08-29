@@ -10,6 +10,7 @@ const {
 } = require('../db/transactionRepository');
 const { query } = require('../db/index');
 const { getUserById } = require('../db/userRepository');
+const cacheService = require('./cacheService');
 
 const TRANSACTION_TYPES = ['distribution', 'redemption', 'transfer', 'refund'];
 const MUTABLE_STATUSES = ['pending', 'completed', 'failed', 'refunded', 'reconciled'];
@@ -372,13 +373,21 @@ async function refundTransaction(merchantId, payload) {
 
   const stellarLedger = await fetchStellarLedger(refundTxHash);
 
-  return createRefundTransaction({
+  const refundResult = await createRefundTransaction({
     txHash,
     refundTxHash,
     refundReason,
     stellarLedger,
     metadata,
   });
+
+  // Invalidate balance cache for both original transaction wallets
+  const originalWallets = [originalTransaction.from_wallet, originalTransaction.to_wallet].filter(Boolean);
+  for (const wallet of originalWallets) {
+    await cacheService.invalidateBalanceCache(wallet);
+  }
+
+  return refundResult;
 }
 
 /**

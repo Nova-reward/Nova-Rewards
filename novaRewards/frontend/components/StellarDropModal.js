@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import api from '../lib/api';
 import confetti from 'canvas-confetti';
+import { formatTokenAmount } from '../lib/formatting';
 
 /**
  * StellarDropModal - Displays eligible drops and handles claiming
@@ -275,7 +276,7 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
               Successfully Claimed!
             </h2>
             <p style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
-              You received <strong>{claimedAmount} NOVA</strong> tokens
+              You received <strong>{formatTokenAmount(claimedAmount)} NOVA</strong> tokens
             </p>
             <p style={{ color: '#4b5563' }}>
               The tokens have been added to your balance
@@ -297,7 +298,7 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
                 Stellar Drop Available!
               </h2>
               <p style={{ color: '#4b5563' }}>
-                You've qualified for a special reward
+                You&apos;ve qualified for a special reward
               </p>
             </div>
 
@@ -313,7 +314,7 @@ const StellarDropModal = forwardRef(({ onClaimSuccess, onModalClose }, ref) => {
                   Token Amount
                 </div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#7c3aed' }}>
-                  {drop?.tokenAmount} NOVA
+                  {formatTokenAmount(drop?.tokenAmount)} NOVA
                 </div>
               </div>
 

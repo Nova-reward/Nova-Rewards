@@ -2,7 +2,7 @@ import React from 'react';
 import { useDataFetching } from '@/hooks/useDataFetching';
 import { WithErrorHandling } from '@/components/ErrorStates/WithErrorHandling';
 import { RefreshIndicator } from './RefreshIndicator';
-import { formatNumber } from '@/lib/utils';
+import { formatTokenAmount } from '@/lib/utils';
 import { apiClient } from '@/lib/api-client';
 
 interface BalanceData {
@@ -45,7 +45,7 @@ export const BalanceDisplayWithErrorHandling: React.FC = () => {
         <div className="space-y-2">
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-bold text-gray-900 dark:text-white">
-              {formatNumber(parseFloat(balance.novaBalance))} NOVA
+              {formatTokenAmount(balance.novaBalance)} NOVA
             </span>
             <span className="text-sm text-gray-500">≈ ${balance.usdValue}</span>
           </div>
@@ -53,7 +53,7 @@ export const BalanceDisplayWithErrorHandling: React.FC = () => {
           <div className="flex items-center gap-4 text-sm">
             {balance.stakedBalance && (
               <div className="text-gray-600 dark:text-gray-400">
-                Staked: {formatNumber(parseFloat(balance.stakedBalance))} NOVA
+                Staked: {formatTokenAmount(balance.stakedBalance)} NOVA
               </div>
             )}
             <RefreshIndicator isRefreshing={isRefreshing} lastUpdated={new Date()} />
