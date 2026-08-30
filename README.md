@@ -267,6 +267,57 @@ Tests:       N passed, N total
 
 ---
 
+## Continuous Integration (CI)
+
+Every push to `main` and every pull request against `main` runs the GitHub
+Actions pipeline defined in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+### Required stages (branch protection)
+
+All of the following stages must pass before a pull request can be merged:
+
+| Stage | Job(s) | What it runs |
+|-------|--------|--------------|
+| Secrets scan | `secret-scan` | TruffleHog verified-secret scan |
+| Dependency audit | `dependency-audit` | `depcheck` (unused/missing deps) + `npm audit` (block on critical/high) |
+| Lint / type check | `test`, `frontend` | `npm run lint` (ESLint) for backend + frontend; TypeScript type-checking enforced by the frontend `next build` (`typescript.ignoreBuildErrors` is `false`) |
+| Backend tests | `test`, `backend-integration`, `backend-security` | Backend unit + integration + security (SQL-injection/XSS/auth) tests against PostgreSQL & Redis service containers |
+| Frontend tests | `frontend-unit` | Frontend unit + component tests (Jest) with coverage upload |
+| Frontend build | `frontend` | `next build` produces a production build and type-checks the frontend |
+| Contract tests | `contract-tests` | Rust/Soroban unit + integration tests (`cargo test`, cached via `Swatinem/rust-cache`) |
+| E2E tests | `e2e` | Playwright E2E + accessibility suites |
+| Aggregate gate | `all-tests-pass` | Gated summary job that fails unless every required job passed |
+
+`all-tests-pass` should be configured as a **required status check** on the
+`main` branch (Settings → Branches → main branch protection rule).
+
+### Caching
+
+- **node_modules** — `actions/setup-node` with `cache: npm` (keyed on the
+  `novaRewards/package-lock.json`)
+- **Rust artifacts** — `Swatinem/rust-cache` scoped to `contracts`
+
+### Run the same checks locally
+
+```bash
+# Lint (backend + frontend)
+npm run lint
+
+# Backend tests (needs PostgreSQL + Redis; see Quick Start)
+npm run test:backend
+
+# Frontend tests
+npm run test:frontend
+
+# Frontend build + type-check
+cd novaRewards/frontend && npm run build
+
+# Contract tests
+cargo test --manifest-path contracts/Cargo.toml --workspace
+```
+
+---
+
 ### Common setup failures
 
 #### Port already in use

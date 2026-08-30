@@ -114,6 +114,41 @@ If any step fails, check the [troubleshooting section in the README](./novaRewar
 
 ---
 
+## Continuous Integration (CI)
+
+The repository uses GitHub Actions (`.github/workflows/ci.yml`) to verify every
+push to `main` and every pull request targeting `main`. The `branches/main`
+branch protection rule requires the `all-tests-pass` status check to pass before
+a pull request can be merged.
+
+Required CI stages:
+
+1. **Secrets scan** — TruffleHog (verified secrets)
+2. **Dependency audit** — `depcheck` + `npm audit` (blocks on critical/high)
+3. **Lint & type check** — ESLint for backend/frontend; the frontend is
+   type-checked as part of `next build` (`typescript.ignoreBuildErrors` is `false`)
+4. **Backend tests** — unit, integration, and security suites (PostgreSQL + Redis)
+5. **Frontend tests** — unit + component tests (Jest)
+6. **Frontend build** — `next build`
+7. **Contract tests** — Rust/Soroban `cargo test`
+8. **E2E tests** — Playwright (Chromium + accessibility)
+9. **Aggregate gate** — `all-tests-pass`, required by branch protection
+
+Caching: `node_modules` (npm cache) and Rust build artifacts are cached to keep
+typical pull-request runs well under 10 minutes.
+
+Run the same checks locally:
+
+```bash
+npm run lint            # backend + frontend lint
+npm run test:backend    # backend tests
+npm run test:frontend   # frontend tests
+cd novaRewards/frontend && npm run build   # frontend build + type-check
+cargo test --manifest-path contracts/Cargo.toml --workspace  # contract tests
+```
+
+---
+
 ## Branch Naming Conventions
 
 Always branch off `main`. Use the following prefixes:
