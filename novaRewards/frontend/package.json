@@ -21,7 +21,7 @@
     "@hookform/resolvers": "^5.5.7",
     "@sentry/nextjs": "^10.70.0",
     "@stellar/freighter-api": "^2.0.0",
-    "axios": "^1.7.2",
+    "axios": "^1.20.0",
     "axios-mock-adapter": "2.1.0",
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^13.1.1",
