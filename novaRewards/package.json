@@ -11,7 +11,7 @@
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
     "@bull-board/api": "^8.1.2",
-    "@bull-board/express": "^9.3.2",
+    "@bull-board/express": "^9.5.0",
     "eslint": "^8.57.0"
   },
   "scripts": {
