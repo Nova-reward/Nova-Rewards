@@ -26,7 +26,7 @@
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^13.1.1",
     "jwt-decode": "^4.0.0",
-    "lucide-react": "^1.22.0",
+    "lucide-react": "^1.34.0",
     "msw": "2.10.4",
     "next": "^15.5.15",
     "next-i18next": "^14.0.3",
