@@ -16,6 +16,7 @@
   },
   "scripts": {
     "test": "npm test -w backend && npm test -w frontend",
+    "check:deps": "node scripts/check-dependency-alignment.js",
     "test:backend": "npm test -w backend",
     "test:frontend": "npm test -w frontend",
     "lint": "npm run lint -w backend && npm run lint -w frontend",
