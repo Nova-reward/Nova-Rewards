@@ -85,7 +85,7 @@ const nextConfig = {
     minimumCacheTTL: 86400,
   },
   sentry: {
-    // Deprecated in v10 — options moved to sentryWebpackPluginOptions below
+    disableClientWebpackPlugin: true,
   },
 };
 
