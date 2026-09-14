@@ -75,5 +75,9 @@
   "jest-junit": {
     "outputDirectory": "test-results",
     "outputName": "junit.xml"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10"
   }
 }

@@ -11,5 +11,9 @@
   "dependencies": {
     "ioredis": "^5.11.1",
     "winston": "^3.19.0"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10"
   }
 }
