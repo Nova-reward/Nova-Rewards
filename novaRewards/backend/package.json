@@ -40,7 +40,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^10.0.3",
     "opossum": "^10.0.0",
     "pg": "^8.23.0",
     "prisma": "^7.9.1",
