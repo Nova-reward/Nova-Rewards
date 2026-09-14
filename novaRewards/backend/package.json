@@ -33,7 +33,7 @@
     "compression": "1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
-    "eslint": "^10.8.1",
+    "eslint": "^10.10.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "helmet": "8.3.0",

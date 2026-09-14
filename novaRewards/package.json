@@ -12,7 +12,7 @@
     "@apidevtools/swagger-parser": "^12.1.0",
     "@bull-board/api": "^8.1.2",
     "@bull-board/express": "^9.3.2",
-    "eslint": "^8.57.0"
+    "eslint": "^10.10.0"
   },
   "scripts": {
     "test": "npm test -w backend && npm test -w frontend",
