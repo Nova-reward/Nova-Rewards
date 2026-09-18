@@ -5,7 +5,7 @@ import WalletConnectButton from '../WalletConnectButton';
 import BalanceDisplay from '../BalanceDisplay';
 import NotificationBell from '../NotificationBell';
 import ThemeToggle from './ThemeToggle';
-import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { User, Settings, LogOut, ChevronDown, Bell } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Header() {

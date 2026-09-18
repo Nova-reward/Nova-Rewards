@@ -110,10 +110,8 @@ export function SkeletonDashboard() {
       {/* Recent transactions card */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '1rem' }}>
         <SkeletonBlock width="55%" height="0.875rem" style={{ marginBottom: '0.75rem' }} />
-        </div>
       </div>
-      <div className="space-y-4"
-    >
+
       {/* Summary grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {[...Array(3)].map((_, i) => (
