@@ -5,8 +5,8 @@
   "description": "NovaRewards backend API",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node init && node server.js",
+    "dev": "node init && nodemon server.js",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "test:integration": "vitest run --project integration",

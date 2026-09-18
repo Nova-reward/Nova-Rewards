@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { ErrorType } from '@/lib/errorService';
 
 interface ErrorTypeDisplayProps {

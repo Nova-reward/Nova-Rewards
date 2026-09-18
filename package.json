@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "start": "node dist/main",
-    "start:dev": "nest start --watch",
-    "build": "nest build",
+    "start": "node init && node dist/main",
+    "start:dev": "node init && nest start --watch",
+    "build": "node init && nest build",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

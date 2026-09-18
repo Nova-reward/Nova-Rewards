@@ -45,6 +45,9 @@ const cacheHeaders = [
 ];
 
 const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
   async headers() {
     return [
       { source: '/(.*)', headers: securityHeaders },

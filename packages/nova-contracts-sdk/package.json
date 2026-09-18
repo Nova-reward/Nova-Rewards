@@ -4,9 +4,12 @@
   "description": "TypeScript bindings for Nova Rewards Soroban smart contracts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "node init && tsc",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
