@@ -45,6 +45,10 @@ pub enum ReferralError {
     ReferrerNotFound = 4,
     /// The reward pool does not hold enough tokens.
     InsufficientPool = 5,
+    /// The requested payout exceeds the configured per-claim maximum.
+    ClaimExceedsMax = 6,
+    /// The requested payout would exceed the configured per-day aggregate cap.
+    DailyCapExceeded = 7,
 }
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
@@ -61,7 +65,18 @@ pub enum DataKey {
     RewardClaimed(Address),
     /// Internal pool balance available for payouts
     PoolBalance,
+    /// Maximum total payout (referrer + referee) allowed per single claim
+    MaxPerClaim,
+    /// Maximum aggregate payout allowed within a single day window
+    DailyCap,
+    /// Aggregate amount already paid out in the current day window
+    DailySpent,
+    /// Ledger timestamp marking the start of the current day window
+    DailyWindowStart,
 }
+
+// ── Day window length (seconds) ──────────────────────────────────────────────
+const DAY_SECONDS: u64 = 86_400;
 
 // ── TTL constant (31 days in ledgers at ~5 s/ledger) ─────────────────────────
 const PERSISTENT_TTL: u32 = 2_678_400;
@@ -94,6 +109,65 @@ impl ReferralContract {
 
     fn admin(env: &Env) -> Address {
         env.storage().instance().get(&DataKey::Admin).unwrap()
+    }
+
+    // ── Cap configuration ─────────────────────────────────────────────────────
+
+    /// Sets the maximum total payout (`referrer_amount + referee_amount`)
+    /// permitted for a single [`claim_referral_reward`](ReferralContract::claim_referral_reward).
+    ///
+    /// A value of `0` disables the per-claim cap.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"max_per_claim must be non-negative"` if `max_per_claim < 0`.
+    pub fn set_max_per_claim(env: Env, max_per_claim: i128) {
+        Self::admin(&env).require_auth();
+        assert!(max_per_claim >= 0, "max_per_claim must be non-negative");
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxPerClaim, &max_per_claim);
+    }
+
+    /// Sets the maximum aggregate payout permitted within a single day window.
+    ///
+    /// A value of `0` disables the daily cap.
+    ///
+    /// # Authorization
+    /// Requires admin authorization.
+    ///
+    /// # Panics
+    /// - `"daily_cap must be non-negative"` if `daily_cap < 0`.
+    pub fn set_daily_cap(env: Env, daily_cap: i128) {
+        Self::admin(&env).require_auth();
+        assert!(daily_cap >= 0, "daily_cap must be non-negative");
+        env.storage().instance().set(&DataKey::DailyCap, &daily_cap);
+    }
+
+    /// Returns the configured per-claim maximum (`0` means disabled).
+    pub fn max_per_claim(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MaxPerClaim)
+            .unwrap_or(0)
+    }
+
+    /// Returns the configured per-day aggregate cap (`0` means disabled).
+    pub fn daily_cap(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::DailyCap)
+            .unwrap_or(0)
+    }
+
+    /// Returns the aggregate amount paid out in the current day window.
+    pub fn daily_spent(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::DailySpent)
+            .unwrap_or(0)
     }
 
     // ── Pool funding ──────────────────────────────────────────────────────────
@@ -208,6 +282,8 @@ impl ReferralContract {
     /// # Errors
     /// - [`ReferralError::ReferrerNotFound`] if `referee` has no registered referrer.
     /// - [`ReferralError::AlreadyRewarded`] if the reward has already been claimed.
+    /// - [`ReferralError::ClaimExceedsMax`] if the total payout exceeds the per-claim cap.
+    /// - [`ReferralError::DailyCapExceeded`] if the payout would exceed the daily cap.
     /// - [`ReferralError::InsufficientPool`] if the pool cannot cover the total payout.
     ///
     /// # Panics
@@ -241,10 +317,46 @@ impl ReferralContract {
             return Err(ReferralError::AlreadyRewarded);
         }
 
-        // Check pool has enough for both payouts
         let total = referrer_amount
             .checked_add(referee_amount)
             .expect("overflow in total reward");
+
+        // Guard: per-claim maximum (0 disables the cap)
+        let max_per_claim: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxPerClaim)
+            .unwrap_or(0);
+        if max_per_claim > 0 && total > max_per_claim {
+            return Err(ReferralError::ClaimExceedsMax);
+        }
+
+        // Guard: per-day aggregate cap (0 disables the cap)
+        let daily_cap: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::DailyCap)
+            .unwrap_or(0);
+        let now = env.ledger().timestamp();
+        let window_start: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::DailyWindowStart)
+            .unwrap_or(0);
+        let mut daily_spent: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::DailySpent)
+            .unwrap_or(0);
+        // Roll the window forward once a full day has elapsed.
+        if now >= window_start.saturating_add(DAY_SECONDS) {
+            daily_spent = 0;
+        }
+        if daily_cap > 0 && daily_spent.saturating_add(total) > daily_cap {
+            return Err(ReferralError::DailyCapExceeded);
+        }
+
+        // Check pool has enough for both payouts (before any deduction/transfer)
         let pool_bal: i128 = env
             .storage()
             .instance()
@@ -258,6 +370,16 @@ impl ReferralContract {
         env.storage()
             .instance()
             .set(&DataKey::PoolBalance, &(pool_bal - total));
+
+        // Record daily spend against the (possibly rolled) window.
+        if now >= window_start.saturating_add(DAY_SECONDS) {
+            env.storage()
+                .instance()
+                .set(&DataKey::DailyWindowStart, &now);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::DailySpent, &(daily_spent + total));
 
         env.storage().persistent().set(&claimed_key, &true);
         env.storage()
@@ -441,6 +563,99 @@ mod tests {
         assert_eq!(result, Err(ReferralError::InsufficientPool));
         // Pool unchanged
         assert_eq!(client.pool_balance(), 20_000);
+    }
+
+    #[test]
+    fn test_insufficient_pool_fires_before_any_state_change() {
+        let (env, _, client) = setup();
+        let referrer = Address::generate(&env);
+        let referee = Address::generate(&env);
+        client.register_referral(&referrer, &referee).unwrap();
+
+        // pool_balance (20_000) < referrer_amount + referee_amount (25_000)
+        let result = client.claim_referral_reward(&referee, &20_000, &5_000);
+        assert_eq!(result, Err(ReferralError::InsufficientPool));
+
+        // No deduction, no claim marker, no daily spend recorded.
+        assert_eq!(client.pool_balance(), 20_000);
+        assert!(!client.is_reward_claimed(&referee));
+        assert_eq!(client.daily_spent(), 0);
+    }
+
+    // ── Per-claim cap ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_claim_exceeding_max_per_claim_rejected() {
+        let (env, _, client) = setup();
+        let referrer = Address::generate(&env);
+        let referee = Address::generate(&env);
+        client.register_referral(&referrer, &referee).unwrap();
+
+        client.set_max_per_claim(&1_000);
+        assert_eq!(client.max_per_claim(), 1_000);
+
+        let result = client.claim_referral_reward(&referee, &800, &800);
+        assert_eq!(result, Err(ReferralError::ClaimExceedsMax));
+        assert_eq!(client.pool_balance(), 20_000);
+        assert!(!client.is_reward_claimed(&referee));
+    }
+
+    #[test]
+    fn test_claim_within_max_per_claim_succeeds() {
+        let (env, _, client) = setup();
+        let referrer = Address::generate(&env);
+        let referee = Address::generate(&env);
+        client.register_referral(&referrer, &referee).unwrap();
+
+        client.set_max_per_claim(&1_000);
+        client.claim_referral_reward(&referee, &600, &400).unwrap();
+        assert_eq!(client.pool_balance(), 19_000);
+    }
+
+    // ── Daily cap ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_daily_cap_exceeded_rejected() {
+        let (env, _, client) = setup();
+        let referrer = Address::generate(&env);
+        let r1 = Address::generate(&env);
+        let r2 = Address::generate(&env);
+        client.register_referral(&referrer, &r1).unwrap();
+        client.register_referral(&referrer, &r2).unwrap();
+
+        client.set_daily_cap(&1_000);
+        assert_eq!(client.daily_cap(), 1_000);
+
+        client.claim_referral_reward(&r1, &500, &500).unwrap();
+        assert_eq!(client.daily_spent(), 1_000);
+
+        let result = client.claim_referral_reward(&r2, &500, &500);
+        assert_eq!(result, Err(ReferralError::DailyCapExceeded));
+        assert_eq!(client.pool_balance(), 19_000);
+        assert!(!client.is_reward_claimed(&r2));
+    }
+
+    #[test]
+    fn test_daily_cap_rolls_over_after_a_day() {
+        let (env, _, client) = setup();
+        let referrer = Address::generate(&env);
+        let r1 = Address::generate(&env);
+        let r2 = Address::generate(&env);
+        client.register_referral(&referrer, &r1).unwrap();
+        client.register_referral(&referrer, &r2).unwrap();
+
+        client.set_daily_cap(&1_000);
+        client.claim_referral_reward(&r1, &500, &500).unwrap();
+        assert_eq!(client.daily_spent(), 1_000);
+
+        // Advance the ledger past the day window.
+        env.ledger().with_mut(|li| {
+            li.timestamp = DAY_SECONDS + 1;
+        });
+
+        client.claim_referral_reward(&r2, &500, &500).unwrap();
+        assert_eq!(client.daily_spent(), 1_000);
+        assert_eq!(client.pool_balance(), 18_000);
     }
 
     // ── Initialization guard ──────────────────────────────────────────────────
