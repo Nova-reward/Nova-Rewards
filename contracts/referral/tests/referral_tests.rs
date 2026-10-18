@@ -144,6 +144,19 @@ fn credit_referrer_exceeds_pool_panics() {
 }
 
 #[test]
+fn credit_referrer_insufficient_pool_leaves_balance_untouched() {
+    let (env, _admin, client) = setup();
+    let referrer = Address::generate(&env);
+    let referred = Address::generate(&env);
+    client.register_referral(&referrer, &referred);
+    let before = client.pool_balance();
+    let result = client.try_credit_referrer(&referred, &(before + 1));
+    assert!(result.is_err());
+    // No transfer occurred: the pool balance is unchanged.
+    assert_eq!(client.pool_balance(), before);
+}
+
+#[test]
 #[should_panic(expected = "no referrer found")]
 fn credit_referrer_without_registration_panics() {
     let (env, _admin, client) = setup();
@@ -159,6 +172,85 @@ fn credit_referrer_zero_amount_panics() {
     let referred = Address::generate(&env);
     client.register_referral(&referrer, &referred);
     client.credit_referrer(&referred, &0);
+}
+
+// ── per-claim and daily caps ──────────────────────────────────────────────────
+
+#[test]
+fn credit_referrer_rejects_claim_above_per_claim_max() {
+    let (env, _admin, client) = setup();
+    client.set_per_claim_max(&1_000);
+    let referrer = Address::generate(&env);
+    let referred = Address::generate(&env);
+    client.register_referral(&referrer, &referred);
+    let before = client.pool_balance();
+    let result = client.try_credit_referrer(&referred, &1_001);
+    assert!(result.is_err());
+    assert_eq!(client.pool_balance(), before);
+}
+
+#[test]
+fn credit_referrer_allows_claim_at_per_claim_max() {
+    let (env, _admin, client) = setup();
+    client.set_per_claim_max(&1_000);
+    let referrer = Address::generate(&env);
+    let referred = Address::generate(&env);
+    client.register_referral(&referrer, &referred);
+    client.credit_referrer(&referred, &1_000);
+    assert_eq!(client.pool_balance(), 9_000);
+}
+
+#[test]
+fn credit_referrer_rejects_claim_above_daily_cap() {
+    let (env, _admin, client) = setup();
+    client.set_daily_cap(&1_500);
+    let referrer = Address::generate(&env);
+    let referred = Address::generate(&env);
+    client.register_referral(&referrer, &referred);
+    client.credit_referrer(&referred, &1_000);
+    let before = client.pool_balance();
+    let result = client.try_credit_referrer(&referred, &1_000);
+    assert!(result.is_err());
+    assert_eq!(client.pool_balance(), before);
+}
+
+#[test]
+fn credit_referrer_allows_claim_at_daily_cap() {
+    let (env, _admin, client) = setup();
+    client.set_daily_cap(&1_500);
+    let referrer = Address::generate(&env);
+    let referred = Address::generate(&env);
+    client.register_referral(&referrer, &referred);
+    client.credit_referrer(&referred, &1_000);
+    client.credit_referrer(&referred, &500);
+    assert_eq!(client.pool_balance(), 8_500);
+}
+
+// ── admin setters ─────────────────────────────────────────────────────────────
+
+#[test]
+fn admin_can_update_caps() {
+    let (_env, _admin, client) = setup();
+    client.set_per_claim_max(&2_000);
+    client.set_daily_cap(&5_000);
+    assert_eq!(client.per_claim_max(), 2_000);
+    assert_eq!(client.daily_cap(), 5_000);
+}
+
+#[test]
+fn non_admin_cannot_update_caps() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let id = env.register(ReferralContract, ());
+    let client = ReferralContractClient::new(&env, &id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    let attacker = Address::generate(&env);
+    // With auth mocked, the contract still checks the stored admin address.
+    let result = client.try_set_per_claim_max(&attacker, &1);
+    assert!(result.is_err());
+    let result = client.try_set_daily_cap(&attacker, &1);
+    assert!(result.is_err());
 }
 
 // ── total_referrals ───────────────────────────────────────────────────────────

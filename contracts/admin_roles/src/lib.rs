@@ -17,6 +17,28 @@
 //! | `("adm_roles", "adm_xfer")`     | `(v, old_admin, new_admin)`                             |
 //! | `("adm_roles", "role_chg")`     | `(v, admin, operation, target)`                         |
 //! | `("adm_roles", "upgraded")`     | `(v, new_wasm_hash)`                                    |
+//!
+//! ## Protecting high-value admin keys (e.g. the referral admin)
+//!
+//! The referral contract (`contracts/referral`) gates `claim_referral_reward`
+//! behind a single admin address. A compromised admin key can therefore drain
+//! the referral pool. To reduce that blast radius, the referral admin should be
+//! an address whose authority is itself M-of-N controlled:
+//!
+//! 1. Deploy this contract and `initialize` it with the intended signer set and
+//!    a threshold `N > 1`.
+//! 2. Configure the referral contract's admin to be an address that only acts
+//!    after this contract's multisig has approved the action (e.g. a
+//!    multisig-controlled account / smart wallet whose signers are the
+//!    `Signers` set here, or a wrapper that checks `get_threshold()` /
+//!    `get_signers()` before forwarding the call).
+//! 3. Rotate signers with `update_signers` and adjust `update_threshold` as the
+//!    signer set changes; both are admin-gated and emit `role_chg` events.
+//!
+//! `get_threshold()` and `get_signers()` are exposed read-only so that
+//! integrating contracts and off-chain tooling can verify the M-of-N policy
+//! that protects the referral admin key. See `contracts/referral/SECURITY.md`
+//! for the full threat analysis.
 #![no_std]
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, Symbol, Vec,
@@ -349,6 +371,21 @@ impl AdminRolesContract {
 
     pub fn get_signers(env: Env) -> Vec<Address> {
         env.storage().instance().get(&DataKey::Signers).unwrap_or(vec![&env])
+    }
+
+    /// Returns `true` when the configured multisig policy is M-of-N with
+    /// `N > 1`, i.e. a single signer cannot unilaterally authorize an action.
+    ///
+    /// Integrators (such as the referral contract's admin wiring) can use this
+    /// to assert that the admin key is protected by more than one signer before
+    /// granting it authority over high-value operations.
+    pub fn is_multisig_enabled(env: Env) -> bool {
+        let threshold: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Threshold)
+            .unwrap_or(1);
+        threshold > 1
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────

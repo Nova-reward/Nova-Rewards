@@ -39,6 +39,12 @@ Trust boundaries:
 
 ---
 
+## References
+
+- [Referral Contract Security Analysis — admin-trust assumption for `claim_referral_reward`](../../contracts/referral/SECURITY.md)
+
+---
+
 ## Threat Actors
 
 | Actor | Motivation | Capability |
@@ -64,6 +70,7 @@ Trust boundaries:
 | SC-05 | Referral self-referral / circular referral abuse | Tampering | Medium | Medium | On-chain validation rejects self-referral and cycles |
 | SC-06 | Contract upgrade introducing malicious logic | Tampering | Critical | Low | Upgrade requires multi-sig; time-lock delay before activation |
 | SC-07 | Front-running reward claims | Information Disclosure | Medium | Low | Stellar's deterministic ordering reduces front-running risk |
+| SC-08 | Pool drain via admin-only `ReferralContract::claim_referral_reward` with fabricated addresses (compromised admin key) | Elevation of Privilege | High | Low | `InsufficientPool` checked before any transfer; configurable per-claim max and per-day aggregate cap; multi-sig admin above threshold. See [Referral Security Analysis](../../contracts/referral/SECURITY.md) |
 
 ### Backend API
 
