@@ -4,9 +4,9 @@
   "private": true,
   "description": "NovaRewards Next.js frontend",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node init && next dev",
+    "build": "node init && next build",
+    "start": "node init && next start",
     "test": "jest --runInBand --coverage",
     "test:ci": "jest --runInBand --ci --coverage --json --outputFile=test-results/results.json --reporters=default --reporters=jest-junit",
     "test:e2e": "playwright test",
@@ -15,7 +15,7 @@
     "lint": "next lint",
     "analyze": "ANALYZE=true next build",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build -o storybook-static"
+    "build-storybook": "node init && storybook build -o storybook-static"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",

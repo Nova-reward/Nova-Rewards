@@ -1,7 +1,7 @@
 {
   "name": "nova-rewards",
   "version": "1.0.0",
-  "description": "NovaRewards — blockchain-powered loyalty rewards on Stellar",
+  "description": "NovaRewards \u2014 blockchain-powered loyalty rewards on Stellar",
   "private": true,
   "workspaces": [
     "backend",
@@ -22,24 +22,20 @@
     "lint:fix": "npm run lint:fix -w backend && npm run lint:fix -w frontend",
     "format": "npm run format -w frontend",
     "format:check": "npm run format:check -w frontend",
-    "build": "npm run build -w frontend",
+    "build": "node init && npm run build -w frontend",
     "setup:new": "node scripts/setup.js",
     "setup": "node scripts/setup.js --use-env",
     "migrate": "node database/migrate.js",
-
     "deploy": "node deploy/deploy.js",
     "deploy:testnet": "node deploy/deploy.js --network testnet",
     "deploy:mainnet": "node deploy/deploy.js --network mainnet",
     "deploy:dry-run": "node deploy/deploy.js --dry-run",
-
     "verify": "node deploy/verify.js",
     "verify:testnet": "node deploy/verify.js --network testnet",
     "verify:mainnet": "node deploy/verify.js --network mainnet",
-
     "rollback": "node deploy/rollback.js",
     "rollback:testnet": "node deploy/rollback.js --network testnet",
     "rollback:mainnet": "node deploy/rollback.js --network mainnet",
-
     "init-contract": "node deploy/init-contract.js"
   }
 }
